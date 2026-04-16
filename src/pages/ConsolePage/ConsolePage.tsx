@@ -1,4 +1,5 @@
 import type { ConsoleLogEntry } from '../../services/launcher/launcher';
+import { ansiToHtml } from '../../services/launcher/ansi';
 import {
   getQueueSummary,
   type RuntimeDriver,
@@ -92,7 +93,9 @@ export function ConsolePage({
             {logs.map((entry) => (
               <div key={entry.id} className={`console-log console-log--${entry.kind}`}>
                 <span className="console-log__time">{entry.time}</span>
-                <pre className="console-log__text">{entry.text}</pre>
+                {entry.kind === 'stdout'
+                  ? <pre className="console-log__text" dangerouslySetInnerHTML={{ __html: ansiToHtml(entry.text) }} />
+                  : <pre className="console-log__text">{entry.text}</pre>}
               </div>
             ))}
           </div>

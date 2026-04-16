@@ -586,36 +586,8 @@ fn runtime_event_from_python_payload(
     }
 }
 
-fn strip_ansi(s: &str) -> String {
-    if !s.contains('\x1b') {
-        return s.to_string();
-    }
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c != '\x1b' {
-            result.push(c);
-            continue;
-        }
-        match chars.peek() {
-            Some(&'[') => {
-                chars.next();
-                for nc in chars.by_ref() {
-                    if ('\x40'..='\x7e').contains(&nc) {
-                        break;
-                    }
-                }
-            }
-            _ => {
-                chars.next();
-            }
-        }
-    }
-    result
-}
-
 fn emit_raw_log(app: &AppHandle, line: &str) {
-    let _ = app.emit("runtime:raw-log", strip_ansi(line));
+    let _ = app.emit("runtime:raw-log", line);
 }
 
 fn emit_stderr_lines(app: &AppHandle, stderr: &[u8]) {
