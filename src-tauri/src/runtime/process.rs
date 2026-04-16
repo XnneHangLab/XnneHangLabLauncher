@@ -277,9 +277,7 @@ pub fn run_download_command(
         for line_result in BufReader::new(stderr).lines() {
             let line = line_result.map_err(|error| error.to_string())?;
             if !line.trim().is_empty() {
-                app_for_stderr
-                    .emit("runtime:raw-log", &line)
-                    .map_err(|error| error.to_string())?;
+                emit_raw_log(&app_for_stderr, &line);
             }
         }
         Ok(())
@@ -315,8 +313,7 @@ pub fn run_download_command(
                     .map_err(|error| error.to_string())?;
             }
         } else {
-            app.emit("runtime:raw-log", &line)
-                .map_err(|error| error.to_string())?;
+            emit_raw_log(&app, &line);
         }
     }
 
@@ -589,8 +586,36 @@ fn runtime_event_from_python_payload(
     }
 }
 
+fn strip_ansi(s: &str) -> String {
+    if !s.contains('\x1b') {
+        return s.to_string();
+    }
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            result.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some(&'[') => {
+                chars.next();
+                for nc in chars.by_ref() {
+                    if ('\x40'..='\x7e').contains(&nc) {
+                        break;
+                    }
+                }
+            }
+            _ => {
+                chars.next();
+            }
+        }
+    }
+    result
+}
+
 fn emit_raw_log(app: &AppHandle, line: &str) {
-    let _ = app.emit("runtime:raw-log", line);
+    let _ = app.emit("runtime:raw-log", strip_ansi(line));
 }
 
 fn emit_stderr_lines(app: &AppHandle, stderr: &[u8]) {
@@ -598,7 +623,7 @@ fn emit_stderr_lines(app: &AppHandle, stderr: &[u8]) {
     for line in text.lines() {
         let line = line.trim();
         if !line.is_empty() {
-            let _ = app.emit("runtime:raw-log", line);
+            emit_raw_log(app, line);
         }
     }
 }
@@ -971,7 +996,7 @@ pub fn spawn_backend_process(
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().flatten() {
             if !line.trim().is_empty() {
-                let _ = app_stdout.emit("runtime:raw-log", &line);
+                emit_raw_log(&app_stdout, &line);
             }
         }
     });
@@ -979,7 +1004,7 @@ pub fn spawn_backend_process(
     thread::spawn(move || {
         for line in BufReader::new(stderr).lines().flatten() {
             if !line.trim().is_empty() {
-                let _ = app.emit("runtime:raw-log", &line);
+                emit_raw_log(&app, &line);
             }
         }
         let _ = child.wait();
@@ -1033,7 +1058,7 @@ pub fn spawn_frontend_process(
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().flatten() {
             if !line.trim().is_empty() {
-                let _ = app_stdout.emit("runtime:raw-log", &line);
+                emit_raw_log(&app_stdout, &line);
             }
         }
     });
@@ -1041,7 +1066,7 @@ pub fn spawn_frontend_process(
     thread::spawn(move || {
         for line in BufReader::new(stderr).lines().flatten() {
             if !line.trim().is_empty() {
-                let _ = app.emit("runtime:raw-log", &line);
+                emit_raw_log(&app, &line);
             }
         }
         let _ = child.wait();
