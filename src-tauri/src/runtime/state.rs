@@ -164,6 +164,7 @@ pub struct RuntimeState {
     pub queue: Arc<Mutex<QueueState>>,
     pub driver_config: Arc<Mutex<RuntimeDriverConfig>>,
     pub webui: Arc<Mutex<WebuiProcessState>>,
+    pub frontend: Arc<Mutex<WebuiProcessState>>,
 }
 
 impl RuntimeState {
@@ -174,6 +175,7 @@ impl RuntimeState {
             queue: Arc::new(Mutex::new(QueueState::default())),
             driver_config: Arc::new(Mutex::new(RuntimeDriverConfig::Uv)),
             webui: Arc::new(Mutex::new(WebuiProcessState::default())),
+            frontend: Arc::new(Mutex::new(WebuiProcessState::default())),
         }
     }
 
@@ -206,6 +208,21 @@ impl RuntimeState {
 
     pub fn take_webui_process(&self) -> Option<WebuiProcessRecord> {
         self.webui.lock().unwrap().take_active()
+    }
+
+    pub fn register_frontend_process(&self, pid: u32) -> WebuiProcessRecord {
+        self.frontend.lock().unwrap().register(pid)
+    }
+
+    pub fn clear_frontend_process_if_matches(&self, launch_id: u64) -> bool {
+        self.frontend
+            .lock()
+            .unwrap()
+            .clear_if_launch_matches(launch_id)
+    }
+
+    pub fn take_frontend_process(&self) -> Option<WebuiProcessRecord> {
+        self.frontend.lock().unwrap().take_active()
     }
 }
 

@@ -56,8 +56,18 @@ export function launchWebui() {
   return invoke<void>('launch_webui');
 }
 
+export function launchFrontend() {
+  return invoke<void>('launch_frontend');
+}
+
 export async function subscribeWebuiStatus(onStatus: (status: string) => void) {
   return listen<string>('webui:status', (event) => {
+    onStatus(event.payload);
+  });
+}
+
+export async function subscribeFrontendStatus(onStatus: (status: string) => void) {
+  return listen<string>('frontend:status', (event) => {
     onStatus(event.payload);
   });
 }

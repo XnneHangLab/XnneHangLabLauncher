@@ -33,6 +33,8 @@ interface RenderPageOptions {
   onOpenPath: (pathKey: string) => void;
   onLaunchWebui: () => void;
   webuiRunning: boolean;
+  onLaunchFrontend: () => void;
+  frontendRunning: boolean;
   runtimeDriver: RuntimeDriver;
   runtimeMode: string;
   scriptsReady: boolean;
@@ -63,6 +65,8 @@ export function renderPage(
           onOpenModels={options.onOpenModels}
           onLaunchWebui={options.onLaunchWebui}
           webuiRunning={options.webuiRunning}
+          onLaunchFrontend={options.onLaunchFrontend}
+          frontendRunning={options.frontendRunning}
         />
       );
     case 'settings':

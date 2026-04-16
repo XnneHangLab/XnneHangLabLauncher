@@ -379,6 +379,7 @@ pub fn drain_download_queue(app: AppHandle, state: RuntimeState) {
                 queue: state.queue.clone(),
                 driver_config: state.driver_config.clone(),
                 webui: state.webui.clone(),
+                frontend: state.frontend.clone(),
             },
             task.task_id.clone(),
             task.target.clone(),
@@ -928,6 +929,24 @@ fn terminate_webui_process_tree(pid: u32) -> Result<(), String> {
     execute_webui_cleanup_plan(plan)
 }
 
+pub fn cleanup_frontend_processes(app: &AppHandle, state: &RuntimeState) -> Result<bool, String> {
+    let Some(record) = state.take_frontend_process() else {
+        return Ok(false);
+    };
+
+    emit_raw_log(
+        app,
+        &format!("[frontend] 正在停止前端进程 (pid {}) …", record.pid),
+    );
+    terminate_webui_process_tree(record.pid)?;
+    emit_raw_log(
+        app,
+        &format!("[frontend] 前端进程已停止 (pid {})", record.pid),
+    );
+    let _ = app.emit("frontend:status", "stopped");
+    Ok(true)
+}
+
 pub fn cleanup_webui_processes(app: &AppHandle, state: &RuntimeState) -> Result<bool, String> {
     let Some(record) = state.take_webui_process() else {
         return Ok(false);
@@ -946,41 +965,25 @@ pub fn cleanup_webui_processes(app: &AppHandle, state: &RuntimeState) -> Result<
     Ok(true)
 }
 
-pub fn spawn_webui_process(
+pub fn spawn_backend_process(
     app: AppHandle,
     state: RuntimeState,
     repo_root: &Path,
     workspace_root: &Path,
     driver: &RuntimeDriverConfig,
-    port: u16,
 ) -> Result<(), String> {
-    let port_str = port.to_string();
     let mut command = build_python_command_for_driver(
         repo_root,
         workspace_root,
         driver,
-        ["-m", "xnnehanglab_tts.cli", "webui", "--port", &port_str],
+        ["run_server.py"],
     );
     configure_webui_command_for_process_tree(&mut command);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    command.env("GRADIO_ANALYTICS_ENABLED", "False");
-    // Ensure localhost is excluded from any system proxy so Gradio's post-launch
-    // self-check GET to localhost doesn't get intercepted and return 502.
-    let existing_no_proxy = std::env::var("NO_PROXY")
-        .or_else(|_| std::env::var("no_proxy"))
-        .unwrap_or_default();
-    let no_proxy = if existing_no_proxy.is_empty() {
-        "localhost,127.0.0.1".to_string()
-    } else if existing_no_proxy.contains("localhost") {
-        existing_no_proxy
-    } else {
-        format!("{},localhost,127.0.0.1", existing_no_proxy)
-    };
-    command.env("NO_PROXY", &no_proxy).env("no_proxy", &no_proxy);
 
     let mut child = command
         .spawn()
-        .map_err(|error| format!("failed to spawn webui process: {error}"))?;
+        .map_err(|error| format!("failed to spawn backend process: {error}"))?;
     let record = state.register_webui_process(child.id());
 
     let stdout = child
@@ -1010,6 +1013,68 @@ pub fn spawn_webui_process(
         let _ = child.wait();
         if state.clear_webui_process_if_matches(record.launch_id) {
             let _ = app.emit("webui:status", "stopped");
+        }
+    });
+
+    Ok(())
+}
+
+pub fn spawn_frontend_process(
+    app: AppHandle,
+    state: RuntimeState,
+    repo_root: &Path,
+) -> Result<(), String> {
+    let frontend_dir = repo_root.join("frontend");
+
+    #[cfg(windows)]
+    let mut command = {
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", "npm", "run", "dev"]);
+        cmd
+    };
+    #[cfg(not(windows))]
+    let mut command = {
+        let mut cmd = Command::new("npm");
+        cmd.arg("run").arg("dev");
+        cmd
+    };
+
+    command.current_dir(&frontend_dir);
+    configure_webui_command_for_process_tree(&mut command);
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to spawn frontend process: {error}"))?;
+    let record = state.register_frontend_process(child.id());
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "missing child stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "missing child stderr".to_string())?;
+
+    let app_stdout = app.clone();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().flatten() {
+            if !line.trim().is_empty() {
+                let _ = app_stdout.emit("runtime:raw-log", &line);
+            }
+        }
+    });
+
+    thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().flatten() {
+            if !line.trim().is_empty() {
+                let _ = app.emit("runtime:raw-log", &line);
+            }
+        }
+        let _ = child.wait();
+        if state.clear_frontend_process_if_matches(record.launch_id) {
+            let _ = app.emit("frontend:status", "stopped");
         }
     });
 

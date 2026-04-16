@@ -11,6 +11,8 @@ interface HomePageProps {
   onOpenModels: () => void;
   onLaunchWebui: () => void;
   webuiRunning: boolean;
+  onLaunchFrontend: () => void;
+  frontendRunning: boolean;
 }
 
 export function HomePage({
@@ -19,6 +21,8 @@ export function HomePage({
   onOpenModels,
   onLaunchWebui,
   webuiRunning,
+  onLaunchFrontend,
+  frontendRunning,
 }: HomePageProps) {
   return (
     <div className="home-page">
@@ -41,6 +45,8 @@ export function HomePage({
           onOpenModels={onOpenModels}
           onLaunchWebui={onLaunchWebui}
           webuiRunning={webuiRunning}
+          onLaunchFrontend={onLaunchFrontend}
+          frontendRunning={frontendRunning}
         />
       </div>
     </div>

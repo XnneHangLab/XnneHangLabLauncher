@@ -21,7 +21,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                cleanup_webui_processes(&window.app_handle());
+                cleanup_all_processes(&window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -37,6 +37,7 @@ pub fn run() {
             runtime::commands::set_runtime_driver,
             runtime::commands::pick_python_path_command,
             runtime::commands::launch_webui,
+            runtime::commands::launch_frontend,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -46,14 +47,17 @@ pub fn run() {
             event,
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
         ) {
-            cleanup_webui_processes(app_handle);
+            cleanup_all_processes(app_handle);
         }
     });
 }
 
-fn cleanup_webui_processes(app_handle: &tauri::AppHandle) {
+fn cleanup_all_processes(app_handle: &tauri::AppHandle) {
     let state = app_handle.state::<runtime::state::RuntimeState>();
     if let Err(error) = runtime::process::cleanup_webui_processes(app_handle, &state) {
-        log::warn!("failed to clean up webui process: {error}");
+        log::warn!("failed to clean up backend process: {error}");
+    }
+    if let Err(error) = runtime::process::cleanup_frontend_processes(app_handle, &state) {
+        log::warn!("failed to clean up frontend process: {error}");
     }
 }

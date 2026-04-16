@@ -13,6 +13,7 @@ import {
   enqueueDownload,
   exportConsoleLogs,
   inspectRuntime,
+  launchFrontend,
   launchWebui,
   listDownloadTasks,
   listManagedFolders,
@@ -20,6 +21,7 @@ import {
   pickPythonPath,
   probeEnvironment,
   setRuntimeDriver as setRuntimeDriverApi,
+  subscribeFrontendStatus,
   subscribeRuntimeEvents,
   subscribeWebuiStatus,
   useRepoWorkspaceRoot,
@@ -63,6 +65,7 @@ export function AppShell() {
   const [runtimeDriver, setRuntimeDriver] = useState<RuntimeDriver>('uv');
   const [pythonExePath, setPythonExePath] = useState('');
   const [webuiRunning, setWebuiRunning] = useState(false);
+  const [frontendRunning, setFrontendRunning] = useState(false);
 
   useEffect(() => {
     writeStoredTheme(theme);
@@ -171,7 +174,7 @@ export function AppShell() {
         setWebuiRunning(false);
         setLogs((current) => [
           ...current,
-          createConsoleLog('system', 'Gradio WebUI 进程已退出'),
+          createConsoleLog('system', '后端进程已退出'),
         ]);
       }
     })
@@ -184,10 +187,30 @@ export function AppShell() {
       })
       .catch(() => {});
 
+    let unsubscribeFrontend = () => {};
+    void subscribeFrontendStatus((status) => {
+      if (status === 'stopped') {
+        setFrontendRunning(false);
+        setLogs((current) => [
+          ...current,
+          createConsoleLog('system', '前端进程已退出'),
+        ]);
+      }
+    })
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+          return;
+        }
+        unsubscribeFrontend = cleanup;
+      })
+      .catch(() => {});
+
     return () => {
       disposed = true;
       unsubscribe();
       unsubscribeWebui();
+      unsubscribeFrontend();
     };
   }, []);
 
@@ -437,7 +460,7 @@ export function AppShell() {
     if (!isEnvironmentReady(environmentProbe)) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', '环境未就绪，已禁止启动 WebUI'),
+        createConsoleLog('stderr', '环境未就绪，已禁止启动后端'),
       ]);
       return;
     }
@@ -450,7 +473,21 @@ export function AppShell() {
       setWebuiRunning(false);
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `启动 WebUI 失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', `启动后端失败: ${toErrorMessage(error)}`),
+      ]);
+    }
+  }
+
+  async function handleLaunchFrontend() {
+    setActivePage('console');
+    setFrontendRunning(true);
+    try {
+      await launchFrontend();
+    } catch (error) {
+      setFrontendRunning(false);
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', `启动前端失败: ${toErrorMessage(error)}`),
       ]);
     }
   }
@@ -500,6 +537,8 @@ export function AppShell() {
               onOpenPath: handleOpenManagedPath,
               onLaunchWebui: handleLaunchWebui,
               webuiRunning,
+              onLaunchFrontend: handleLaunchFrontend,
+              frontendRunning,
               runtimeDriver,
               runtimeMode,
               scriptsReady,
