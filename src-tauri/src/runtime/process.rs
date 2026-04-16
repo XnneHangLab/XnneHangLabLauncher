@@ -69,34 +69,6 @@ enum WebuiPortProbePlan {
     },
 }
 
-pub fn run_inspect_command(repo_root: &Path, workspace_root: &Path, driver: &RuntimeDriverConfig, app: &AppHandle) -> Result<serde_json::Value, String> {
-    emit_raw_log(app, "[inspect] 正在读取运行时信息 …");
-    let output = build_python_command_for_driver(
-        repo_root,
-        workspace_root,
-        driver,
-        ["-m", "xnnehanglab_tts.cli", "inspect-runtime"],
-    )
-    .output()
-    .map_err(|error| format!("failed to run inspect-runtime: {error}"))?;
-
-    emit_stderr_lines(app, &output.stderr);
-
-    if !output.status.success() {
-        let msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(msg);
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let last_line = stdout
-        .lines()
-        .last()
-        .ok_or_else(|| "inspect-runtime returned no stdout".to_string())?;
-    let envelope: PythonEnvelope =
-        serde_json::from_str(last_line).map_err(|error| error.to_string())?;
-    Ok(envelope.payload)
-}
-
 pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &RuntimeDriverConfig, app: &AppHandle) -> Result<EnvironmentProbePayload, String> {
     emit_raw_log(app, "[probe] 开始检测运行环境 …");
 

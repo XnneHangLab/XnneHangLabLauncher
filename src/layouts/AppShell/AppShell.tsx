@@ -12,7 +12,6 @@ import {
   chooseWorkspaceRoot,
   enqueueDownload,
   exportConsoleLogs,
-  inspectRuntime,
   launchFrontend,
   launchWebui,
   listDownloadTasks,
@@ -29,7 +28,6 @@ import {
 import {
   applyRuntimeEvent,
   buildFolderItemsFromPaths,
-  buildManagedFolderItems,
   createConsoleLogFromRuntimeEvent,
   getQueueSummary,
   isEnvironmentReady,
@@ -75,28 +73,8 @@ export function AppShell() {
     let disposed = false;
     let unsubscribe = () => {};
 
-    async function refreshInspectionSnapshot() {
-      try {
-        const nextInspection = await inspectRuntime();
-        if (disposed) {
-          return;
-        }
-        setInspection(nextInspection);
-        setFolders(buildManagedFolderItems(nextInspection));
-      } catch (error) {
-        if (disposed) {
-          return;
-        }
-        setLogs((current) => [
-          ...current,
-          createConsoleLog('stderr', `刷新资源状态失败: ${toErrorMessage(error)}`),
-        ]);
-      }
-    }
-
     void (async () => {
       try {
-        // Populate folder cards immediately from Rust state — no Python subprocess needed
         listManagedFolders()
           .then((paths) => { if (!disposed) setFolders(buildFolderItemsFromPaths(paths)); })
           .catch(() => {});
@@ -110,20 +88,13 @@ export function AppShell() {
         }
         setEnvironmentProbe(nextProbe);
         setTasks(nextTasks);
-
-        if (!isEnvironmentReady(nextProbe)) {
-          setInspection(null);
-          return;
-        }
-
-        await refreshInspectionSnapshot();
       } catch (error) {
         if (disposed) {
           return;
         }
         setLogs((current) => [
           ...current,
-          createConsoleLog('stderr', `初始化运行时失败: ${toErrorMessage(error)}`),
+          createConsoleLog('stderr', toErrorMessage(error)),
         ]);
       }
     })();
@@ -142,7 +113,6 @@ export function AppShell() {
         }
         if (event.event === 'download.completed' || event.event === 'download.failed') {
           setFileProgress(null);
-          void refreshInspectionSnapshot();
         }
         setTasks((current) => applyRuntimeEvent(current, event));
         setLogs((current) => [...current, createConsoleLogFromRuntimeEvent(event)]);
@@ -164,7 +134,7 @@ export function AppShell() {
         }
         setLogs((current) => [
           ...current,
-          createConsoleLog('stderr', `订阅运行时事件失败: ${toErrorMessage(error)}`),
+          createConsoleLog('stderr', toErrorMessage(error)),
         ]);
       });
 
@@ -238,7 +208,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `创建下载任务失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -267,7 +237,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `创建下载任务失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -296,7 +266,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `创建下载任务失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -325,7 +295,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `创建下载任务失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -354,7 +324,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `创建下载任务失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -364,14 +334,6 @@ export function AppShell() {
     setInspection(null);
     setFolders([]);
     setTasks([]);
-
-    if (!isEnvironmentReady(nextProbe)) {
-      return;
-    }
-
-    const nextInspection = await inspectRuntime();
-    setInspection(nextInspection);
-    setFolders(buildManagedFolderItems(nextInspection));
   }
 
   async function handleChooseWorkspaceRoot() {
@@ -384,7 +346,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `切换工作目录失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -396,7 +358,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `恢复默认工作目录失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }
@@ -407,7 +369,7 @@ export function AppShell() {
     } catch (error) {
       setLogs((current) => [
         ...current,
-        createConsoleLog('stderr', `打开目录失败: ${toErrorMessage(error)}`),
+        createConsoleLog('stderr', toErrorMessage(error)),
       ]);
     }
   }

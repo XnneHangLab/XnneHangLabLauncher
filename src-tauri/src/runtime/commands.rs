@@ -3,25 +3,10 @@ use tauri::{AppHandle, State};
 use super::process::{
     cleanup_frontend_processes, cleanup_webui_port_conflicts, cleanup_webui_processes,
     drain_download_queue, ensure_environment_ready, open_path, pick_python_path,
-    pick_workspace_root, resolve_managed_path, run_inspect_command, run_probe_command,
+    pick_workspace_root, resolve_managed_path, run_probe_command,
     spawn_backend_process, spawn_frontend_process, write_console_log,
 };
 use super::state::{resolve_repo_root, resolve_workspace_root, RuntimeDriverConfig, RuntimeState};
-
-#[tauri::command]
-pub async fn inspect_runtime(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
-) -> Result<serde_json::Value, String> {
-    let repo_root = state.repo_root.clone();
-    let workspace_root = state.current_workspace_root();
-    let driver = state.current_driver_config();
-    run_blocking_runtime_action(move || {
-        ensure_environment_ready(&repo_root, &workspace_root, &driver, &app)?;
-        run_inspect_command(&repo_root, &workspace_root, &driver, &app)
-    })
-    .await
-}
 
 #[tauri::command]
 pub async fn probe_environment(

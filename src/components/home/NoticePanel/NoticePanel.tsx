@@ -16,25 +16,27 @@ export function NoticePanel({ notices, onOpenModels, onLaunchWebui, webuiRunning
         <p key={notice}>{notice}</p>
       ))}
 
-      <button
-        type="button"
-        className="run-btn"
-        data-state={frontendRunning ? 'running' : 'ready'}
-        disabled={frontendRunning}
-        onClick={onLaunchFrontend}
-      >
-        {frontendRunning ? '前端运行中…' : '启动前端'}
-      </button>
+      <div className="notice-actions">
+        <button
+          type="button"
+          className="run-btn"
+          data-state={frontendRunning ? 'running' : 'ready'}
+          disabled={frontendRunning}
+          onClick={onLaunchFrontend}
+        >
+          {frontendRunning ? '前端运行中…' : '启动前端'}
+        </button>
 
-      <button
-        type="button"
-        className="run-btn"
-        data-state={webuiRunning ? 'running' : 'ready'}
-        disabled={webuiRunning}
-        onClick={onLaunchWebui}
-      >
-        {webuiRunning ? '后端运行中…' : '启动后端'}
-      </button>
+        <button
+          type="button"
+          className="run-btn"
+          data-state={webuiRunning ? 'running' : 'ready'}
+          disabled={webuiRunning}
+          onClick={onLaunchWebui}
+        >
+          {webuiRunning ? '后端运行中…' : '启动后端'}
+        </button>
+      </div>
     </aside>
   );
 }

@@ -4,7 +4,6 @@ import type {
   EnvironmentProbe,
   ManagedPath,
   RuntimeEvent,
-  RuntimeInspection,
   RuntimeTaskRecord,
 } from './runtime';
 
@@ -18,10 +17,6 @@ export function chooseWorkspaceRoot() {
 
 export function useRepoWorkspaceRoot() {
   return invoke<EnvironmentProbe>('use_repo_workspace_root');
-}
-
-export function inspectRuntime() {
-  return invoke<RuntimeInspection>('inspect_runtime');
 }
 
 export function enqueueDownload(target: string) {

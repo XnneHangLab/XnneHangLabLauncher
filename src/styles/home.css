@@ -400,8 +400,14 @@
   color: var(--muted);
 }
 
-.home-page .run-btn {
+.home-page .notice-actions {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-page .run-btn {
   position: relative;
   height: 68px;
   border: 0;
