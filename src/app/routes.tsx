@@ -4,6 +4,7 @@ import { ConsolePage } from '../pages/ConsolePage/ConsolePage';
 import { ModelsPage } from '../pages/ModelsPage/ModelsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage/SettingsPage';
+import { ProfilesPage } from '../pages/ProfilesPage/ProfilesPage';
 import type { PageId } from '../data/nav';
 import type { ConsoleLogEntry } from '../services/launcher/launcher';
 import type {
@@ -88,6 +89,8 @@ export function renderPage(
           onSaveLabConfig={options.onSaveLabConfig}
         />
       );
+    case 'profiles':
+      return <ProfilesPage />;
     case 'advanced':
       return (
         <PlaceholderPage
