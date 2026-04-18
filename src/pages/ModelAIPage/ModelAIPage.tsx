@@ -118,11 +118,13 @@ function ProviderCard({
           />
         </SettingRow>
         <SettingRow name="API 格式" icon="📐">
-          <input
+          <select
             className="proxy-input"
             value={provider.api_format}
             onChange={(e) => onChange({ ...provider, api_format: e.target.value })}
-          />
+          >
+            <option value="chat_completion">chat_completion</option>
+          </select>
         </SettingRow>
       </SettingCard>
     </>
