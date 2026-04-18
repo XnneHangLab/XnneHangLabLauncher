@@ -45,6 +45,7 @@ pub fn run() {
             runtime::config::write_profile,
             runtime::config::create_profile,
             runtime::config::delete_profile,
+            runtime::config::pick_file_for_profile,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

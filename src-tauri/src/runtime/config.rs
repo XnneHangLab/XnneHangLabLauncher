@@ -1,4 +1,6 @@
 use serde_json;
+use std::path::PathBuf;
+use std::process::Command;
 use tauri::State;
 
 use super::state::RuntimeState;
@@ -163,4 +165,81 @@ pub async fn fetch_model_list(base_url: String, api_key: String) -> Result<Vec<S
         .collect();
 
     Ok(models)
+}
+
+#[tauri::command]
+pub async fn pick_file_for_profile(
+    state: State<'_, RuntimeState>,
+    title: String,
+    start_subdir: String,
+) -> Result<Option<String>, String> {
+    let start_dir = if start_subdir.is_empty() {
+        state.repo_root.clone()
+    } else {
+        state.repo_root.join(&start_subdir)
+    };
+    let start_str = start_dir.to_string_lossy().to_string();
+
+    let abs_path = pick_file_dialog(&title, &start_str)?;
+    let Some(abs) = abs_path else {
+        return Ok(None);
+    };
+
+    let relative = abs
+        .strip_prefix(&state.repo_root)
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| abs.to_string_lossy().replace('\\', "/"));
+
+    Ok(Some(relative))
+}
+
+fn pick_file_dialog(title: &str, start_dir: &str) -> Result<Option<PathBuf>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms; \
+             $d = New-Object System.Windows.Forms.OpenFileDialog; \
+             $d.Title = '{title}'; \
+             $d.InitialDirectory = '{start_dir}'; \
+             $d.Filter = '所有文件 (*.*)|*.*'; \
+             if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) \
+             {{ [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $d.FileName }}"
+        );
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output()
+            .map_err(|e| format!("无法启动文件选择器: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "POSIX path of (choose file with prompt \"{title}\" default location POSIX file \"{start_dir}\")"
+        );
+        let output = Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|e| format!("无法启动文件选择器: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let start_with_slash = format!("{}/", start_dir.trim_end_matches('/'));
+        for (program, args) in [
+            ("zenity", vec!["--file-selection", &format!("--title={title}"), &format!("--filename={start_with_slash}")]),
+            ("kdialog", vec!["--getopenfilename", start_dir]),
+        ] {
+            let Ok(output) = Command::new(program).args(&args).output() else { continue };
+            if !output.status.success() { continue }
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                return Ok(Some(PathBuf::from(stdout)));
+            }
+        }
+        return Err("未找到可用的文件选择器（需要 zenity 或 kdialog）".to_string());
+    }
 }

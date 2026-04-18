@@ -20,3 +20,7 @@ export function createProfile(file: string) {
 export function deleteProfile(file: string) {
   return invoke<void>('delete_profile', { file });
 }
+
+export function pickFileForProfile(title: string, startSubdir: string) {
+  return invoke<string | null>('pick_file_for_profile', { title, startSubdir });
+}

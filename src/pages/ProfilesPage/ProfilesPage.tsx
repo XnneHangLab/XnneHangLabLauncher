@@ -8,6 +8,7 @@ import {
   writeProfile,
   createProfile,
   deleteProfile,
+  pickFileForProfile,
 } from '../../services/config/profileBridge';
 import type { ProfileMeta, ProfileConfig } from '../../services/config/profileConfig';
 import '../../styles/settings.css';
@@ -28,6 +29,29 @@ const KNOWN_PLUGINS: Array<{ id: string; label: string; description: string }> =
 function ProfileAvatar({ name }: { name: string }) {
   const initial = name ? name[0].toUpperCase() : '?';
   return <div className="profile-avatar">{initial}</div>;
+}
+
+function BrowsePath({
+  value,
+  onChange,
+  onBrowse,
+  wide = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBrowse: () => Promise<void>;
+  wide?: boolean;
+}) {
+  return (
+    <div className="profile-path-wrap">
+      <input
+        className={`proxy-input${wide ? ' workspace-input' : ''}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button type="button" className="profile-browse-btn" onClick={onBrowse}>…</button>
+    </div>
+  );
 }
 
 interface ProfileEditorProps {
@@ -68,6 +92,21 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
     onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
   }
 
+  async function browseAvatar() {
+    const rel = await pickFileForProfile('选择头像', 'static/avatars');
+    if (rel !== null) {
+      setCharacter({ avatar: rel.split('/').pop() ?? rel });
+    }
+  }
+  async function browsePersona() {
+    const rel = await pickFileForProfile('选择人设文件', 'prompts');
+    if (rel !== null) setPrompt({ persona: rel });
+  }
+  async function browseFormat() {
+    const rel = await pickFileForProfile('选择格式文件', 'prompts');
+    if (rel !== null) setPrompt({ format: rel });
+  }
+
   const unknownPlugins = enabledPlugins.filter(
     (p) => !KNOWN_PLUGINS.find((k) => k.id === p),
   );
@@ -105,9 +144,12 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
             <input className="proxy-input" value={character.live2d_model_name ?? ''}
               onChange={(e) => setCharacter({ live2d_model_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="头像文件名" description="相对于 voices/ 的路径" icon="🖼">
-            <input className="proxy-input" value={character.avatar ?? ''}
-              onChange={(e) => setCharacter({ avatar: e.target.value })} />
+          <SettingRow name="头像文件" description="static/avatars/ 目录下的文件名" icon="🖼">
+            <BrowsePath
+              value={character.avatar ?? ''}
+              onChange={(v) => setCharacter({ avatar: v })}
+              onBrowse={browseAvatar}
+            />
           </SettingRow>
           <SettingRow name="用户称呼" description="对话中对用户的称呼" icon="🙋">
             <input className="proxy-input" value={character.human_name ?? ''}
@@ -147,12 +189,20 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
 
         <SettingCard>
           <SettingRow name="人设文件" description="相对于项目根目录的 .md 路径" icon="📄">
-            <input className="proxy-input workspace-input" value={prompt.persona ?? ''}
-              onChange={(e) => setPrompt({ persona: e.target.value })} />
+            <BrowsePath
+              value={prompt.persona ?? ''}
+              onChange={(v) => setPrompt({ persona: v })}
+              onBrowse={browsePersona}
+              wide
+            />
           </SettingRow>
           <SettingRow name="格式文件" description="情绪括号等格式 prompt 路径" icon="📐">
-            <input className="proxy-input workspace-input" value={prompt.format ?? ''}
-              onChange={(e) => setPrompt({ format: e.target.value })} />
+            <BrowsePath
+              value={prompt.format ?? ''}
+              onChange={(v) => setPrompt({ format: v })}
+              onBrowse={browseFormat}
+              wide
+            />
           </SettingRow>
           <SettingRow name="显示控制标签" icon="🏷">
             <ToggleSwitch
@@ -269,49 +319,46 @@ export function ProfilesPage() {
 
   return (
     <div className="profiles-page">
-      <aside className="profiles-list">
-        <div className="profiles-list__inner">
+      <div className="profiles-topbar">
+        <div className="profiles-list">
           {metas.map((m) => (
             <button
               key={m.file}
               type="button"
-              className={`profile-card${selectedFile === m.file ? ' profile-card--active' : ''}`}
+              className={`profile-chip${selectedFile === m.file ? ' profile-chip--active' : ''}`}
               onClick={() => handleSelect(m.file)}
             >
               <ProfileAvatar name={m.character_name || m.name} />
-              <div className="profile-card__text">
-                <div className="profile-card__name">{m.character_name || m.name}</div>
-                <div className="profile-card__desc">{m.description}</div>
-              </div>
+              <span className="profile-chip__name">{m.character_name || m.name}</span>
             </button>
           ))}
 
           {showNewInput ? (
-            <div className="profile-new-form">
+            <div className="profile-new-inline">
               <input
                 className="profile-new-input"
                 placeholder="文件名（如 mychar）"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleCreate();
+                  if (e.key === 'Escape') { setShowNewInput(false); setNewName(''); }
+                }}
                 autoFocus
               />
-              <div className="profile-new-actions">
-                <button type="button" className="profile-new-confirm" onClick={handleCreate}>创建</button>
-                <button type="button" className="profile-new-cancel"
-                  onClick={() => { setShowNewInput(false); setNewName(''); }}>取消</button>
-              </div>
+              <button type="button" className="profile-new-confirm" onClick={handleCreate}>创建</button>
+              <button type="button" className="profile-new-cancel"
+                onClick={() => { setShowNewInput(false); setNewName(''); }}>取消</button>
             </div>
           ) : (
-            <button type="button" className="profile-add-btn"
-              onClick={() => setShowNewInput(true)}>
-              <span style={{ fontSize: 16 }}>＋</span> 新建角色卡片
+            <button type="button" className="profile-add-btn" onClick={() => setShowNewInput(true)}>
+              ＋
             </button>
           )}
         </div>
 
-        {error && <p className="profile-error">{error}</p>}
-      </aside>
+        {error && <span className="profile-error">{error}</span>}
+      </div>
 
       {activeConfig && selectedFile ? (
         <ProfileEditor
@@ -324,7 +371,7 @@ export function ProfilesPage() {
         />
       ) : (
         <div className="profiles-empty">
-          <p>选择左侧卡片开始编辑</p>
+          <p>选择上方角色卡片开始编辑</p>
         </div>
       )}
     </div>
