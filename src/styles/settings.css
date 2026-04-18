@@ -397,11 +397,78 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin: 16px 0 8px;
 }
 
 .settings-shell .provider-header .group-title {
   margin: 0;
+}
+
+.settings-shell .provider-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-shell .provider-name-input {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 7px;
+  width: 180px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.settings-shell .provider-name-input:hover,
+.settings-shell .provider-name-input:focus {
+  border-color: var(--line);
+  background: var(--panel-2);
+  outline: none;
+}
+
+.settings-shell .provider-name-input--error {
+  border-color: rgba(255, 100, 100, 0.5) !important;
+  background: rgba(255, 100, 100, 0.06) !important;
+}
+
+.settings-shell .provider-name-error {
+  font-size: 11px;
+  color: #ff6b6b;
+  white-space: nowrap;
+}
+
+.settings-shell .provider-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.settings-shell .provider-sync-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.settings-shell .provider-sync-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: rgba(63, 163, 255, 0.4);
+  background: rgba(63, 163, 255, 0.06);
+}
+
+.settings-shell .provider-sync-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .settings-shell .provider-remove-btn {

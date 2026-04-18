@@ -8,3 +8,7 @@ export function readLabConfig() {
 export function writeLabConfig(config: LabConfig) {
   return invoke<void>('write_lab_config', { config });
 }
+
+export function fetchModelList(baseUrl: string, apiKey: string) {
+  return invoke<string[]>('fetch_model_list', { baseUrl, apiKey });
+}

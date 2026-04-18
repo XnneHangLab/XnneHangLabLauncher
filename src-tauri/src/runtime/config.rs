@@ -53,3 +53,33 @@ pub fn write_lab_config(
         .map_err(|e| format!("序列化配置失败: {e}"))?;
     std::fs::write(&config_path, toml_str).map_err(|e| format!("写入配置失败: {e}"))
 }
+
+#[tauri::command]
+pub async fn fetch_model_list(base_url: String, api_key: String) -> Result<Vec<String>, String> {
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("API 返回错误: {}", resp.status()));
+    }
+
+    let data: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {e}"))?;
+
+    let models = data["data"]
+        .as_array()
+        .ok_or_else(|| "响应格式不符合预期（缺少 data 字段）".to_string())?
+        .iter()
+        .filter_map(|m| m["id"].as_str().map(String::from))
+        .collect();
+
+    Ok(models)
+}

@@ -39,6 +39,7 @@ pub fn run() {
             runtime::commands::launch_frontend,
             runtime::config::read_lab_config,
             runtime::config::write_lab_config,
+            runtime::config::fetch_model_list,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
