@@ -15,16 +15,16 @@ import type { ProfileMeta, ProfileConfig } from '../../services/config/profileCo
 import '../../styles/settings.css';
 import '../../styles/profiles.css';
 
-const KNOWN_PLUGINS: Array<{ id: string; label: string; description: string }> = [
-  { id: 'pre_tool_preview', label: '工具调用预览', description: '工具调用前展示简短预览文本' },
-  { id: 'tool_call_integrity', label: '工具完整性检查', description: '保证工具调用结构完整' },
-  { id: 'web_fetch', label: '网页抓取', description: '允许 Agent 抓取网页内容' },
-  { id: 'web_search_ddg', label: 'DDG 搜索', description: 'DuckDuckGo 网络搜索' },
-  { id: 'screen_shot', label: '截图', description: '允许 Agent 调用截图能力' },
-  { id: 'diary', label: '日记', description: '读写日记文件' },
-  { id: 'memory', label: '记忆', description: '长期记忆检索与写入' },
-  { id: 'live2d_control', label: 'Live2D 控制', description: '控制 Live2D 模型外观与动作' },
-  { id: 'mood_chat', label: '情绪聊天', description: '主动发起情绪化对话' },
+const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
+  { id: 'pre_tool_preview', description: '工具调用前展示简短预览文本' },
+  { id: 'tool_call_integrity', description: '保证工具调用结构完整' },
+  { id: 'web_fetch', description: '允许 Agent 抓取网页内容' },
+  { id: 'web_search_ddg', description: 'DuckDuckGo 网络搜索' },
+  { id: 'screen_shot', description: '允许 Agent 调用截图能力' },
+  { id: 'diary', description: '读写日记文件' },
+  { id: 'memory', description: '长期记忆检索与写入' },
+  { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
+  { id: 'mood_chat', description: '主动发起情绪化对话' },
 ];
 
 function ProfileAvatar({ name, absPath }: { name: string; absPath?: string | null }) {
@@ -123,15 +123,15 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
         </div>
 
         <SettingCard>
-          <SettingRow name="显示名称" icon="🏷">
+          <SettingRow name="name" description="角色的显示名称" icon="🏷">
             <input className="proxy-input" value={profile.name}
               onChange={(e) => setProfile({ name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="描述" icon="📝">
+          <SettingRow name="description" icon="📝">
             <input className="proxy-input" value={profile.description}
               onChange={(e) => setProfile({ description: e.target.value })} />
           </SettingRow>
-          <SettingRow name="Agent 名称" description="后端路由使用的标识符" icon="🤖">
+          <SettingRow name="agent_name" description="后端路由使用的标识符" icon="🤖">
             <input className="proxy-input" value={profile.agent_name}
               onChange={(e) => setProfile({ agent_name: e.target.value })} />
           </SettingRow>
@@ -140,26 +140,26 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
         <div className="group-title">角色配置</div>
 
         <SettingCard>
-          <SettingRow name="角色名" icon="👤">
+          <SettingRow name="character_name" icon="👤">
             <input className="proxy-input" value={character.character_name ?? ''}
               onChange={(e) => setCharacter({ character_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="Live2D 模型名" icon="🖼">
+          <SettingRow name="live2d_model_name" icon="🖼">
             <input className="proxy-input" value={character.live2d_model_name ?? ''}
               onChange={(e) => setCharacter({ live2d_model_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="头像文件" description="static/avatars/ 目录下的文件名" icon="🖼">
+          <SettingRow name="avatar" description="static/avatars/ 目录下的文件名" icon="🖼">
             <BrowsePath
               value={character.avatar ?? ''}
               onChange={(v) => setCharacter({ avatar: v })}
               onBrowse={browseAvatar}
             />
           </SettingRow>
-          <SettingRow name="用户称呼" description="对话中对用户的称呼" icon="🙋">
+          <SettingRow name="human_name" description="对话中对用户的称呼" icon="🙋">
             <input className="proxy-input" value={character.human_name ?? ''}
               onChange={(e) => setCharacter({ human_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="默认表情" icon="😊">
+          <SettingRow name="default_expression_emotion" icon="😊">
             <input className="proxy-input" value={character.default_expression_emotion ?? ''}
               onChange={(e) => setCharacter({ default_expression_emotion: e.target.value })} />
           </SettingRow>
@@ -174,16 +174,16 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
             ['ignore_parentheses', '忽略圆括号 ()'],
             ['ignore_asterisks', '忽略星号 *'],
             ['ignore_angle_brackets', '忽略尖括号 <>'],
-          ] as const).map(([key, label]) => (
-            <SettingRow key={key} name={label}>
+          ] as const).map(([key, desc]) => (
+            <SettingRow key={key} name={key} description={desc}>
               <ToggleSwitch
-                label={label}
+                label={key}
                 checked={ttsPreprocessor[key] ?? false}
                 onChange={(v) => setTtsPreprocessor({ [key]: v })}
               />
             </SettingRow>
           ))}
-          <SettingRow name="TTS 角色名" description="对应 voices/ 下的子目录名" icon="🔊">
+          <SettingRow name="character_name" description="对应 voices/ 下的子目录名" icon="🔊">
             <input className="proxy-input" value={tts.character_name ?? ''}
               onChange={(e) => setTts({ character_name: e.target.value })} />
           </SettingRow>
@@ -192,7 +192,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
         <div className="group-title">提示词</div>
 
         <SettingCard>
-          <SettingRow name="人设文件" description="相对于项目根目录的 .md 路径" icon="📄">
+          <SettingRow name="persona" description="相对于项目根目录的 .md 路径" icon="📄">
             <BrowsePath
               value={prompt.persona ?? ''}
               onChange={(v) => setPrompt({ persona: v })}
@@ -200,7 +200,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
               wide
             />
           </SettingRow>
-          <SettingRow name="格式文件" description="情绪括号等格式 prompt 路径" icon="📐">
+          <SettingRow name="format" description="情绪括号等格式 prompt 路径" icon="📐">
             <BrowsePath
               value={prompt.format ?? ''}
               onChange={(v) => setPrompt({ format: v })}
@@ -208,9 +208,9 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
               wide
             />
           </SettingRow>
-          <SettingRow name="显示控制标签" icon="🏷">
+          <SettingRow name="show_control_tags" icon="🏷">
             <ToggleSwitch
-              label="显示控制标签"
+              label="show_control_tags"
               checked={prompt.show_control_tags ?? false}
               onChange={(v) => setPrompt({ show_control_tags: v })}
             />
@@ -220,10 +220,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
         <div className="group-title">插件</div>
 
         <SettingCard>
-          {KNOWN_PLUGINS.map(({ id, label, description }) => (
-            <SettingRow key={id} name={label} description={description}>
+          {KNOWN_PLUGINS.map(({ id, description }) => (
+            <SettingRow key={id} name={id} description={description}>
               <ToggleSwitch
-                label={label}
+                label={id}
                 checked={enabledPlugins.includes(id)}
                 onChange={(on) => togglePlugin(id, on)}
               />

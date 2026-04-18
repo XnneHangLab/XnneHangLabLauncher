@@ -190,6 +190,11 @@
   min-height: 0;
 }
 
+.profiles-editor.settings-shell .setting-name {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
 .profiles-editor.settings-shell .settings-save-row {
   justify-content: space-between;
 }
