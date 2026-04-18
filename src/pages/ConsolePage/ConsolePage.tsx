@@ -93,9 +93,7 @@ export function ConsolePage({
             {logs.map((entry) => (
               <div key={entry.id} className={`console-log console-log--${entry.kind}`}>
                 <span className="console-log__time">{entry.time}</span>
-                {entry.kind === 'stdout'
-                  ? <pre className="console-log__text" dangerouslySetInnerHTML={{ __html: ansiToHtml(entry.text) }} />
-                  : <pre className="console-log__text">{entry.text}</pre>}
+                <pre className="console-log__text" dangerouslySetInnerHTML={{ __html: ansiToHtml(entry.text) }} />
               </div>
             ))}
           </div>
