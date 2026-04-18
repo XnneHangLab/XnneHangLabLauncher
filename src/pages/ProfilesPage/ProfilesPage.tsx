@@ -10,6 +10,7 @@ import {
   deleteProfile,
 } from '../../services/config/profileBridge';
 import type { ProfileMeta, ProfileConfig } from '../../services/config/profileConfig';
+import '../../styles/settings.css';
 import '../../styles/profiles.css';
 
 const KNOWN_PLUGINS: Array<{ id: string; label: string; description: string }> = [
@@ -72,10 +73,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
   );
 
   return (
-    <div className="profiles-editor">
-      <div className="profiles-editor__inner">
+    <div className="profiles-editor settings-shell">
+      <div className="settings-wrap">
         <div className="group-title group-title--standalone">
-          基本信息 <span className="profile-file-badge">{file}.toml</span>
+          {profile.name || file} <span className="profile-file-badge">{file}.toml</span>
         </div>
 
         <SettingCard>
@@ -179,12 +180,12 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
           )}
         </SettingCard>
 
-        <div className="profiles-editor__actions">
+        <div className="settings-save-row">
+          <button type="button" className="profile-delete-btn" onClick={onDelete}>
+            删除
+          </button>
           <button type="button" className="settings-save-button" onClick={onSave} disabled={saving}>
             {saving ? '保存中…' : '保存'}
-          </button>
-          <button type="button" className="profile-delete-btn" onClick={onDelete}>
-            删除此卡片
           </button>
         </div>
 
