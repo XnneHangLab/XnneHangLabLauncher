@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { ToggleSwitch } from '../../components/settings/ToggleSwitch/ToggleSwitch';
@@ -26,7 +27,10 @@ const KNOWN_PLUGINS: Array<{ id: string; label: string; description: string }> =
   { id: 'mood_chat', label: '情绪聊天', description: '主动发起情绪化对话' },
 ];
 
-function ProfileAvatar({ name }: { name: string }) {
+function ProfileAvatar({ name, absPath }: { name: string; absPath?: string | null }) {
+  if (absPath) {
+    return <img className="profile-avatar profile-avatar--img" src={convertFileSrc(absPath)} alt={name} />;
+  }
   const initial = name ? name[0].toUpperCase() : '?';
   return <div className="profile-avatar">{initial}</div>;
 }
@@ -328,8 +332,11 @@ export function ProfilesPage() {
               className={`profile-chip${selectedFile === m.file ? ' profile-chip--active' : ''}`}
               onClick={() => handleSelect(m.file)}
             >
-              <ProfileAvatar name={m.character_name || m.name} />
-              <span className="profile-chip__name">{m.character_name || m.name}</span>
+              <ProfileAvatar name={m.character_name || m.name} absPath={m.avatar_abs_path} />
+              <div className="profile-chip__text">
+                <span className="profile-chip__name">{m.character_name || m.name}</span>
+                <span className="profile-chip__file">{m.file}</span>
+              </div>
             </button>
           ))}
 

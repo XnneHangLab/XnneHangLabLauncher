@@ -78,13 +78,21 @@ pub fn list_profiles(state: State<'_, RuntimeState>) -> Result<serde_json::Value
         let toml_val: toml::Value = contents.parse().unwrap_or(toml::Value::Table(Default::default()));
         let profile_section = toml_val.get("profile");
         let character_section = toml_val.get("character");
+        let avatar_str = character_section.and_then(|c| c.get("avatar")).and_then(|v| v.as_str()).unwrap_or("");
+        let avatar_abs_path: Option<String> = if !avatar_str.is_empty() {
+            let p = state.repo_root.join("static").join("avatars").join(avatar_str);
+            if p.exists() { Some(p.to_string_lossy().to_string()) } else { None }
+        } else {
+            None
+        };
         list.push(serde_json::json!({
             "file": stem,
             "name": profile_section.and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or(&stem),
             "description": profile_section.and_then(|p| p.get("description")).and_then(|v| v.as_str()).unwrap_or(""),
             "agent_name": profile_section.and_then(|p| p.get("agent_name")).and_then(|v| v.as_str()).unwrap_or(""),
             "character_name": character_section.and_then(|c| c.get("character_name")).and_then(|v| v.as_str()).unwrap_or(""),
-            "avatar": character_section.and_then(|c| c.get("avatar")).and_then(|v| v.as_str()).unwrap_or(""),
+            "avatar": avatar_str,
+            "avatar_abs_path": avatar_abs_path,
         }));
     }
 

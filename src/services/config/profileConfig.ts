@@ -5,6 +5,7 @@ export interface ProfileMeta {
   agent_name: string;
   character_name: string;
   avatar: string;
+  avatar_abs_path: string | null;
 }
 
 export interface ProfileConfig {
