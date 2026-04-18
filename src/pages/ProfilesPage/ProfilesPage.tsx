@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
@@ -27,6 +27,20 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
   { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
   { id: 'mood_chat', description: '主动发起情绪化对话' },
 ];
+
+type PluginFieldType = 'text' | 'number' | 'textarea';
+interface PluginField { key: string; type: PluginFieldType; description?: string; }
+
+const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
+  memory: [
+    { key: 'user_id', type: 'text' },
+    { key: 'agent_id', type: 'text' },
+    { key: 'search_limit', type: 'number' },
+  ],
+  mood_chat: [
+    { key: 'prompt', type: 'textarea', description: '主动发言时注入的提示词' },
+  ],
+};
 
 function ProfileAvatar({ name, absPath }: { name: string; absPath?: string | null }) {
   if (absPath) {
@@ -72,6 +86,14 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
     const current = enabledPlugins.filter((p) => p !== id);
     const next = on ? [...current, id] : current;
     onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
+  }
+
+  function getPluginCfg(id: string): Record<string, unknown> {
+    const raw = config.plugins?.[id];
+    return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+  }
+  function setPluginCfg(id: string, patch: Record<string, unknown>) {
+    onChange({ ...config, plugins: { ...(config.plugins ?? {}), [id]: { ...getPluginCfg(id), ...patch } } });
   }
 
   async function browseAvatar() {
@@ -198,15 +220,40 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
         <div className="group-title">插件</div>
 
         <SettingCard>
-          {KNOWN_PLUGINS.map(({ id, description }) => (
-            <SettingRow key={id} name={id} description={description}>
-              <ToggleSwitch
-                label={id}
-                checked={enabledPlugins.includes(id)}
-                onChange={(on) => togglePlugin(id, on)}
-              />
-            </SettingRow>
-          ))}
+          {KNOWN_PLUGINS.map(({ id, description }) => {
+            const isOn = enabledPlugins.includes(id);
+            const fields = PLUGIN_CONFIG_FIELDS[id];
+            const cfg = getPluginCfg(id);
+            return (
+              <React.Fragment key={id}>
+                <SettingRow name={id} description={description}>
+                  <ToggleSwitch
+                    label={id}
+                    checked={isOn}
+                    onChange={(on) => togglePlugin(id, on)}
+                  />
+                </SettingRow>
+                {isOn && fields?.map((f) => (
+                  <SettingRow key={`${id}.${f.key}`} name={f.key} description={f.description}>
+                    {f.type === 'textarea' ? (
+                      <textarea
+                        className="proxy-input plugin-textarea"
+                        value={(cfg[f.key] as string) ?? ''}
+                        onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}
+                      />
+                    ) : (
+                      <input
+                        className="proxy-input"
+                        type={f.type}
+                        value={(cfg[f.key] as string | number) ?? ''}
+                        onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
+                      />
+                    )}
+                  </SettingRow>
+                ))}
+              </React.Fragment>
+            );
+          })}
           {unknownPlugins.length > 0 && (
             <SettingRow name="其他已启用插件" description={unknownPlugins.join(', ')} />
           )}
@@ -237,7 +284,19 @@ export function ProfilesPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    reload();
+    void (async () => {
+      try {
+        const list = await listProfiles();
+        setMetas(list);
+        if (list.length > 0) {
+          const cfg = await readProfile(list[0].file);
+          setSelectedFile(list[0].file);
+          setActiveConfig(cfg);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
   }, []);
 
   async function reload() {

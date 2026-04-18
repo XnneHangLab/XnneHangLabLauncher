@@ -535,3 +535,12 @@
   border-color: var(--accent);
   background: var(--panel-2);
 }
+
+.settings-shell .plugin-textarea {
+  width: 320px;
+  height: 80px;
+  padding: 8px 12px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
