@@ -2,8 +2,6 @@ export type PageId =
   | 'home'
   | 'settings'
   | 'advanced'
-  | 'model-ai'
-  | 'speech'
   | 'troubleshooting'
   | 'versions'
   | 'models'
@@ -33,9 +31,7 @@ export type NavItemData = PageNavItemData | ThemeToggleNavItemData;
 export const navItems: NavItemData[] = [
   { type: 'page', id: 'home', label: '一键启动', icon: '▶', section: 'primary' },
   { type: 'page', id: 'settings', label: '启动设置', icon: '⚙', section: 'primary' },
-  { type: 'page', id: 'advanced', label: '服务配置', icon: '≣', section: 'primary' },
-  { type: 'page', id: 'model-ai', label: '模型与 AI', icon: '◈', section: 'primary' },
-  { type: 'page', id: 'speech', label: '语音', icon: '♪', section: 'primary' },
+  { type: 'page', id: 'advanced', label: '高级选项', icon: '≣', section: 'primary' },
   { type: 'page', id: 'troubleshooting', label: '疑难解答', icon: '⌘', section: 'primary' },
   { type: 'page', id: 'versions', label: '版本管理', icon: '🕘', section: 'primary' },
   { type: 'page', id: 'models', label: '模型管理', icon: '◫', section: 'primary' },

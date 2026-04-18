@@ -4,9 +4,6 @@ import { ConsolePage } from '../pages/ConsolePage/ConsolePage';
 import { ModelsPage } from '../pages/ModelsPage/ModelsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage/SettingsPage';
-import { ServiceConfigPage } from '../pages/ServiceConfigPage/ServiceConfigPage';
-import { ModelAIPage } from '../pages/ModelAIPage/ModelAIPage';
-import { SpeechPage } from '../pages/SpeechPage/SpeechPage';
 import type { PageId } from '../data/nav';
 import type { ConsoleLogEntry } from '../services/launcher/launcher';
 import type {
@@ -93,23 +90,9 @@ export function renderPage(
       );
     case 'advanced':
       return (
-        <ServiceConfigPage
-          labConfig={options.labConfig}
-          onSaveLabConfig={options.onSaveLabConfig}
-        />
-      );
-    case 'model-ai':
-      return (
-        <ModelAIPage
-          labConfig={options.labConfig}
-          onSaveLabConfig={options.onSaveLabConfig}
-        />
-      );
-    case 'speech':
-      return (
-        <SpeechPage
-          labConfig={options.labConfig}
-          onSaveLabConfig={options.onSaveLabConfig}
+        <PlaceholderPage
+          title="高级选项"
+          description="预留更细粒度的运行参数与后端切换入口。"
         />
       );
     case 'troubleshooting':

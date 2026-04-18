@@ -13,6 +13,9 @@ import type {
   RuntimeDriver,
 } from '../../services/runtime/runtime';
 import type { LabConfig } from '../../services/config/labConfig';
+import { ServiceConfigPanel } from '../ServiceConfigPage/ServiceConfigPage';
+import { ModelAIPanel } from '../ModelAIPage/ModelAIPage';
+import { SpeechPanel } from '../SpeechPage/SpeechPage';
 import '../../styles/settings.css';
 
 interface SettingsPageProps {
@@ -42,7 +45,7 @@ export function SettingsPage({
   labConfig,
   onSaveLabConfig,
 }: SettingsPageProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTabId>('launch');
   const [localDriver, setLocalDriver] = useState<RuntimeDriver>(runtimeDriver);
   const [localPythonExePath, setLocalPythonExePath] = useState(pythonExePath);
 
@@ -64,21 +67,11 @@ export function SettingsPage({
     }
   }
 
-  return (
-    <div className="settings-shell">
-      <SettingsTabs
-        items={settingsTabs}
-        activeTab={activeTab}
-        onSelect={setActiveTab}
-      />
-
-      <div className="settings-wrap">
-        {activeTab === 'general' ? (
-          <div
-            id="settings-panel-general"
-            role="tabpanel"
-            aria-labelledby="settings-tab-general"
-          >
+  function renderTabContent() {
+    switch (activeTab) {
+      case 'launch':
+        return (
+          <div id="settings-panel-launch" role="tabpanel" aria-labelledby="settings-tab-launch">
             <div className="group-title group-title--standalone">运行环境</div>
 
             <div className="env-info-card">
@@ -105,11 +98,7 @@ export function SettingsPage({
             <SettingCard>
               <SettingRow
                 name="根目录"
-                description={
-                  workspaceLocked
-                    ? '有任务进行中，暂时锁定'
-                    : '模型等资源路径均相对此目录'
-                }
+                description={workspaceLocked ? '有任务进行中，暂时锁定' : '模型等资源路径均相对此目录'}
                 icon="📂"
               >
                 <div className="workspace-actions">
@@ -233,19 +222,51 @@ export function SettingsPage({
 
             <div className="footer-space" />
           </div>
-        ) : (
-          <div
-            id="settings-panel-about"
-            role="tabpanel"
-            aria-labelledby="settings-tab-about"
-          >
+        );
+
+      case 'server':
+        return (
+          <div id="settings-panel-server" role="tabpanel" aria-labelledby="settings-tab-server">
+            <ServiceConfigPanel labConfig={labConfig} onSaveLabConfig={onSaveLabConfig} />
+          </div>
+        );
+
+      case 'model-ai':
+        return (
+          <div id="settings-panel-model-ai" role="tabpanel" aria-labelledby="settings-tab-model-ai">
+            <ModelAIPanel labConfig={labConfig} onSaveLabConfig={onSaveLabConfig} />
+          </div>
+        );
+
+      case 'speech':
+        return (
+          <div id="settings-panel-speech" role="tabpanel" aria-labelledby="settings-tab-speech">
+            <SpeechPanel labConfig={labConfig} onSaveLabConfig={onSaveLabConfig} />
+          </div>
+        );
+
+      case 'about':
+        return (
+          <div id="settings-panel-about" role="tabpanel" aria-labelledby="settings-tab-about">
             <div className="about-card">
               {aboutInfo.map((line) => (
                 <p key={line}>{line}</p>
               ))}
             </div>
           </div>
-        )}
+        );
+    }
+  }
+
+  return (
+    <div className="settings-shell">
+      <SettingsTabs
+        items={settingsTabs}
+        activeTab={activeTab}
+        onSelect={setActiveTab}
+      />
+      <div className="settings-wrap">
+        {renderTabContent()}
       </div>
     </div>
   );

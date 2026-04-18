@@ -1,4 +1,4 @@
-export type SettingsTabId = 'general' | 'about';
+export type SettingsTabId = 'launch' | 'server' | 'model-ai' | 'speech' | 'about';
 
 export interface SettingsTab {
   id: SettingsTabId;
@@ -6,7 +6,10 @@ export interface SettingsTab {
 }
 
 export const settingsTabs: SettingsTab[] = [
-  { id: 'general', label: '运行配置' },
+  { id: 'launch', label: '启动配置' },
+  { id: 'server', label: '服务配置' },
+  { id: 'model-ai', label: '模型与 AI' },
+  { id: 'speech', label: '语音' },
   { id: 'about', label: '关于' },
 ];
 

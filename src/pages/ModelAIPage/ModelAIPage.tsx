@@ -3,9 +3,8 @@ import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { ToggleSwitch } from '../../components/settings/ToggleSwitch/ToggleSwitch';
 import type { LabConfig, LlmProvider } from '../../services/config/labConfig';
-import '../../styles/settings.css';
 
-interface ModelAIPageProps {
+interface ModelAIPanelProps {
   labConfig: LabConfig | null;
   onSaveLabConfig: (config: LabConfig) => void;
 }
@@ -53,7 +52,7 @@ function ProviderCard({
   );
 }
 
-export function ModelAIPage({ labConfig, onSaveLabConfig }: ModelAIPageProps) {
+export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) {
   const [providers, setProviders] = useState<LlmProvider[]>(
     labConfig?.agent.llm.providers ?? [],
   );
@@ -65,14 +64,7 @@ export function ModelAIPage({ labConfig, onSaveLabConfig }: ModelAIPageProps) {
   );
 
   if (!labConfig) {
-    return (
-      <div className="settings-shell">
-        <div className="settings-wrap">
-          <div className="group-title group-title--standalone">模型与 AI</div>
-          <p style={{ color: 'var(--muted)', fontSize: 14 }}>正在加载配置…</p>
-        </div>
-      </div>
-    );
+    return <p style={{ color: 'var(--muted)', fontSize: 14 }}>正在加载配置…</p>;
   }
 
   function handleSave() {
@@ -89,89 +81,87 @@ export function ModelAIPage({ labConfig, onSaveLabConfig }: ModelAIPageProps) {
   }
 
   return (
-    <div className="settings-shell">
-      <div className="settings-wrap">
-        <div className="group-title group-title--standalone">LLM 提供商</div>
+    <>
+      <div className="group-title group-title--standalone">LLM 提供商</div>
 
-        {providers.map((p, i) => (
-          <div key={i}>
-            <div className="group-title">{p.name || `提供商 ${i + 1}`}</div>
-            <ProviderCard
-              provider={p}
-              onChange={(next) => {
-                const updated = [...providers];
-                updated[i] = next;
-                setProviders(updated);
-              }}
-            />
-          </div>
-        ))}
-
-        <div className="group-title">对话模型</div>
-        <SettingCard>
-          <SettingRow name="提供商" description="使用哪个 LLM 提供商" icon="🏭">
-            <input
-              className="proxy-input"
-              value={chatModel.llm_provider}
-              onChange={(e) => setChatModel({ ...chatModel, llm_provider: e.target.value })}
-            />
-          </SettingRow>
-          <SettingRow name="模型名称" icon="🤖">
-            <input
-              className="proxy-input"
-              value={chatModel.llm_model_name}
-              onChange={(e) => setChatModel({ ...chatModel, llm_model_name: e.target.value })}
-            />
-          </SettingRow>
-          <SettingRow name="支持视觉" description="模型是否支持图像输入" icon="👁">
-            <ToggleSwitch
-              label="支持视觉"
-              checked={chatModel.support_vision}
-              onChange={(next) => setChatModel({ ...chatModel, support_vision: next })}
-            />
-          </SettingRow>
-          <SettingRow name="推理模式" description="启用 thinking / reasoning 模式" icon="🧠">
-            <ToggleSwitch
-              label="推理模式"
-              checked={chatModel.reasoning}
-              onChange={(next) => setChatModel({ ...chatModel, reasoning: next })}
-            />
-          </SettingRow>
-        </SettingCard>
-
-        <div className="group-title">视觉模型</div>
-        <SettingCard>
-          <SettingRow name="提供商" icon="🏭">
-            <input
-              className="proxy-input"
-              value={visionModel.llm_provider}
-              onChange={(e) => setVisionModel({ ...visionModel, llm_provider: e.target.value })}
-            />
-          </SettingRow>
-          <SettingRow name="模型名称" icon="🤖">
-            <input
-              className="proxy-input"
-              value={visionModel.llm_model_name}
-              onChange={(e) => setVisionModel({ ...visionModel, llm_model_name: e.target.value })}
-            />
-          </SettingRow>
-          <SettingRow name="推理模式" icon="🧠">
-            <ToggleSwitch
-              label="推理模式"
-              checked={visionModel.reasoning}
-              onChange={(next) => setVisionModel({ ...visionModel, reasoning: next })}
-            />
-          </SettingRow>
-        </SettingCard>
-
-        <div className="settings-save-row">
-          <button type="button" className="settings-save-button" onClick={handleSave}>
-            保存
-          </button>
+      {providers.map((p, i) => (
+        <div key={i}>
+          <div className="group-title">{p.name || `提供商 ${i + 1}`}</div>
+          <ProviderCard
+            provider={p}
+            onChange={(next) => {
+              const updated = [...providers];
+              updated[i] = next;
+              setProviders(updated);
+            }}
+          />
         </div>
+      ))}
 
-        <div className="footer-space" />
+      <div className="group-title">对话模型</div>
+      <SettingCard>
+        <SettingRow name="提供商" description="使用哪个 LLM 提供商" icon="🏭">
+          <input
+            className="proxy-input"
+            value={chatModel.llm_provider}
+            onChange={(e) => setChatModel({ ...chatModel, llm_provider: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="模型名称" icon="🤖">
+          <input
+            className="proxy-input"
+            value={chatModel.llm_model_name}
+            onChange={(e) => setChatModel({ ...chatModel, llm_model_name: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="支持视觉" description="模型是否支持图像输入" icon="👁">
+          <ToggleSwitch
+            label="支持视觉"
+            checked={chatModel.support_vision}
+            onChange={(next) => setChatModel({ ...chatModel, support_vision: next })}
+          />
+        </SettingRow>
+        <SettingRow name="推理模式" description="启用 thinking / reasoning 模式" icon="🧠">
+          <ToggleSwitch
+            label="推理模式"
+            checked={chatModel.reasoning}
+            onChange={(next) => setChatModel({ ...chatModel, reasoning: next })}
+          />
+        </SettingRow>
+      </SettingCard>
+
+      <div className="group-title">视觉模型</div>
+      <SettingCard>
+        <SettingRow name="提供商" icon="🏭">
+          <input
+            className="proxy-input"
+            value={visionModel.llm_provider}
+            onChange={(e) => setVisionModel({ ...visionModel, llm_provider: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="模型名称" icon="🤖">
+          <input
+            className="proxy-input"
+            value={visionModel.llm_model_name}
+            onChange={(e) => setVisionModel({ ...visionModel, llm_model_name: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="推理模式" icon="🧠">
+          <ToggleSwitch
+            label="推理模式"
+            checked={visionModel.reasoning}
+            onChange={(next) => setVisionModel({ ...visionModel, reasoning: next })}
+          />
+        </SettingRow>
+      </SettingCard>
+
+      <div className="settings-save-row">
+        <button type="button" className="settings-save-button" onClick={handleSave}>
+          保存
+        </button>
       </div>
-    </div>
+
+      <div className="footer-space" />
+    </>
   );
 }
