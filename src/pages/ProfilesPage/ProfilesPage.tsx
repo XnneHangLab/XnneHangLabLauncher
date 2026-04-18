@@ -30,7 +30,7 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
 ];
 
 type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json';
-interface PluginField { key: string; type: PluginFieldType; description?: string; }
+interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; }
 
 const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   memory: [
@@ -40,15 +40,15 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'search_limit', type: 'number', description: '每轮注入的最大记忆条数' },
   ],
   mood_chat: [
-    { key: 'prompt', type: 'textarea', description: '主动对话时发送给 agent 的提示词' },
-    { key: 'initial_mood', type: 'number', description: '启动后的初始心情分' },
-    { key: 'target_mood', type: 'number', description: '心情自然回归的目标分数' },
-    { key: 'response_timeout_s', type: 'number', description: '主动发言后等待用户回应的超时时间（秒）' },
-    { key: 'interval_excited_s', type: 'number', description: '心情 >= 90 时的主动发言间隔（秒）' },
-    { key: 'interval_normal_s', type: 'number', description: '心情 >= 80 时的主动发言间隔（秒）' },
-    { key: 'interval_low_s', type: 'number', description: '心情 >= 60 时的主动发言间隔（秒）' },
-    { key: 'mood_increase', type: 'number', description: '用户发言后增加的心情分' },
-    { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分' },
+    { key: 'prompt', type: 'textarea', description: '主动对话时发送给 agent 的提示词', defaultValue: '请根据上下文，主动说些什么。' },
+    { key: 'initial_mood', type: 'number', description: '启动后的初始心情分', defaultValue: 80 },
+    { key: 'target_mood', type: 'number', description: '心情自然回归的目标分数', defaultValue: 80 },
+    { key: 'response_timeout_s', type: 'number', description: '主动发言后等待用户回应的超时时间（秒）', defaultValue: 10 },
+    { key: 'interval_excited_s', type: 'number', description: '心情 >= 90 时的主动发言间隔（秒）', defaultValue: 5 },
+    { key: 'interval_normal_s', type: 'number', description: '心情 >= 80 时的主动发言间隔（秒）', defaultValue: 30 },
+    { key: 'interval_low_s', type: 'number', description: '心情 >= 60 时的主动发言间隔（秒）', defaultValue: 120 },
+    { key: 'mood_increase', type: 'number', description: '用户发言后增加的心情分', defaultValue: 5 },
+    { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分', defaultValue: 10 },
   ],
   pre_tool_preview: [
     { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数' },
@@ -77,13 +77,9 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'user_agent', type: 'text', description: '请求 SearXNG 时使用的 User-Agent 头' },
     { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）' },
   ],
-  live2d_control: [
-    { key: 'appearance_presets', type: 'json', description: '可切换的外观预设列表 [{key, description}]' },
-    { key: 'idle_clips', type: 'json', description: '待机动作片段列表 [{id, url, weight}]' },
-    { key: 'idle_assignments', type: 'json', description: '各状态使用的待机动作分配 {listening, speaking}' },
-    { key: 'mixer_weights_by_state', type: 'json', description: '各状态的 Pose Mixer 层权重 {listening, speaking}' },
-  ],
 };
+
+const PLUGIN_CUSTOM_EDITORS = new Set(['live2d_control']);
 
 function PluginJsonField({ fileKey, value, onChange }: { fileKey: string; value: unknown; onChange: (v: unknown) => void }) {
   const [raw, setRaw] = useState(() => value !== undefined ? JSON.stringify(value, null, 2) : '');
@@ -109,6 +105,137 @@ function PluginJsonField({ fileKey, value, onChange }: { fileKey: string; value:
       onChange={(e) => handleChange(e.target.value)}
       spellCheck={false}
     />
+  );
+}
+
+type AppearancePreset = { key: string; description: string };
+type IdleClip = { id: string; url: string; weight: number };
+type IdleStateAssignment = { mode: string; clip_ids: string[] };
+type MixerStateWeights = { idle_layer: number; speech_layer: number; backend_pose_layer: number; mouse_attention_layer: number };
+
+const MIXER_LAYERS: Array<[keyof MixerStateWeights, string]> = [
+  ['idle_layer', '待机层'],
+  ['speech_layer', '说话层'],
+  ['backend_pose_layer', '后端姿态层'],
+  ['mouse_attention_layer', '鼠标注意力层'],
+];
+
+function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; onPatch: (patch: Record<string, unknown>) => void }) {
+  const presets = (cfg.appearance_presets as AppearancePreset[] | undefined) ?? [];
+  const clips = (cfg.idle_clips as IdleClip[] | undefined) ?? [];
+  const assignmentsRaw = cfg.idle_assignments as { listening?: IdleStateAssignment; speaking?: IdleStateAssignment } | undefined;
+  const defaultState: IdleStateAssignment = { mode: 'random_no_repeat', clip_ids: [] };
+  const assignments = { listening: assignmentsRaw?.listening ?? defaultState, speaking: assignmentsRaw?.speaking ?? defaultState };
+  const mixerRaw = cfg.mixer_weights_by_state as { listening?: MixerStateWeights; speaking?: MixerStateWeights } | undefined;
+  const defaultMixer: MixerStateWeights = { idle_layer: 1, speech_layer: 1, backend_pose_layer: 1, mouse_attention_layer: 0.35 };
+  const mixerWeights = { listening: mixerRaw?.listening ?? defaultMixer, speaking: mixerRaw?.speaking ?? defaultMixer };
+
+  function setPreset(i: number, patch: Partial<AppearancePreset>) {
+    const next = [...presets]; next[i] = { ...next[i], ...patch };
+    onPatch({ appearance_presets: next });
+  }
+  function setClip(i: number, patch: Partial<IdleClip>) {
+    const next = [...clips]; next[i] = { ...next[i], ...patch };
+    onPatch({ idle_clips: next });
+  }
+  function setAssignment(state: 'listening' | 'speaking', patch: Partial<IdleStateAssignment>) {
+    onPatch({ idle_assignments: { ...assignments, [state]: { ...assignments[state], ...patch } } });
+  }
+  function setMixer(state: 'listening' | 'speaking', patch: Partial<MixerStateWeights>) {
+    onPatch({ mixer_weights_by_state: { ...mixerWeights, [state]: { ...mixerWeights[state], ...patch } } });
+  }
+
+  return (
+    <div className="l2d-editor">
+      <div className="l2d-section">
+        <div className="l2d-section-header">
+          <span className="l2d-section-title">appearance_presets</span>
+          <span className="l2d-section-desc">可切换的外观预设</span>
+        </div>
+        <div className="l2d-list">
+          {presets.map((p, i) => (
+            <div key={i} className="l2d-row">
+              <input className="proxy-input" style={{ width: 110 }} placeholder="key" value={p.key} onChange={e => setPreset(i, { key: e.target.value })} />
+              <input className="proxy-input" style={{ flex: 1, minWidth: 0 }} placeholder="description" value={p.description} onChange={e => setPreset(i, { description: e.target.value })} />
+              <button type="button" className="l2d-remove-btn" onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
+            </div>
+          ))}
+          <button type="button" className="l2d-add-btn" onClick={() => onPatch({ appearance_presets: [...presets, { key: '', description: '' }] })}>＋ 添加预设</button>
+        </div>
+      </div>
+
+      <div className="l2d-section">
+        <div className="l2d-section-header">
+          <span className="l2d-section-title">idle_clips</span>
+          <span className="l2d-section-desc">待机动作片段</span>
+        </div>
+        <div className="l2d-list">
+          {clips.map((c, i) => (
+            <div key={i} className="l2d-row">
+              <input className="proxy-input" style={{ width: 130 }} placeholder="id" value={c.id} onChange={e => setClip(i, { id: e.target.value })} />
+              <input className="proxy-input" style={{ flex: 1, minWidth: 0 }} placeholder="url (*.motion3.json)" value={c.url} onChange={e => setClip(i, { url: e.target.value })} />
+              <input className="proxy-input" style={{ width: 68 }} type="number" step="0.1" min="0" placeholder="weight" value={c.weight} onChange={e => setClip(i, { weight: Number(e.target.value) })} />
+              <button type="button" className="l2d-remove-btn" onClick={() => onPatch({ idle_clips: clips.filter((_, idx) => idx !== i) })}>×</button>
+            </div>
+          ))}
+          <button type="button" className="l2d-add-btn" onClick={() => onPatch({ idle_clips: [...clips, { id: '', url: '', weight: 1 }] })}>＋ 添加片段</button>
+        </div>
+      </div>
+
+      <div className="l2d-section">
+        <div className="l2d-section-header">
+          <span className="l2d-section-title">idle_assignments</span>
+          <span className="l2d-section-desc">各状态的待机动作分配</span>
+        </div>
+        {(['listening', 'speaking'] as const).map(state => (
+          <div key={state} className="l2d-state-block">
+            <div className="l2d-state-label">{state}</div>
+            <div className="l2d-state-fields">
+              <div className="l2d-kv-row">
+                <span className="l2d-kv-key">mode</span>
+                <input className="proxy-input" style={{ width: 180 }} value={assignments[state].mode} onChange={e => setAssignment(state, { mode: e.target.value })} />
+              </div>
+              <div className="l2d-kv-row">
+                <span className="l2d-kv-key">clip_ids</span>
+                <textarea
+                  className="proxy-input"
+                  style={{ flex: 1, minWidth: 0, height: 72, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12, resize: 'vertical' }}
+                  placeholder="每行一个 clip ID"
+                  value={assignments[state].clip_ids.join('\n')}
+                  onChange={e => setAssignment(state, { clip_ids: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="l2d-section">
+        <div className="l2d-section-header">
+          <span className="l2d-section-title">mixer_weights_by_state</span>
+          <span className="l2d-section-desc">Pose Mixer 各层权重</span>
+        </div>
+        {(['listening', 'speaking'] as const).map(state => (
+          <div key={state} className="l2d-state-block">
+            <div className="l2d-state-label">{state}</div>
+            <div className="l2d-mixer-grid">
+              {MIXER_LAYERS.map(([key, label]) => (
+                <div key={key} className="l2d-mixer-field">
+                  <span className="l2d-mixer-label">{label}</span>
+                  <input
+                    className="proxy-input"
+                    style={{ width: 68 }}
+                    type="number" step="0.05" min="0"
+                    value={mixerWeights[state][key]}
+                    onChange={e => setMixer(state, { [key]: Number(e.target.value) })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -315,7 +442,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
                   </div>
                   <div className="plugin-item-controls">
                     <ToggleSwitch label={id} checked={isOn} onChange={(on) => togglePlugin(id, on)} />
-                    {fields && (
+                    {(fields || PLUGIN_CUSTOM_EDITORS.has(id)) && (
                       <button
                         type="button"
                         className={`plugin-expand-btn${isOpen ? ' plugin-expand-btn--open' : ''}`}
@@ -324,10 +451,13 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
                     )}
                   </div>
                 </div>
-                {isOpen && fields && (
+                {isOpen && (fields || PLUGIN_CUSTOM_EDITORS.has(id)) && (
                   <div className="plugin-item-body">
-                    {fields.map(f => {
+                    {id === 'live2d_control' ? (
+                      <Live2dControlEditor cfg={cfg} onPatch={(patch) => setPluginCfg(id, patch)} />
+                    ) : fields ? fields.map(f => {
                       const val = cfg[f.key];
+                      const effective = val !== undefined ? val : f.defaultValue;
                       return (
                         <div key={f.key} className={`plugin-field-row${f.type === 'json' ? ' plugin-field-row--json' : ''}`}>
                           <div className="plugin-field-meta">
@@ -343,26 +473,26 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
                           ) : f.type === 'textarea' ? (
                             <textarea
                               className="proxy-input plugin-textarea"
-                              value={(val as string) ?? ''}
+                              value={(effective as string) ?? ''}
                               onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}
                             />
                           ) : f.type === 'boolean' ? (
                             <ToggleSwitch
                               label={f.key}
-                              checked={(val as boolean) ?? false}
+                              checked={(effective as boolean) ?? false}
                               onChange={(v) => setPluginCfg(id, { [f.key]: v })}
                             />
                           ) : (
                             <input
                               className="proxy-input"
                               type={f.type}
-                              value={(val as string | number) ?? ''}
+                              value={(effective as string | number) ?? ''}
                               onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
                             />
                           )}
                         </div>
                       );
-                    })}
+                    }) : null}
                   </div>
                 )}
               </div>
