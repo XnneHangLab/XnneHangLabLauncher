@@ -67,11 +67,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
   const prompt = config.prompt ?? {};
   const enabledPlugins = config.plugins?.enabled ?? [];
 
-  const [openPlugins, setOpenPlugins] = useState<Set<string>>(() => {
-    const s = new Set<string>();
-    (config.plugins?.enabled ?? []).forEach(id => { if (PLUGIN_CONFIG_FIELDS[id]) s.add(id); });
-    return s;
-  });
+  const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
 
   function toggleOpen(id: string) {
     setOpenPlugins(prev => {

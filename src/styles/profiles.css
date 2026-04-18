@@ -319,7 +319,7 @@
 
 .plugin-item-body {
   border-top: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(52, 155, 255, 0.05);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
