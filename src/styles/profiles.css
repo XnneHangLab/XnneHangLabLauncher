@@ -497,3 +497,299 @@
   color: var(--muted);
   min-width: 72px;
 }
+
+/* ── Compact row override for profiles editor ── */
+.profiles-editor.settings-shell .setting-row {
+  min-height: 56px;
+  padding: 10px 20px;
+}
+
+/* ── Identity card ── */
+.profile-identity-card {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
+  margin-bottom: 14px;
+}
+
+.profile-identity-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.profile-identity-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3fa3ff 0%, #2468dc 100%);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+}
+
+.profile-avatar-browse-btn {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+}
+
+.profile-avatar-browse-btn:hover {
+  color: var(--accent);
+  border-color: rgba(63, 163, 255, 0.45);
+  background: rgba(63, 163, 255, 0.06);
+}
+
+.profile-identity-fields {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.profile-id-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.14s;
+}
+
+.profile-id-input:focus {
+  border-color: var(--accent);
+}
+
+.profile-id-input--name {
+  font-size: 15px;
+  font-weight: 600;
+  grid-column: span 2;
+}
+
+.profile-id-input--dim {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-file-badge--corner {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.35;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+/* ── TTS flag chips ── */
+.tts-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tts-flag {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+
+.tts-flag:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.tts-flag--on {
+  background: rgba(52, 155, 255, 0.12);
+  border-color: rgba(52, 155, 255, 0.5);
+  color: #5ab4ff;
+}
+
+/* ── Advanced toggle ── */
+.profile-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+}
+
+.profile-advanced-toggle:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+/* ── Live2D preset card ── */
+.l2d-preset-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+
+.l2d-preset-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.l2d-preset-key {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
+.l2d-preset-desc {
+  font-size: 12px;
+  resize: vertical;
+  min-height: 56px;
+}
+
+/* ── Live2D clip row ── */
+.l2d-clip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.l2d-clip-id {
+  width: 120px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+}
+
+.l2d-clip-url {
+  flex: 1;
+  font-size: 12px;
+}
+
+.l2d-clip-weight {
+  width: 64px;
+  text-align: right;
+}
+
+/* ── Live2D table ── */
+.l2d-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.l2d-table th,
+.l2d-table td {
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+.l2d-table th {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+
+.l2d-table th:first-child {
+  text-align: left;
+}
+
+.l2d-table td:first-child {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-right: 12px;
+}
+
+.l2d-td-top {
+  vertical-align: top !important;
+  padding-top: 10px !important;
+}
+
+.l2d-table-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.14s;
+}
+
+.l2d-table-input:focus {
+  border-color: var(--accent);
+}
+
+.l2d-table-input--num {
+  text-align: right;
+}
+
+.l2d-table-textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  font-size: 12px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.14s;
+}
+
+.l2d-table-textarea:focus {
+  border-color: var(--accent);
+}

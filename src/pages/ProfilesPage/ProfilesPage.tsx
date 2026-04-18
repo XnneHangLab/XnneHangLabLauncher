@@ -81,6 +81,8 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
 
 const PLUGIN_CUSTOM_EDITORS = new Set(['live2d_control']);
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function PluginJsonField({ fileKey, value, onChange }: { fileKey: string; value: unknown; onChange: (v: unknown) => void }) {
   const [raw, setRaw] = useState(() => value !== undefined ? JSON.stringify(value, null, 2) : '');
   const [hasError, setHasError] = useState(false);
@@ -107,6 +109,8 @@ function PluginJsonField({ fileKey, value, onChange }: { fileKey: string; value:
     />
   );
 }
+
+// ── Live2D Control structured editor ─────────────────────────────────────────
 
 type AppearancePreset = { key: string; description: string };
 type IdleClip = { id: string; url: string; weight: number };
@@ -147,6 +151,8 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
 
   return (
     <div className="l2d-editor">
+
+      {/* appearance_presets — card per item */}
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">appearance_presets</span>
@@ -154,16 +160,23 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
         </div>
         <div className="l2d-list">
           {presets.map((p, i) => (
-            <div key={i} className="l2d-row">
-              <input className="proxy-input" style={{ width: 110 }} placeholder="key" value={p.key} onChange={e => setPreset(i, { key: e.target.value })} />
-              <input className="proxy-input" style={{ flex: 1, minWidth: 0 }} placeholder="description" value={p.description} onChange={e => setPreset(i, { description: e.target.value })} />
-              <button type="button" className="l2d-remove-btn" onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
+            <div key={i} className="l2d-preset-card">
+              <div className="l2d-preset-fields">
+                <input className="proxy-input l2d-preset-key" placeholder="key" value={p.key}
+                  onChange={e => setPreset(i, { key: e.target.value })} />
+                <textarea className="proxy-input l2d-preset-desc" placeholder="description" value={p.description}
+                  onChange={e => setPreset(i, { description: e.target.value })} />
+              </div>
+              <button type="button" className="l2d-remove-btn"
+                onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
             </div>
           ))}
-          <button type="button" className="l2d-add-btn" onClick={() => onPatch({ appearance_presets: [...presets, { key: '', description: '' }] })}>＋ 添加预设</button>
+          <button type="button" className="l2d-add-btn"
+            onClick={() => onPatch({ appearance_presets: [...presets, { key: '', description: '' }] })}>＋ 添加预设</button>
         </div>
       </div>
 
+      {/* idle_clips — compact rows */}
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">idle_clips</span>
@@ -171,81 +184,96 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
         </div>
         <div className="l2d-list">
           {clips.map((c, i) => (
-            <div key={i} className="l2d-row">
-              <input className="proxy-input" style={{ width: 130 }} placeholder="id" value={c.id} onChange={e => setClip(i, { id: e.target.value })} />
-              <input className="proxy-input" style={{ flex: 1, minWidth: 0 }} placeholder="url (*.motion3.json)" value={c.url} onChange={e => setClip(i, { url: e.target.value })} />
-              <input className="proxy-input" style={{ width: 68 }} type="number" step="0.1" min="0" placeholder="weight" value={c.weight} onChange={e => setClip(i, { weight: Number(e.target.value) })} />
-              <button type="button" className="l2d-remove-btn" onClick={() => onPatch({ idle_clips: clips.filter((_, idx) => idx !== i) })}>×</button>
+            <div key={i} className="l2d-clip-row">
+              <input className="proxy-input l2d-clip-id" placeholder="id" value={c.id}
+                onChange={e => setClip(i, { id: e.target.value })} />
+              <input className="proxy-input l2d-clip-url" placeholder="url (*.motion3.json)" value={c.url}
+                onChange={e => setClip(i, { url: e.target.value })} />
+              <input className="proxy-input l2d-clip-weight" type="number" step="0.1" min="0" placeholder="w" value={c.weight}
+                onChange={e => setClip(i, { weight: Number(e.target.value) })} />
+              <button type="button" className="l2d-remove-btn"
+                onClick={() => onPatch({ idle_clips: clips.filter((_, idx) => idx !== i) })}>×</button>
             </div>
           ))}
-          <button type="button" className="l2d-add-btn" onClick={() => onPatch({ idle_clips: [...clips, { id: '', url: '', weight: 1 }] })}>＋ 添加片段</button>
+          <button type="button" className="l2d-add-btn"
+            onClick={() => onPatch({ idle_clips: [...clips, { id: '', url: '', weight: 1 }] })}>＋ 添加片段</button>
         </div>
       </div>
 
+      {/* idle_assignments — table */}
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">idle_assignments</span>
           <span className="l2d-section-desc">各状态的待机动作分配</span>
         </div>
-        {(['listening', 'speaking'] as const).map(state => (
-          <div key={state} className="l2d-state-block">
-            <div className="l2d-state-label">{state}</div>
-            <div className="l2d-state-fields">
-              <div className="l2d-kv-row">
-                <span className="l2d-kv-key">mode</span>
-                <input className="proxy-input" style={{ width: 180 }} value={assignments[state].mode} onChange={e => setAssignment(state, { mode: e.target.value })} />
-              </div>
-              <div className="l2d-kv-row">
-                <span className="l2d-kv-key">clip_ids</span>
-                <textarea
-                  className="proxy-input"
-                  style={{ flex: 1, minWidth: 0, height: 72, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12, resize: 'vertical' }}
-                  placeholder="每行一个 clip ID"
-                  value={assignments[state].clip_ids.join('\n')}
-                  onChange={e => setAssignment(state, { clip_ids: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
-                />
-              </div>
-            </div>
-          </div>
-        ))}
+        <table className="l2d-table">
+          <thead>
+            <tr><th /><th>listening</th><th>speaking</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>mode</td>
+              {(['listening', 'speaking'] as const).map(s => (
+                <td key={s}>
+                  <input className="proxy-input l2d-table-input" value={assignments[s].mode}
+                    onChange={e => setAssignment(s, { mode: e.target.value })} />
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="l2d-td-top">clip_ids</td>
+              {(['listening', 'speaking'] as const).map(s => (
+                <td key={s}>
+                  <textarea className="proxy-input l2d-table-textarea" placeholder="每行一个 ID"
+                    value={assignments[s].clip_ids.join('\n')}
+                    onChange={e => setAssignment(s, { clip_ids: e.target.value.split('\n').map(x => x.trim()).filter(Boolean) })} />
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
 
+      {/* mixer_weights_by_state — table */}
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">mixer_weights_by_state</span>
           <span className="l2d-section-desc">Pose Mixer 各层权重</span>
         </div>
-        {(['listening', 'speaking'] as const).map(state => (
-          <div key={state} className="l2d-state-block">
-            <div className="l2d-state-label">{state}</div>
-            <div className="l2d-mixer-grid">
-              {MIXER_LAYERS.map(([key, label]) => (
-                <div key={key} className="l2d-mixer-field">
-                  <span className="l2d-mixer-label">{label}</span>
-                  <input
-                    className="proxy-input"
-                    style={{ width: 68 }}
-                    type="number" step="0.05" min="0"
-                    value={mixerWeights[state][key]}
-                    onChange={e => setMixer(state, { [key]: Number(e.target.value) })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        <table className="l2d-table">
+          <thead>
+            <tr><th /><th>listening</th><th>speaking</th></tr>
+          </thead>
+          <tbody>
+            {MIXER_LAYERS.map(([key, label]) => (
+              <tr key={key}>
+                <td>{label}</td>
+                {(['listening', 'speaking'] as const).map(s => (
+                  <td key={s}>
+                    <input className="proxy-input l2d-table-input l2d-table-input--num"
+                      type="number" step="0.05" min="0"
+                      value={mixerWeights[s][key]}
+                      onChange={e => setMixer(s, { [key]: Number(e.target.value) })} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+
     </div>
   );
 }
 
+// ── Profile chip avatar ───────────────────────────────────────────────────────
+
 function ProfileAvatar({ name, absPath }: { name: string; absPath?: string | null }) {
-  if (absPath) {
-    return <img className="profile-avatar profile-avatar--img" src={convertFileSrc(absPath)} alt={name} />;
-  }
-  const initial = name ? name[0].toUpperCase() : '?';
-  return <div className="profile-avatar">{initial}</div>;
+  if (absPath) return <img className="profile-avatar profile-avatar--img" src={convertFileSrc(absPath)} alt={name} />;
+  return <div className="profile-avatar">{(name?.[0] ?? '?').toUpperCase()}</div>;
 }
+
+// ── Profile editor ────────────────────────────────────────────────────────────
 
 interface ProfileEditorProps {
   file: string;
@@ -254,9 +282,10 @@ interface ProfileEditorProps {
   onSave: () => void;
   onDelete: () => void;
   saving: boolean;
+  avatarAbsPath?: string | null;
 }
 
-function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: ProfileEditorProps) {
+function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avatarAbsPath }: ProfileEditorProps) {
   const profile = config.profile ?? { name: '', description: '', agent_name: '' };
   const character = config.character ?? {};
   const ttsPreprocessor = character.tts_preprocessor ?? {};
@@ -265,6 +294,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
   const enabledPlugins = config.plugins?.enabled ?? [];
 
   const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   function toggleOpen(id: string) {
     setOpenPlugins(prev => {
@@ -273,7 +303,6 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
       return next;
     });
   }
-
   function setProfile(patch: Partial<typeof profile>) {
     onChange({ ...config, profile: { ...profile, ...patch } });
   }
@@ -293,9 +322,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
     const current = enabledPlugins.filter((p) => p !== id);
     const next = on ? [...current, id] : current;
     onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
-    if (on && PLUGIN_CONFIG_FIELDS[id]) setOpenPlugins(prev => new Set(prev).add(id));
+    if (on && (PLUGIN_CONFIG_FIELDS[id] || PLUGIN_CUSTOM_EDITORS.has(id))) {
+      setOpenPlugins(prev => new Set(prev).add(id));
+    }
   }
-
   function getPluginCfg(id: string): Record<string, unknown> {
     const raw = config.plugins?.[id];
     return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
@@ -306,9 +336,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
 
   async function browseAvatar() {
     const rel = await pickFileForProfile('选择头像', 'static/avatars');
-    if (rel !== null) {
-      setCharacter({ avatar: rel.split('/').pop() ?? rel });
-    }
+    if (rel !== null) setCharacter({ avatar: rel.split('/').pop() ?? rel });
   }
   async function browsePersona() {
     const rel = await pickFileForProfile('选择人设文件', 'prompts');
@@ -319,120 +347,105 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
     if (rel !== null) setPrompt({ format: rel });
   }
 
-  const unknownPlugins = enabledPlugins.filter(
-    (p) => !KNOWN_PLUGINS.find((k) => k.id === p),
-  );
+  const unknownPlugins = enabledPlugins.filter(p => !KNOWN_PLUGINS.find(k => k.id === p));
+  const identityInitial = (character.character_name || profile.name || file)[0]?.toUpperCase() ?? '?';
 
   return (
     <div className="profiles-editor settings-shell">
       <div className="settings-wrap">
-        <div className="group-title group-title--standalone">
-          {profile.name || file} <span className="profile-file-badge">{file}.toml</span>
+
+        {/* ── Identity card ── */}
+        <div className="profile-identity-card">
+          <div className="profile-identity-avatar-col">
+            {avatarAbsPath
+              ? <img className="profile-identity-avatar profile-avatar--img" src={convertFileSrc(avatarAbsPath)} alt={identityInitial} />
+              : <div className="profile-identity-avatar">{identityInitial}</div>
+            }
+            <button type="button" className="profile-avatar-browse-btn" title="更换头像" onClick={browseAvatar}>…</button>
+          </div>
+          <div className="profile-identity-fields">
+            <input className="profile-id-input profile-id-input--name" placeholder="character_name"
+              value={character.character_name ?? ''} onChange={e => setCharacter({ character_name: e.target.value })} />
+            <input className="profile-id-input" placeholder="name"
+              value={profile.name} onChange={e => setProfile({ name: e.target.value })} />
+            <input className="profile-id-input profile-id-input--dim" placeholder="description"
+              value={profile.description} onChange={e => setProfile({ description: e.target.value })} />
+            <input className="profile-id-input profile-id-input--dim" placeholder="agent_name"
+              value={profile.agent_name} onChange={e => setProfile({ agent_name: e.target.value })} />
+          </div>
+          <span className="profile-file-badge profile-file-badge--corner">{file}.toml</span>
         </div>
 
+        {/* ── Character visual ── */}
+        <div className="group-title">角色外观</div>
         <SettingCard>
-          <SettingRow name="name" description="角色的显示名称" icon="🏷">
-            <input className="proxy-input" value={profile.name}
-              onChange={(e) => setProfile({ name: e.target.value })} />
-          </SettingRow>
-          <SettingRow name="description" icon="📝">
-            <input className="proxy-input" value={profile.description}
-              onChange={(e) => setProfile({ description: e.target.value })} />
-          </SettingRow>
-          <SettingRow name="agent_name" description="后端路由使用的标识符" icon="🤖">
-            <input className="proxy-input" value={profile.agent_name}
-              onChange={(e) => setProfile({ agent_name: e.target.value })} />
-          </SettingRow>
-        </SettingCard>
-
-        <div className="group-title">角色配置</div>
-
-        <SettingCard>
-          <SettingRow name="character_name" icon="👤">
-            <input className="proxy-input" value={character.character_name ?? ''}
-              onChange={(e) => setCharacter({ character_name: e.target.value })} />
-          </SettingRow>
-          <SettingRow name="live2d_model_name" icon="🖼">
+          <SettingRow name="live2d_model_name" description="Live2D 模型名称">
             <input className="proxy-input" value={character.live2d_model_name ?? ''}
-              onChange={(e) => setCharacter({ live2d_model_name: e.target.value })} />
+              onChange={e => setCharacter({ live2d_model_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="avatar" description="static/avatars/ 目录下的文件名" icon="🖼">
-            <BrowsePath
-              value={character.avatar ?? ''}
-              onChange={(v) => setCharacter({ avatar: v })}
-              onBrowse={browseAvatar}
-            />
+          <SettingRow name="avatar" description="static/avatars/ 下的文件名">
+            <BrowsePath value={character.avatar ?? ''} onChange={v => setCharacter({ avatar: v })} onBrowse={browseAvatar} />
           </SettingRow>
-          <SettingRow name="human_name" description="对话中对用户的称呼" icon="🙋">
+          <SettingRow name="human_name" description="对话中对用户的称呼">
             <input className="proxy-input" value={character.human_name ?? ''}
-              onChange={(e) => setCharacter({ human_name: e.target.value })} />
+              onChange={e => setCharacter({ human_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="default_expression_emotion" icon="😊">
+          <SettingRow name="default_expression_emotion" description="默认情绪标签">
             <input className="proxy-input" value={character.default_expression_emotion ?? ''}
-              onChange={(e) => setCharacter({ default_expression_emotion: e.target.value })} />
+              onChange={e => setCharacter({ default_expression_emotion: e.target.value })} />
           </SettingRow>
         </SettingCard>
 
-        <div className="group-title">TTS 预处理</div>
-
+        {/* ── TTS / Voice ── */}
+        <div className="group-title">语音</div>
         <SettingCard>
-          {([
-            ['remove_special_char', '移除特殊字符'],
-            ['ignore_brackets', '忽略方括号 []'],
-            ['ignore_parentheses', '忽略圆括号 ()'],
-            ['ignore_asterisks', '忽略星号 *'],
-            ['ignore_angle_brackets', '忽略尖括号 <>'],
-          ] as const).map(([key, desc]) => (
-            <SettingRow key={key} name={key} description={desc}>
-              <ToggleSwitch
-                label={key}
-                checked={ttsPreprocessor[key] ?? false}
-                onChange={(v) => setTtsPreprocessor({ [key]: v })}
-              />
-            </SettingRow>
-          ))}
-          <SettingRow name="character_name" description="对应 voices/ 下的子目录名" icon="🔊">
+          <SettingRow name="character_name" description="voices/ 下的子目录名">
             <input className="proxy-input" value={tts.character_name ?? ''}
-              onChange={(e) => setTts({ character_name: e.target.value })} />
+              onChange={e => setTts({ character_name: e.target.value })} />
+          </SettingRow>
+          <SettingRow name="预处理" description="点击开启对应文本过滤">
+            <div className="tts-flags">
+              {([
+                ['remove_special_char', '特殊字符'],
+                ['ignore_brackets', '方括号 []'],
+                ['ignore_parentheses', '圆括号 ()'],
+                ['ignore_asterisks', '星号 *'],
+                ['ignore_angle_brackets', '尖括号 <>'],
+              ] as const).map(([key, label]) => (
+                <button key={key} type="button"
+                  className={`tts-flag${ttsPreprocessor[key] ? ' tts-flag--on' : ''}`}
+                  onClick={() => setTtsPreprocessor({ [key]: !ttsPreprocessor[key] })}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </SettingRow>
         </SettingCard>
 
+        {/* ── Prompt ── */}
         <div className="group-title">提示词</div>
-
         <SettingCard>
-          <SettingRow name="persona" description="相对于项目根目录的 .md 路径" icon="📄">
-            <BrowsePath
-              value={prompt.persona ?? ''}
-              onChange={(v) => setPrompt({ persona: v })}
-              onBrowse={browsePersona}
-              wide
-            />
+          <SettingRow name="persona" description="人设 prompt 路径">
+            <BrowsePath value={prompt.persona ?? ''} onChange={v => setPrompt({ persona: v })} onBrowse={browsePersona} wide />
           </SettingRow>
-          <SettingRow name="format" description="情绪括号等格式 prompt 路径" icon="📐">
-            <BrowsePath
-              value={prompt.format ?? ''}
-              onChange={(v) => setPrompt({ format: v })}
-              onBrowse={browseFormat}
-              wide
-            />
+          <SettingRow name="format" description="情绪 / 格式 prompt 路径">
+            <BrowsePath value={prompt.format ?? ''} onChange={v => setPrompt({ format: v })} onBrowse={browseFormat} wide />
           </SettingRow>
-          <SettingRow name="show_control_tags" icon="🏷">
-            <ToggleSwitch
-              label="show_control_tags"
-              checked={prompt.show_control_tags ?? false}
-              onChange={(v) => setPrompt({ show_control_tags: v })}
-            />
+          <SettingRow name="show_control_tags">
+            <ToggleSwitch label="show_control_tags" checked={prompt.show_control_tags ?? false}
+              onChange={v => setPrompt({ show_control_tags: v })} />
           </SettingRow>
         </SettingCard>
 
+        {/* ── Plugins ── */}
         <div className="group-title">插件</div>
-
         <div className="plugin-list">
           {KNOWN_PLUGINS.map(({ id, description }) => {
             const isOn = enabledPlugins.includes(id);
             const fields = PLUGIN_CONFIG_FIELDS[id];
             const isOpen = openPlugins.has(id);
             const cfg = getPluginCfg(id);
+            const hasConfig = fields || PLUGIN_CUSTOM_EDITORS.has(id);
             return (
               <div key={id} className={`plugin-item${isOn ? ' plugin-item--on' : ''}${isOpen ? ' plugin-item--open' : ''}`}>
                 <div className="plugin-item-header">
@@ -442,16 +455,14 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
                   </div>
                   <div className="plugin-item-controls">
                     <ToggleSwitch label={id} checked={isOn} onChange={(on) => togglePlugin(id, on)} />
-                    {(fields || PLUGIN_CUSTOM_EDITORS.has(id)) && (
-                      <button
-                        type="button"
+                    {hasConfig && (
+                      <button type="button"
                         className={`plugin-expand-btn${isOpen ? ' plugin-expand-btn--open' : ''}`}
-                        onClick={() => toggleOpen(id)}
-                      >›</button>
+                        onClick={() => toggleOpen(id)}>›</button>
                     )}
                   </div>
                 </div>
-                {isOpen && (fields || PLUGIN_CUSTOM_EDITORS.has(id)) && (
+                {isOpen && hasConfig && (
                   <div className="plugin-item-body">
                     {id === 'live2d_control' ? (
                       <Live2dControlEditor cfg={cfg} onPatch={(patch) => setPluginCfg(id, patch)} />
@@ -465,30 +476,19 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
                             {f.description && <span className="plugin-field-desc">{f.description}</span>}
                           </div>
                           {f.type === 'json' ? (
-                            <PluginJsonField
-                              fileKey={`${file}:${id}:${f.key}`}
-                              value={val}
-                              onChange={(v) => setPluginCfg(id, { [f.key]: v })}
-                            />
+                            <PluginJsonField fileKey={`${file}:${id}:${f.key}`} value={val}
+                              onChange={(v) => setPluginCfg(id, { [f.key]: v })} />
                           ) : f.type === 'textarea' ? (
-                            <textarea
-                              className="proxy-input plugin-textarea"
+                            <textarea className="proxy-input plugin-textarea"
                               value={(effective as string) ?? ''}
-                              onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}
-                            />
+                              onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })} />
                           ) : f.type === 'boolean' ? (
-                            <ToggleSwitch
-                              label={f.key}
-                              checked={(effective as boolean) ?? false}
-                              onChange={(v) => setPluginCfg(id, { [f.key]: v })}
-                            />
+                            <ToggleSwitch label={f.key} checked={(effective as boolean) ?? false}
+                              onChange={(v) => setPluginCfg(id, { [f.key]: v })} />
                           ) : (
-                            <input
-                              className="proxy-input"
-                              type={f.type}
+                            <input className="proxy-input" type={f.type}
                               value={(effective as string | number) ?? ''}
-                              onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
-                            />
+                              onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })} />
                           )}
                         </div>
                       );
@@ -510,20 +510,36 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
           )}
         </div>
 
+        {/* ── Advanced (collapsible) ── */}
+        <button type="button" className="profile-advanced-toggle" onClick={() => setShowAdvanced(v => !v)}>
+          高级 {showAdvanced ? '▴' : '▾'}
+        </button>
+        {showAdvanced && (
+          <SettingCard>
+            <SettingRow name="conf_name" description="Live2D 配置文件名">
+              <input className="proxy-input" value={character.conf_name ?? ''}
+                onChange={e => setCharacter({ conf_name: e.target.value })} />
+            </SettingRow>
+            <SettingRow name="conf_uid" description="Live2D 配置 UID">
+              <input className="proxy-input" value={character.conf_uid ?? ''}
+                onChange={e => setCharacter({ conf_uid: e.target.value })} />
+            </SettingRow>
+          </SettingCard>
+        )}
+
         <div className="settings-save-row">
-          <button type="button" className="profile-delete-btn" onClick={onDelete}>
-            删除
-          </button>
+          <button type="button" className="profile-delete-btn" onClick={onDelete}>删除</button>
           <button type="button" className="settings-save-button" onClick={onSave} disabled={saving}>
             {saving ? '保存中…' : '保存'}
           </button>
         </div>
-
         <div className="footer-space" />
       </div>
     </div>
   );
 }
+
+// ── Profiles page ─────────────────────────────────────────────────────────────
 
 export function ProfilesPage() {
   const [metas, setMetas] = useState<ProfileMeta[]>([]);
@@ -561,9 +577,9 @@ export function ProfilesPage() {
 
   async function handleSelect(file: string) {
     try {
-      const config = await readProfile(file);
+      const cfg = await readProfile(file);
       setSelectedFile(file);
-      setActiveConfig(config);
+      setActiveConfig(cfg);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -609,17 +625,16 @@ export function ProfilesPage() {
     }
   }
 
+  const selectedMeta = metas.find(m => m.file === selectedFile);
+
   return (
     <div className="profiles-page">
       <div className="profiles-topbar">
         <div className="profiles-list">
           {metas.map((m) => (
-            <button
-              key={m.file}
-              type="button"
+            <button key={m.file} type="button"
               className={`profile-chip${selectedFile === m.file ? ' profile-chip--active' : ''}`}
-              onClick={() => handleSelect(m.file)}
-            >
+              onClick={() => handleSelect(m.file)}>
               <ProfileAvatar name={m.character_name || m.name} absPath={m.avatar_abs_path} />
               <div className="profile-chip__text">
                 <span className="profile-chip__name">{m.character_name || m.name}</span>
@@ -630,28 +645,21 @@ export function ProfilesPage() {
 
           {showNewInput ? (
             <div className="profile-new-inline">
-              <input
-                className="profile-new-input"
-                placeholder="文件名（如 mychar）"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+              <input className="profile-new-input" placeholder="文件名（如 mychar）"
+                value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void handleCreate();
                   if (e.key === 'Escape') { setShowNewInput(false); setNewName(''); }
                 }}
-                autoFocus
-              />
+                autoFocus />
               <button type="button" className="profile-new-confirm" onClick={handleCreate}>创建</button>
               <button type="button" className="profile-new-cancel"
                 onClick={() => { setShowNewInput(false); setNewName(''); }}>取消</button>
             </div>
           ) : (
-            <button type="button" className="profile-add-btn" onClick={() => setShowNewInput(true)}>
-              ＋
-            </button>
+            <button type="button" className="profile-add-btn" onClick={() => setShowNewInput(true)}>＋</button>
           )}
         </div>
-
         {error && <span className="profile-error">{error}</span>}
       </div>
 
@@ -663,6 +671,7 @@ export function ProfilesPage() {
           onSave={handleSave}
           onDelete={handleDelete}
           saving={saving}
+          avatarAbsPath={selectedMeta?.avatar_abs_path ?? null}
         />
       ) : (
         <div className="profiles-empty">
