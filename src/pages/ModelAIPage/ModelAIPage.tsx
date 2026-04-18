@@ -120,7 +120,8 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
           ])
         }
       >
-        + 新增提供商
+        <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span>
+        新增提供商
       </button>
 
       <div className="group-title">对话模型</div>

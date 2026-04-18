@@ -422,21 +422,24 @@
 }
 
 .settings-shell .provider-add-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   margin-top: 12px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px dashed var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
+  color: var(--text);
+  font-size: 14px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .settings-shell .provider-add-btn:hover {
-  color: var(--accent);
   border-color: var(--accent);
-  background: rgba(63, 163, 255, 0.05);
+  background: linear-gradient(180deg, var(--folder-card-hover-bg-start), var(--folder-card-hover-bg-end));
+  transform: translateY(-1px);
 }
