@@ -6,7 +6,7 @@ export interface SettingsTab {
 }
 
 export const settingsTabs: SettingsTab[] = [
-  { id: 'general', label: '一般设置' },
+  { id: 'general', label: '运行配置' },
   { id: 'about', label: '关于' },
 ];
 

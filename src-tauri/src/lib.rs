@@ -37,6 +37,8 @@ pub fn run() {
             runtime::commands::pick_python_path_command,
             runtime::commands::launch_webui,
             runtime::commands::launch_frontend,
+            runtime::config::read_lab_config,
+            runtime::config::write_lab_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

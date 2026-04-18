@@ -4,6 +4,9 @@ import { ConsolePage } from '../pages/ConsolePage/ConsolePage';
 import { ModelsPage } from '../pages/ModelsPage/ModelsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage/SettingsPage';
+import { ServiceConfigPage } from '../pages/ServiceConfigPage/ServiceConfigPage';
+import { ModelAIPage } from '../pages/ModelAIPage/ModelAIPage';
+import { SpeechPage } from '../pages/SpeechPage/SpeechPage';
 import type { PageId } from '../data/nav';
 import type { ConsoleLogEntry } from '../services/launcher/launcher';
 import type {
@@ -14,6 +17,7 @@ import type {
   RuntimeDriver,
   RuntimeTaskRecord,
 } from '../services/runtime/runtime';
+import type { LabConfig } from '../services/config/labConfig';
 
 interface RenderPageOptions {
   inspection: RuntimeInspection | null;
@@ -46,6 +50,8 @@ interface RenderPageOptions {
   pythonExePath: string;
   onChoosePythonExe: () => Promise<string | null>;
   onSave: (driver: RuntimeDriver, pythonExePath: string) => void;
+  labConfig: LabConfig | null;
+  onSaveLabConfig: (config: LabConfig) => void;
   onSetAutoScroll: (next: boolean) => void;
   onSetWrapLines: (next: boolean) => void;
   onClearLogs: () => void;
@@ -81,13 +87,29 @@ export function renderPage(
           pythonExePath={options.pythonExePath}
           onChoosePythonExe={options.onChoosePythonExe}
           onSave={options.onSave}
+          labConfig={options.labConfig}
+          onSaveLabConfig={options.onSaveLabConfig}
         />
       );
     case 'advanced':
       return (
-        <PlaceholderPage
-          title="高级选项"
-          description="预留更细粒度的运行参数与后端切换入口。"
+        <ServiceConfigPage
+          labConfig={options.labConfig}
+          onSaveLabConfig={options.onSaveLabConfig}
+        />
+      );
+    case 'model-ai':
+      return (
+        <ModelAIPage
+          labConfig={options.labConfig}
+          onSaveLabConfig={options.onSaveLabConfig}
+        />
+      );
+    case 'speech':
+      return (
+        <SpeechPage
+          labConfig={options.labConfig}
+          onSaveLabConfig={options.onSaveLabConfig}
         />
       );
     case 'troubleshooting':

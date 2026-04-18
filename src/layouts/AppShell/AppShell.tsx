@@ -25,6 +25,8 @@ import {
   subscribeWebuiStatus,
   useRepoWorkspaceRoot,
 } from '../../services/runtime/bridge';
+import { readLabConfig, writeLabConfig } from '../../services/config/bridge';
+import type { LabConfig } from '../../services/config/labConfig';
 import {
   applyRuntimeEvent,
   buildFolderItemsFromPaths,
@@ -64,6 +66,7 @@ export function AppShell() {
   const [pythonExePath, setPythonExePath] = useState('');
   const [webuiRunning, setWebuiRunning] = useState(false);
   const [frontendRunning, setFrontendRunning] = useState(false);
+  const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
 
   useEffect(() => {
     writeStoredTheme(theme);
@@ -77,6 +80,10 @@ export function AppShell() {
       try {
         listManagedFolders()
           .then((paths) => { if (!disposed) setFolders(buildFolderItemsFromPaths(paths)); })
+          .catch(() => {});
+
+        readLabConfig()
+          .then((cfg) => { if (!disposed) setLabConfig(cfg); })
           .catch(() => {});
 
         const [nextProbe, nextTasks] = await Promise.all([
@@ -454,6 +461,18 @@ export function AppShell() {
     }
   }
 
+  async function handleSaveLabConfig(config: LabConfig) {
+    try {
+      await writeLabConfig(config);
+      setLabConfig(config);
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
   function handleClearLogs() {
     setLogs([]);
   }
@@ -513,6 +532,8 @@ export function AppShell() {
               pythonExePath,
               onChoosePythonExe: handleChoosePythonExe,
               onSave: handleSaveSettings,
+              labConfig,
+              onSaveLabConfig: handleSaveLabConfig,
               onSetAutoScroll: setAutoScroll,
               onSetWrapLines: setWrapLines,
               onClearLogs: handleClearLogs,

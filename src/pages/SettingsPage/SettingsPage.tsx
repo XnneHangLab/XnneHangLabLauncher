@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { SettingsTabs } from '../../components/settings/SettingsTabs/SettingsTabs';
+import { ToggleSwitch } from '../../components/settings/ToggleSwitch/ToggleSwitch';
 import {
   aboutInfo,
   settingsTabs,
@@ -11,6 +12,7 @@ import type {
   EnvironmentProbe,
   RuntimeDriver,
 } from '../../services/runtime/runtime';
+import type { LabConfig } from '../../services/config/labConfig';
 import '../../styles/settings.css';
 
 interface SettingsPageProps {
@@ -23,6 +25,8 @@ interface SettingsPageProps {
   pythonExePath: string;
   onChoosePythonExe: () => Promise<string | null>;
   onSave: (driver: RuntimeDriver, pythonExePath: string) => void;
+  labConfig: LabConfig | null;
+  onSaveLabConfig: (config: LabConfig) => void;
 }
 
 export function SettingsPage({
@@ -35,6 +39,8 @@ export function SettingsPage({
   pythonExePath,
   onChoosePythonExe,
   onSave,
+  labConfig,
+  onSaveLabConfig,
 }: SettingsPageProps) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>('general');
   const [localDriver, setLocalDriver] = useState<RuntimeDriver>(runtimeDriver);
@@ -191,6 +197,39 @@ export function SettingsPage({
                 保存并重新检测
               </button>
             </div>
+
+            {labConfig ? (
+              <>
+                <div className="group-title">功能开关</div>
+                <SettingCard>
+                  {(
+                    [
+                      ['sherpa_asr', 'Sherpa ASR', '本地离线语音识别（Sherpa-ONNX Paraformer）'],
+                      ['qwen_asr', 'Qwen ASR', '通义千问本地语音识别（OpenVINO）'],
+                      ['llm_translate', 'LLM 翻译', '使用本地 GGUF 模型执行翻译'],
+                      ['local_embedding', '本地向量嵌入', 'BGE-M3 GGUF 向量化，用于记忆搜索'],
+                      ['gsv_lite', 'GSV-Lite TTS', 'GPT-SoVITS Lite 语音合成'],
+                      ['genie_tts', 'Genie TTS', 'Genie TTS ONNX 推理引擎'],
+                      ['qwen_tts', 'Qwen TTS', '通义千问语音合成（0.6B / 1.7B）'],
+                      ['memory_bench', 'Memory Bench', '记忆压测工具'],
+                    ] as Array<[keyof LabConfig['package'], string, string]>
+                  ).map(([key, name, description]) => (
+                    <SettingRow key={key} name={name} description={description}>
+                      <ToggleSwitch
+                        label={name}
+                        checked={labConfig.package[key]}
+                        onChange={(next) => {
+                          onSaveLabConfig({
+                            ...labConfig,
+                            package: { ...labConfig.package, [key]: next },
+                          });
+                        }}
+                      />
+                    </SettingRow>
+                  ))}
+                </SettingCard>
+              </>
+            ) : null}
 
             <div className="footer-space" />
           </div>
