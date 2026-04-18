@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
@@ -67,6 +67,20 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
   const prompt = config.prompt ?? {};
   const enabledPlugins = config.plugins?.enabled ?? [];
 
+  const [openPlugins, setOpenPlugins] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    (config.plugins?.enabled ?? []).forEach(id => { if (PLUGIN_CONFIG_FIELDS[id]) s.add(id); });
+    return s;
+  });
+
+  function toggleOpen(id: string) {
+    setOpenPlugins(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   function setProfile(patch: Partial<typeof profile>) {
     onChange({ ...config, profile: { ...profile, ...patch } });
   }
@@ -86,6 +100,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
     const current = enabledPlugins.filter((p) => p !== id);
     const next = on ? [...current, id] : current;
     onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
+    if (on && PLUGIN_CONFIG_FIELDS[id]) setOpenPlugins(prev => new Set(prev).add(id));
   }
 
   function getPluginCfg(id: string): Record<string, unknown> {
@@ -219,45 +234,73 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving }: Pro
 
         <div className="group-title">插件</div>
 
-        <SettingCard>
+        <div className="plugin-list">
           {KNOWN_PLUGINS.map(({ id, description }) => {
             const isOn = enabledPlugins.includes(id);
             const fields = PLUGIN_CONFIG_FIELDS[id];
+            const isOpen = openPlugins.has(id);
             const cfg = getPluginCfg(id);
             return (
-              <React.Fragment key={id}>
-                <SettingRow name={id} description={description}>
-                  <ToggleSwitch
-                    label={id}
-                    checked={isOn}
-                    onChange={(on) => togglePlugin(id, on)}
-                  />
-                </SettingRow>
-                {isOn && fields?.map((f) => (
-                  <SettingRow key={`${id}.${f.key}`} name={f.key} description={f.description}>
-                    {f.type === 'textarea' ? (
-                      <textarea
-                        className="proxy-input plugin-textarea"
-                        value={(cfg[f.key] as string) ?? ''}
-                        onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}
-                      />
-                    ) : (
-                      <input
-                        className="proxy-input"
-                        type={f.type}
-                        value={(cfg[f.key] as string | number) ?? ''}
-                        onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
-                      />
+              <div key={id} className={`plugin-item${isOn ? ' plugin-item--on' : ''}${isOpen ? ' plugin-item--open' : ''}`}>
+                <div className="plugin-item-header">
+                  <div className="plugin-item-info">
+                    <span className="plugin-item-name">{id}</span>
+                    <span className="plugin-item-desc">{description}</span>
+                  </div>
+                  <div className="plugin-item-controls">
+                    <ToggleSwitch label={id} checked={isOn} onChange={(on) => togglePlugin(id, on)} />
+                    {fields && (
+                      <button
+                        type="button"
+                        className={`plugin-expand-btn${isOpen ? ' plugin-expand-btn--open' : ''}`}
+                        onClick={() => toggleOpen(id)}
+                      >›</button>
                     )}
-                  </SettingRow>
-                ))}
-              </React.Fragment>
+                  </div>
+                </div>
+                {isOpen && fields && (
+                  <div className="plugin-item-body">
+                    {fields.map(f => {
+                      const val = cfg[f.key];
+                      return (
+                        <div key={f.key} className="plugin-field-row">
+                          <div className="plugin-field-meta">
+                            <span className="plugin-field-key">{f.key}</span>
+                            {f.description && <span className="plugin-field-desc">{f.description}</span>}
+                          </div>
+                          {f.type === 'textarea' ? (
+                            <textarea
+                              className="proxy-input plugin-textarea"
+                              value={(val as string) ?? ''}
+                              onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}
+                            />
+                          ) : (
+                            <input
+                              className="proxy-input"
+                              type={f.type}
+                              value={(val as string | number) ?? ''}
+                              onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
           {unknownPlugins.length > 0 && (
-            <SettingRow name="其他已启用插件" description={unknownPlugins.join(', ')} />
+            <div className="plugin-item">
+              <div className="plugin-item-header">
+                <div className="plugin-item-info">
+                  <span className="plugin-item-name">其他已启用插件</span>
+                  <span className="plugin-item-desc">{unknownPlugins.join(', ')}</span>
+                </div>
+              </div>
+            </div>
           )}
-        </SettingCard>
+        </div>
 
         <div className="settings-save-row">
           <button type="button" className="profile-delete-btn" onClick={onDelete}>

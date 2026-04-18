@@ -232,3 +232,121 @@
   background: rgba(232, 76, 76, 0.13);
   border-color: rgba(232, 76, 76, 0.48);
 }
+
+/* ── Plugin accordion ── */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.plugin-item {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.plugin-item--on {
+  border-color: rgba(52, 155, 255, 0.3);
+}
+
+.plugin-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  min-height: 54px;
+}
+
+.plugin-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.plugin-item-name {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  transition: color 0.15s;
+}
+
+.plugin-item--on .plugin-item-name {
+  color: #5ab4ff;
+}
+
+.plugin-item-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.plugin-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.plugin-expand-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.2s;
+  transform: rotate(0deg);
+}
+
+.plugin-expand-btn--open {
+  transform: rotate(90deg);
+  color: #5ab4ff;
+  border-color: rgba(52, 155, 255, 0.4);
+  background: rgba(52, 155, 255, 0.07);
+}
+
+.plugin-item-body {
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-field-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.plugin-field-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 9px;
+}
+
+.plugin-field-key {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.plugin-field-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
