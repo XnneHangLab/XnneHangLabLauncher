@@ -392,3 +392,51 @@
     width: 220px;
   }
 }
+
+.settings-shell .provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 8px;
+}
+
+.settings-shell .provider-header .group-title {
+  margin: 0;
+}
+
+.settings-shell .provider-remove-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.settings-shell .provider-remove-btn:hover {
+  color: #ff6b6b;
+  border-color: rgba(255, 100, 100, 0.4);
+  background: rgba(255, 100, 100, 0.06);
+}
+
+.settings-shell .provider-add-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.settings-shell .provider-add-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(63, 163, 255, 0.05);
+}

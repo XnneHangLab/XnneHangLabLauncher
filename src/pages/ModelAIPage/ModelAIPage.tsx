@@ -11,44 +11,56 @@ interface ModelAIPanelProps {
 
 function ProviderCard({
   provider,
+  index,
   onChange,
+  onRemove,
 }: {
   provider: LlmProvider;
+  index: number;
   onChange: (next: LlmProvider) => void;
+  onRemove: () => void;
 }) {
   return (
-    <SettingCard>
-      <SettingRow name="名称" icon="🏷">
-        <input
-          className="proxy-input"
-          value={provider.name}
-          onChange={(e) => onChange({ ...provider, name: e.target.value })}
-        />
-      </SettingRow>
-      <SettingRow name="API Key" icon="🔑">
-        <input
-          className="proxy-input"
-          type="password"
-          placeholder="留空则不更改"
-          value={provider.llm_api_key}
-          onChange={(e) => onChange({ ...provider, llm_api_key: e.target.value })}
-        />
-      </SettingRow>
-      <SettingRow name="Base URL" icon="🌐">
-        <input
-          className="proxy-input"
-          value={provider.llm_base_url}
-          onChange={(e) => onChange({ ...provider, llm_base_url: e.target.value })}
-        />
-      </SettingRow>
-      <SettingRow name="API 格式" icon="📐">
-        <input
-          className="proxy-input"
-          value={provider.api_format}
-          onChange={(e) => onChange({ ...provider, api_format: e.target.value })}
-        />
-      </SettingRow>
-    </SettingCard>
+    <>
+      <div className="provider-header">
+        <span className="group-title">{provider.name || `提供商 ${index + 1}`}</span>
+        <button type="button" className="provider-remove-btn" onClick={onRemove}>
+          删除
+        </button>
+      </div>
+      <SettingCard>
+        <SettingRow name="名称" icon="🏷">
+          <input
+            className="proxy-input"
+            value={provider.name}
+            onChange={(e) => onChange({ ...provider, name: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="API Key" icon="🔑">
+          <input
+            className="proxy-input"
+            type="password"
+            placeholder="留空则不更改"
+            value={provider.llm_api_key}
+            onChange={(e) => onChange({ ...provider, llm_api_key: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="Base URL" icon="🌐">
+          <input
+            className="proxy-input"
+            value={provider.llm_base_url}
+            onChange={(e) => onChange({ ...provider, llm_base_url: e.target.value })}
+          />
+        </SettingRow>
+        <SettingRow name="API 格式" icon="📐">
+          <input
+            className="proxy-input"
+            value={provider.api_format}
+            onChange={(e) => onChange({ ...provider, api_format: e.target.value })}
+          />
+        </SettingRow>
+      </SettingCard>
+    </>
   );
 }
 
@@ -85,18 +97,31 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
       <div className="group-title group-title--standalone">LLM 提供商</div>
 
       {providers.map((p, i) => (
-        <div key={i}>
-          <div className="group-title">{p.name || `提供商 ${i + 1}`}</div>
-          <ProviderCard
-            provider={p}
-            onChange={(next) => {
-              const updated = [...providers];
-              updated[i] = next;
-              setProviders(updated);
-            }}
-          />
-        </div>
+        <ProviderCard
+          key={i}
+          provider={p}
+          index={i}
+          onChange={(next) => {
+            const updated = [...providers];
+            updated[i] = next;
+            setProviders(updated);
+          }}
+          onRemove={() => setProviders(providers.filter((_, idx) => idx !== i))}
+        />
       ))}
+
+      <button
+        type="button"
+        className="provider-add-btn"
+        onClick={() =>
+          setProviders([
+            ...providers,
+            { name: '', llm_api_key: '', llm_base_url: '', api_format: 'chat_completion' },
+          ])
+        }
+      >
+        + 新增提供商
+      </button>
 
       <div className="group-title">对话模型</div>
       <SettingCard>
