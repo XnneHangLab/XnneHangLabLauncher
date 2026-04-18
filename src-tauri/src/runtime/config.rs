@@ -201,6 +201,64 @@ pub async fn pick_file_for_profile(
     Ok(Some(relative))
 }
 
+#[tauri::command]
+pub async fn pick_any_file(title: String) -> Result<Option<String>, String> {
+    pick_file_dialog(&title, "")
+        .map(|p| p.map(|b| b.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub async fn pick_any_dir(title: String) -> Result<Option<String>, String> {
+    pick_dir_dialog(&title).map(|p| p.map(|b| b.to_string_lossy().to_string()))
+}
+
+fn pick_dir_dialog(title: &str) -> Result<Option<PathBuf>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms; \
+             $d = New-Object System.Windows.Forms.FolderBrowserDialog; \
+             $d.Description = '{title}'; \
+             $d.ShowNewFolderButton = $true; \
+             if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) \
+             {{ [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $d.SelectedPath }}"
+        );
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output()
+            .map_err(|e| format!("无法启动目录选择器: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!("POSIX path of (choose folder with prompt \"{title}\")");
+        let output = Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|e| format!("无法启动目录选择器: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for (program, args) in [
+            ("zenity", vec!["--file-selection", "--directory", &format!("--title={title}")]),
+            ("kdialog", vec!["--getexistingdirectory", "."]),
+        ] {
+            let Ok(output) = Command::new(program).args(&args).output() else { continue };
+            if !output.status.success() { continue }
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                return Ok(Some(PathBuf::from(stdout)));
+            }
+        }
+        return Err("未找到可用的目录选择器（需要 zenity 或 kdialog）".to_string());
+    }
+}
+
 fn pick_file_dialog(title: &str, start_dir: &str) -> Result<Option<PathBuf>, String> {
     #[cfg(target_os = "windows")]
     {

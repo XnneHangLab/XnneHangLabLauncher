@@ -12,3 +12,11 @@ export function writeLabConfig(config: LabConfig) {
 export function fetchModelList(baseUrl: string, apiKey: string) {
   return invoke<string[]>('fetch_model_list', { baseUrl, apiKey });
 }
+
+export function pickAnyFile(title: string) {
+  return invoke<string | null>('pick_any_file', { title });
+}
+
+export function pickAnyDir(title: string) {
+  return invoke<string | null>('pick_any_dir', { title });
+}

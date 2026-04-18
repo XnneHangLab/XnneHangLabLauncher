@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { ToggleSwitch } from '../../components/settings/ToggleSwitch/ToggleSwitch';
+import { BrowsePath } from '../../components/settings/BrowsePath/BrowsePath';
 import {
   listProfiles,
   readProfile,
@@ -33,29 +34,6 @@ function ProfileAvatar({ name, absPath }: { name: string; absPath?: string | nul
   }
   const initial = name ? name[0].toUpperCase() : '?';
   return <div className="profile-avatar">{initial}</div>;
-}
-
-function BrowsePath({
-  value,
-  onChange,
-  onBrowse,
-  wide = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onBrowse: () => Promise<void>;
-  wide?: boolean;
-}) {
-  return (
-    <div className="profile-path-wrap">
-      <input
-        className={`proxy-input${wide ? ' workspace-input' : ''}`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <button type="button" className="profile-browse-btn" onClick={onBrowse}>…</button>
-    </div>
-  );
 }
 
 interface ProfileEditorProps {

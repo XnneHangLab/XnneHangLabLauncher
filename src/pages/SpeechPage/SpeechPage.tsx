@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { ToggleSwitch } from '../../components/settings/ToggleSwitch/ToggleSwitch';
+import { BrowsePath } from '../../components/settings/BrowsePath/BrowsePath';
+import { pickAnyFile, pickAnyDir } from '../../services/config/bridge';
 import type { LabConfig } from '../../services/config/labConfig';
 
 interface SpeechPanelProps {
@@ -62,11 +64,15 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
           </div>
         </SettingRow>
 
-        <SettingRow name="FFMPEG 路径" description="ffmpeg 可执行文件路径或命令名" icon="🎬">
-          <input
-            className="proxy-input"
+        <SettingRow name="FFMPEG_PATH" description="ffmpeg 可执行文件路径或命令名" icon="🎬">
+          <BrowsePath
             value={asr.FFMPEG_PATH}
-            onChange={(e) => setAsr({ ...asr, FFMPEG_PATH: e.target.value })}
+            onChange={(v) => setAsr({ ...asr, FFMPEG_PATH: v })}
+            onBrowse={async () => {
+              const p = await pickAnyFile('选择 FFMPEG 可执行文件');
+              if (p !== null) setAsr((prev) => prev ? { ...prev, FFMPEG_PATH: p } : prev);
+            }}
+            wide
           />
         </SettingRow>
 
@@ -84,11 +90,15 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
         <>
           <div className="group-title">Sherpa-ONNX 配置</div>
           <SettingCard>
-            <SettingRow name="模型目录" icon="📂">
-              <input
-                className="proxy-input workspace-input"
+            <SettingRow name="asr_model_dir" description="Sherpa ONNX 模型目录" icon="📂">
+              <BrowsePath
                 value={asr.sherpa.asr_model_dir}
-                onChange={(e) => setAsr({ ...asr, sherpa: { ...asr.sherpa, asr_model_dir: e.target.value } })}
+                onChange={(v) => setAsr({ ...asr, sherpa: { ...asr.sherpa, asr_model_dir: v } })}
+                onBrowse={async () => {
+                  const p = await pickAnyDir('选择 Sherpa ASR 模型目录');
+                  if (p !== null) setAsr((prev) => prev ? { ...prev, sherpa: { ...prev.sherpa, asr_model_dir: p } } : prev);
+                }}
+                wide
               />
             </SettingRow>
             <SettingRow name="线程数" icon="⚡">
@@ -121,18 +131,26 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
                 ))}
               </div>
             </SettingRow>
-            <SettingRow name="0.6B 模型路径" icon="📂">
-              <input
-                className="proxy-input workspace-input"
+            <SettingRow name="model_0_6b_path" description="Qwen ASR 0.6B 模型目录" icon="📂">
+              <BrowsePath
                 value={asr.qwen_asr.model_0_6b_path}
-                onChange={(e) => setAsr({ ...asr, qwen_asr: { ...asr.qwen_asr, model_0_6b_path: e.target.value } })}
+                onChange={(v) => setAsr({ ...asr, qwen_asr: { ...asr.qwen_asr, model_0_6b_path: v } })}
+                onBrowse={async () => {
+                  const p = await pickAnyDir('选择 Qwen ASR 0.6B 模型目录');
+                  if (p !== null) setAsr((prev) => prev ? { ...prev, qwen_asr: { ...prev.qwen_asr, model_0_6b_path: p } } : prev);
+                }}
+                wide
               />
             </SettingRow>
-            <SettingRow name="1.7B 模型路径" icon="📂">
-              <input
-                className="proxy-input workspace-input"
+            <SettingRow name="model_1_7b_path" description="Qwen ASR 1.7B 模型目录" icon="📂">
+              <BrowsePath
                 value={asr.qwen_asr.model_1_7b_path}
-                onChange={(e) => setAsr({ ...asr, qwen_asr: { ...asr.qwen_asr, model_1_7b_path: e.target.value } })}
+                onChange={(v) => setAsr({ ...asr, qwen_asr: { ...asr.qwen_asr, model_1_7b_path: v } })}
+                onBrowse={async () => {
+                  const p = await pickAnyDir('选择 Qwen ASR 1.7B 模型目录');
+                  if (p !== null) setAsr((prev) => prev ? { ...prev, qwen_asr: { ...prev.qwen_asr, model_1_7b_path: p } } : prev);
+                }}
+                wide
               />
             </SettingRow>
           </SettingCard>
@@ -157,11 +175,15 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
           </div>
         </SettingRow>
 
-        <SettingRow name="声音资源目录" icon="📂">
-          <input
-            className="proxy-input workspace-input"
+        <SettingRow name="voice_assets_root" description="TTS 声音资源目录" icon="📂">
+          <BrowsePath
             value={tts.voice_assets_root}
-            onChange={(e) => setTts({ ...tts, voice_assets_root: e.target.value })}
+            onChange={(v) => setTts({ ...tts, voice_assets_root: v })}
+            onBrowse={async () => {
+              const p = await pickAnyDir('选择声音资源目录');
+              if (p !== null) setTts((prev) => prev ? { ...prev, voice_assets_root: p } : prev);
+            }}
+            wide
           />
         </SettingRow>
       </SettingCard>
@@ -177,14 +199,14 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
                 onChange={(e) => setTts({ ...tts, genie_tts: { ...tts.genie_tts, language: e.target.value } })}
               />
             </SettingRow>
-            <SettingRow name="使用 RoBERTa" icon="🔢">
+            <SettingRow name="use_roberta" icon="🔢">
               <ToggleSwitch
-                label="使用 RoBERTa"
+                label="use_roberta"
                 checked={tts.genie_tts.use_roberta}
                 onChange={(next) => setTts({ ...tts, genie_tts: { ...tts.genie_tts, use_roberta: next } })}
               />
             </SettingRow>
-            <SettingRow name="ONNX 线程数" icon="⚡">
+            <SettingRow name="onnx_intra_threads" icon="⚡">
               <input
                 className="proxy-input"
                 type="number"
@@ -228,25 +250,33 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
                 ))}
               </div>
             </SettingRow>
-            <SettingRow name="CUDA Graphs 预热" icon="🔥">
+            <SettingRow name="warmup_cuda_graphs" icon="🔥">
               <ToggleSwitch
-                label="CUDA Graphs 预热"
+                label="warmup_cuda_graphs"
                 checked={qwenTts.warmup_cuda_graphs}
                 onChange={(next) => setQwenTts({ ...qwenTts, warmup_cuda_graphs: next })}
               />
             </SettingRow>
-            <SettingRow name="0.6B 模型路径" icon="📂">
-              <input
-                className="proxy-input workspace-input"
+            <SettingRow name="model_0_6b_path" description="Qwen TTS 0.6B 模型目录" icon="📂">
+              <BrowsePath
                 value={qwenTts.model_0_6b_path}
-                onChange={(e) => setQwenTts({ ...qwenTts, model_0_6b_path: e.target.value })}
+                onChange={(v) => setQwenTts({ ...qwenTts, model_0_6b_path: v })}
+                onBrowse={async () => {
+                  const p = await pickAnyDir('选择 Qwen TTS 0.6B 模型目录');
+                  if (p !== null) setQwenTts((prev) => prev ? { ...prev, model_0_6b_path: p } : prev);
+                }}
+                wide
               />
             </SettingRow>
-            <SettingRow name="1.7B 模型路径" icon="📂">
-              <input
-                className="proxy-input workspace-input"
+            <SettingRow name="model_1_7b_path" description="Qwen TTS 1.7B 模型目录" icon="📂">
+              <BrowsePath
                 value={qwenTts.model_1_7b_path}
-                onChange={(e) => setQwenTts({ ...qwenTts, model_1_7b_path: e.target.value })}
+                onChange={(v) => setQwenTts({ ...qwenTts, model_1_7b_path: v })}
+                onBrowse={async () => {
+                  const p = await pickAnyDir('选择 Qwen TTS 1.7B 模型目录');
+                  if (p !== null) setQwenTts((prev) => prev ? { ...prev, model_1_7b_path: p } : prev);
+                }}
+                wide
               />
             </SettingRow>
           </SettingCard>

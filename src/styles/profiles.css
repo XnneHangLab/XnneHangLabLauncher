@@ -215,32 +215,6 @@
   font-family: ui-monospace, 'SF Mono', Consolas, monospace;
 }
 
-/* Browse path row */
-.profile-path-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.profile-browse-btn {
-  flex-shrink: 0;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 9px;
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--muted);
-  font-size: 15px;
-  cursor: pointer;
-  transition: color 0.14s, border-color 0.14s, background 0.14s;
-}
-
-.profile-browse-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-  background: var(--panel-2);
-}
-
 /* Delete button */
 .profile-delete-btn {
   height: 38px;

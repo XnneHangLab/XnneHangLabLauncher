@@ -510,3 +510,28 @@
   background: linear-gradient(180deg, var(--folder-card-hover-bg-start), var(--folder-card-hover-bg-end));
   transform: translateY(-1px);
 }
+
+.settings-shell .browse-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-shell .browse-btn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+}
+
+.settings-shell .browse-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
