@@ -1,8 +1,6 @@
 export interface ProfileMeta {
   file: string;
-  name: string;
   description: string;
-  agent_name: string;
   character_name: string;
   avatar: string;
   avatar_abs_path: string | null;
@@ -10,9 +8,7 @@ export interface ProfileMeta {
 
 export interface ProfileConfig {
   profile: {
-    name: string;
     description: string;
-    agent_name: string;
   };
   character?: {
     conf_name?: string;

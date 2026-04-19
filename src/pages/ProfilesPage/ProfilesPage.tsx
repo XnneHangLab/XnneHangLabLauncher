@@ -257,7 +257,7 @@ interface ProfileEditorProps {
 }
 
 function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avatarAbsPath }: ProfileEditorProps) {
-  const profile = config.profile ?? { name: '', description: '', agent_name: '' };
+  const profile = config.profile ?? { description: '' };
   const character = config.character ?? {};
   const ttsPreprocessor = character.tts_preprocessor ?? {};
   const tts = character.tts ?? {};
@@ -319,7 +319,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
   }
 
   const unknownPlugins = enabledPlugins.filter(p => !KNOWN_PLUGINS.find(k => k.id === p));
-  const identityInitial = (character.character_name || profile.name || file)[0]?.toUpperCase() ?? '?';
+  const identityInitial = (character.character_name || file)[0]?.toUpperCase() ?? '?';
 
   return (
     <div className="profiles-editor settings-shell">
@@ -340,15 +340,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
               <input className="profile-id-input profile-id-input--name" placeholder="（展示名）"
                 value={character.character_name ?? ''} onChange={e => setCharacter({ character_name: e.target.value })} />
             </div>
-            <div className="profile-id-group">
+            <div className="profile-id-group profile-id-group--full">
               <span className="profile-id-label">description</span>
               <input className="profile-id-input profile-id-input--dim" placeholder="（备注）"
                 value={profile.description} onChange={e => setProfile({ description: e.target.value })} />
-            </div>
-            <div className="profile-id-group">
-              <span className="profile-id-label">agent_name <em>提示词 {'{agent_name}'}</em></span>
-              <input className="profile-id-input profile-id-input--dim" placeholder="（注入系统提示词的角色名）"
-                value={profile.agent_name} onChange={e => setProfile({ agent_name: e.target.value })} />
             </div>
           </div>
           <span className="profile-file-badge profile-file-badge--corner">{file}.toml</span>
@@ -613,9 +608,9 @@ export function ProfilesPage() {
             <button key={m.file} type="button"
               className={`profile-chip${selectedFile === m.file ? ' profile-chip--active' : ''}`}
               onClick={() => handleSelect(m.file)}>
-              <ProfileAvatar name={m.character_name || m.name} absPath={m.avatar_abs_path} />
+              <ProfileAvatar name={m.character_name || m.file} absPath={m.avatar_abs_path} />
               <div className="profile-chip__text">
-                <span className="profile-chip__name">{m.character_name || m.name}</span>
+                <span className="profile-chip__name">{m.character_name || m.file}</span>
                 <span className="profile-chip__file">{m.file}</span>
               </div>
             </button>
