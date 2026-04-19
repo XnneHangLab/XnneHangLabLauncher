@@ -7,46 +7,80 @@ import type {
 } from '../../services/runtime/runtime';
 import '../../styles/models.css';
 
-const MODEL_SPECS: ModelSpec[] = [
+const MODEL_GROUPS: Array<{ title: string; specs: ModelSpec[] }> = [
   {
-    key: 'genie-base',
-    title: 'Genie-TTS 基础资源',
-    description: 'XnneHangLab 自研语音合成引擎所需的基础模型包，支持 CPU 与 GPU 环境。',
-    icon: '🧠',
-    tags: ['CPU', 'GPU'],
-    requiresGpu: false,
+    title: '推理基础资源',
+    specs: [
+      {
+        key: 'genie-base',
+        title: 'Genie-TTS 基础资源',
+        description: 'XnneHangLab 自研语音合成引擎所需的基础模型包，支持 CPU 与 GPU 环境。',
+        icon: '🧠',
+        tags: ['TTS', 'CPU', 'GPU'],
+        requiresGpu: false,
+      },
+      {
+        key: 'gsv-lite',
+        title: 'GSV-Lite 数据包',
+        description: '包含 HuBERT、Roberta、G2P 及 SV 共四项子资源，仅 GPU 环境可用。',
+        icon: '🎙',
+        tags: ['TTS', 'GPU'],
+        requiresGpu: true,
+      },
+    ],
   },
   {
-    key: 'luming-genie-tts-v2-pro-plus',
-    title: '路鸣 Genie-TTS v2 Pro+',
-    description: '路鸣角色 Genie-TTS 角色模型包，CPU 推理，需配合 Genie-TTS 基础资源使用。',
-    icon: '🎤',
-    tags: ['CPU'],
-    requiresGpu: false,
-  },
-  {
-    key: 'gsv-lite',
-    title: 'GSV-Lite 数据包',
-    description: '包含 HuBERT、Roberta、G2P 及 SV 共四项子资源，仅 GPU 环境可用。',
-    icon: '🎙',
-    tags: ['GPU'],
-    requiresGpu: true,
-  },
-  {
-    key: 'qwen-tts-0.6b',
-    title: 'Qwen3-TTS 0.6B',
-    description: '千问语音合成轻量版，仅 GPU 环境可用。',
-    icon: '🔊',
-    tags: ['GPU', '≥ 8GB'],
-    requiresGpu: true,
-  },
-  {
-    key: 'qwen-tts-1.7b',
-    title: 'Qwen3-TTS 1.7B',
-    description: '千问语音合成标准版，仅 GPU 环境可用。',
-    icon: '🔊',
-    tags: ['GPU', '12~16GB'],
-    requiresGpu: true,
+    title: '推理模型',
+    specs: [
+      {
+        key: 'luming-genie-tts-v2-pro-plus',
+        title: '路鸣 Genie-TTS v2 Pro+',
+        description: '路鸣角色 Genie-TTS 角色模型包，CPU 推理，需配合 Genie-TTS 基础资源使用。',
+        icon: '🎤',
+        tags: ['TTS', 'CPU'],
+        requiresGpu: false,
+      },
+      {
+        key: 'gsv-baoqiao',
+        title: '薄巧 GSV 角色模型',
+        description: '薄巧角色 GPT-SoVITS 语音模型，需配合 GSV-Lite 基础包使用，仅 GPU 环境可用。',
+        icon: '🎤',
+        tags: ['TTS', 'GPU'],
+        requiresGpu: true,
+      },
+      {
+        key: 'qwen-tts-0.6b',
+        title: 'Qwen3-TTS 0.6B',
+        description: '千问语音合成轻量版，仅 GPU 环境可用。',
+        icon: '🔊',
+        tags: ['TTS', 'GPU', '≥ 8GB'],
+        requiresGpu: true,
+      },
+      {
+        key: 'qwen-tts-1.7b',
+        title: 'Qwen3-TTS 1.7B',
+        description: '千问语音合成标准版，仅 GPU 环境可用。',
+        icon: '🔊',
+        tags: ['TTS', 'GPU', '12~16GB'],
+        requiresGpu: true,
+      },
+      {
+        key: 'local-embedding',
+        title: 'BGE-M3 本地嵌入模型',
+        description: 'GGUF Q8_0 量化版 BGE-M3，用于本地向量嵌入与语义检索，CPU 可用。',
+        icon: '🔍',
+        tags: ['Embedding', 'CPU', 'Q8_0'],
+        requiresGpu: false,
+      },
+      {
+        key: 'llm-translate',
+        title: 'Qwen2.5 0.5B 翻译辅助',
+        description: '千问 2.5 超轻量指令模型，GGUF Q8_0，用于文本翻译辅助推理，CPU 可用。',
+        icon: '🌐',
+        tags: ['Translate', 'CPU', '0.5B'],
+        requiresGpu: false,
+      },
+    ],
   },
 ];
 
@@ -70,6 +104,9 @@ interface ModelsPageProps {
   onDownloadQwenTts06b: () => void;
   onDownloadQwenTts17b: () => void;
   onDownloadLumingGenieTts: () => void;
+  onDownloadGsvBaoqiao: () => void;
+  onDownloadLocalEmbedding: () => void;
+  onDownloadLlmTranslate: () => void;
   scriptsReady: boolean;
 }
 
@@ -83,6 +120,9 @@ export function ModelsPage({
   onDownloadQwenTts06b,
   onDownloadQwenTts17b,
   onDownloadLumingGenieTts,
+  onDownloadGsvBaoqiao,
+  onDownloadLocalEmbedding,
+  onDownloadLlmTranslate,
   scriptsReady,
 }: ModelsPageProps) {
   const gpuReady =
@@ -96,10 +136,16 @@ export function ModelsPage({
       onDownloadLumingGenieTts();
     } else if (key === 'gsv-lite') {
       onDownloadGsvLite();
+    } else if (key === 'gsv-baoqiao') {
+      onDownloadGsvBaoqiao();
     } else if (key === 'qwen-tts-0.6b') {
       onDownloadQwenTts06b();
     } else if (key === 'qwen-tts-1.7b') {
       onDownloadQwenTts17b();
+    } else if (key === 'local-embedding') {
+      onDownloadLocalEmbedding();
+    } else if (key === 'llm-translate') {
+      onDownloadLlmTranslate();
     }
   }
 
@@ -113,21 +159,25 @@ export function ModelsPage({
         ) : null}
       </header>
 
-      <section>
-        <h2 className="models-page__section-title">资源包</h2>
-        <div className="models-page__cards">
-          {MODEL_SPECS.map((spec) => (
-            <ModelCard
-              key={spec.key}
-              spec={spec}
-              status={inspection?.resources[spec.key]?.status ?? null}
-              scriptsReady={scriptsReady}
-              gpuReady={gpuReady}
-              onDownload={() => handleDownload(spec.key)}
-            />
-          ))}
-        </div>
-      </section>
+      <div className="models-page__groups">
+        {MODEL_GROUPS.map((group) => (
+          <section key={group.title}>
+            <h2 className="models-page__section-title">{group.title}</h2>
+            <div className="models-page__cards">
+              {group.specs.map((spec) => (
+                <ModelCard
+                  key={spec.key}
+                  spec={spec}
+                  status={inspection?.resources[spec.key]?.status ?? null}
+                  scriptsReady={scriptsReady}
+                  gpuReady={gpuReady}
+                  onDownload={() => handleDownload(spec.key)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
 
       <section className="models-page__queue">
         <h2>下载队列</h2>

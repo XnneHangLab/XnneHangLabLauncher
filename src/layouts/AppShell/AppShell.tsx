@@ -336,6 +336,93 @@ export function AppShell() {
     }
   }
 
+  async function handleDownloadGsvBaoqiao() {
+    if (!isEnvironmentReady(environmentProbe)) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', '环境未就绪，已禁止执行运行时脚本'),
+      ]);
+      return;
+    }
+
+    try {
+      const task = await enqueueDownload('gsv-baoqiao');
+      setTasks((current) => {
+        const next = current.filter((item) => item.taskId !== task.taskId);
+        next.push(task);
+        return next;
+      });
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('system', `${task.label}: ${task.message}`),
+      ]);
+      setActivePage('models');
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
+  async function handleDownloadLocalEmbedding() {
+    if (!isEnvironmentReady(environmentProbe)) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', '环境未就绪，已禁止执行运行时脚本'),
+      ]);
+      return;
+    }
+
+    try {
+      const task = await enqueueDownload('local-embedding');
+      setTasks((current) => {
+        const next = current.filter((item) => item.taskId !== task.taskId);
+        next.push(task);
+        return next;
+      });
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('system', `${task.label}: ${task.message}`),
+      ]);
+      setActivePage('models');
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
+  async function handleDownloadLlmTranslate() {
+    if (!isEnvironmentReady(environmentProbe)) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', '环境未就绪，已禁止执行运行时脚本'),
+      ]);
+      return;
+    }
+
+    try {
+      const task = await enqueueDownload('llm-translate');
+      setTasks((current) => {
+        const next = current.filter((item) => item.taskId !== task.taskId);
+        next.push(task);
+        return next;
+      });
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('system', `${task.label}: ${task.message}`),
+      ]);
+      setActivePage('models');
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
   async function handleWorkspaceProbe(nextProbe: EnvironmentProbe) {
     setEnvironmentProbe(nextProbe);
     setInspection(null);
@@ -515,6 +602,9 @@ export function AppShell() {
               onDownloadQwenTts06b: handleDownloadQwenTts06b,
               onDownloadQwenTts17b: handleDownloadQwenTts17b,
               onDownloadLumingGenieTts: handleDownloadLumingGenieTts,
+              onDownloadGsvBaoqiao: handleDownloadGsvBaoqiao,
+              onDownloadLocalEmbedding: handleDownloadLocalEmbedding,
+              onDownloadLlmTranslate: handleDownloadLlmTranslate,
               onOpenPath: handleOpenManagedPath,
               onLaunchWebui: handleLaunchWebui,
               webuiRunning,

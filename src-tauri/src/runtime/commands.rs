@@ -222,6 +222,9 @@ fn validate_download_target(target: &str) -> Result<(&'static str, &'static str)
         "qwen-tts-0.6b" => Ok(("qwen-tts-0.6b", "Qwen3-TTS 0.6B")),
         "qwen-tts-1.7b" => Ok(("qwen-tts-1.7b", "Qwen3-TTS 1.7B")),
         "luming-genie-tts-v2-pro-plus" => Ok(("luming-genie-tts-v2-pro-plus", "路鸣 Genie-TTS v2 Pro+")),
+        "gsv-baoqiao" => Ok(("gsv-baoqiao", "薄巧 GSV 角色模型")),
+        "local-embedding" => Ok(("local-embedding", "BGE-M3 本地嵌入模型")),
+        "llm-translate" => Ok(("llm-translate", "Qwen2.5 0.5B 翻译辅助")),
         other => Err(format!("unsupported download target: {other}")),
     }
 }
