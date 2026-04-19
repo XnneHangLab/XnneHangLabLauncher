@@ -94,13 +94,8 @@ export interface LabConfig {
     n_gpu_layers: number;
   };
   package: {
-    sherpa_asr: boolean;
-    qwen_asr: boolean;
     llm_translate: boolean;
     local_embedding: boolean;
-    gsv_lite: boolean;
-    genie_tts: boolean;
-    qwen_tts: boolean;
     memory_bench: boolean;
   };
   root: { root_dir: string };

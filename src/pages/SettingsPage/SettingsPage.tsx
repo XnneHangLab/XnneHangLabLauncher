@@ -191,15 +191,32 @@ export function SettingsPage({
               <>
                 <div className="group-title">功能开关</div>
                 <SettingCard>
+                  <SettingRow name="TTS 引擎" description="语音合成后端，关闭则禁用 TTS">
+                    <div className="driver-select-wrap">
+                      {(['none', 'gsv_lite', 'genie_tts', 'qwen_tts'] as const).map((p) => (
+                        <button key={p} type="button"
+                          className={`driver-option${(labConfig.agent.tts?.provider ?? 'genie_tts') === p ? ' driver-option--active' : ''}`}
+                          onClick={() => onSaveLabConfig({ ...labConfig, agent: { ...labConfig.agent, tts: { ...labConfig.agent.tts, provider: p } } })}>
+                          {p === 'none' ? '关闭' : p === 'gsv_lite' ? 'GSV-Lite' : p === 'genie_tts' ? 'Genie' : 'Qwen'}
+                        </button>
+                      ))}
+                    </div>
+                  </SettingRow>
+                  <SettingRow name="ASR 引擎" description="语音识别后端，关闭则仅支持文字输入">
+                    <div className="driver-select-wrap">
+                      {(['none', 'sherpa', 'qwen'] as const).map((p) => (
+                        <button key={p} type="button"
+                          className={`driver-option${(labConfig.asr?.asr_model_provider ?? 'sherpa') === p ? ' driver-option--active' : ''}`}
+                          onClick={() => onSaveLabConfig({ ...labConfig, asr: { ...labConfig.asr, asr_model_provider: p } })}>
+                          {p === 'none' ? '关闭' : p === 'sherpa' ? 'Sherpa' : 'Qwen'}
+                        </button>
+                      ))}
+                    </div>
+                  </SettingRow>
                   {(
                     [
-                      ['sherpa_asr', 'Sherpa ASR', '本地离线语音识别（Sherpa-ONNX Paraformer）'],
-                      ['qwen_asr', 'Qwen ASR', '通义千问本地语音识别（OpenVINO）'],
                       ['llm_translate', 'LLM 翻译', '使用本地 GGUF 模型执行翻译'],
                       ['local_embedding', '本地向量嵌入', 'BGE-M3 GGUF 向量化，用于记忆搜索'],
-                      ['gsv_lite', 'GSV-Lite TTS', 'GPT-SoVITS Lite 语音合成'],
-                      ['genie_tts', 'Genie TTS', 'Genie TTS ONNX 推理引擎'],
-                      ['qwen_tts', 'Qwen TTS', '通义千问语音合成（0.6B / 1.7B）'],
                       ['memory_bench', 'Memory Bench', '记忆压测工具'],
                     ] as Array<[keyof LabConfig['package'], string, string]>
                   ).map(([key, name, description]) => (
