@@ -166,17 +166,16 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">appearance_presets</span>
-          <span className="l2d-section-desc">可切换的外观预设，key 须与模型 emotion map 一致</span>
+          <span className="l2d-section-desc">key 须与模型 emotion map 一致</span>
         </div>
         <div className="l2d-list">
           {presets.map((p, i) => (
-            <div key={i} className="l2d-preset-card">
-              <div className="l2d-preset-fields">
-                <input className="proxy-input l2d-preset-key" placeholder="key（对应 emotion map）" value={p.key}
-                  onChange={e => setPreset(i, { key: e.target.value })} />
-                <textarea className="proxy-input l2d-preset-desc" placeholder="description" value={p.description}
-                  onChange={e => setPreset(i, { description: e.target.value })} />
-              </div>
+            <div key={i} className="l2d-preset-row">
+              <input className="proxy-input l2d-preset-key" placeholder="key" value={p.key}
+                onChange={e => setPreset(i, { key: e.target.value })} />
+              <span className="l2d-preset-colon">:</span>
+              <input className="proxy-input l2d-preset-desc" placeholder="description（外观说明文案）" value={p.description}
+                onChange={e => setPreset(i, { description: e.target.value })} />
               <button type="button" className="l2d-remove-btn"
                 onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
             </div>
@@ -203,7 +202,9 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
           </div>
           <div className="l2d-state-card-body">
             <div className="l2d-state-section">
-              <span className="l2d-state-section-title">clips</span>
+              <span className="l2d-state-section-title">
+                clips <em className="l2d-state-section-hint">路径相对于 Live2D 模型目录</em>
+              </span>
               {states[state].clips.map((c, i) => (
                 <div key={i} className="l2d-clip-row">
                   <input className="proxy-input l2d-clip-url" placeholder="xxx.motion3.json"

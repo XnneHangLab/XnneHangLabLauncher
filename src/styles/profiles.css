@@ -679,35 +679,39 @@
   background: var(--panel-2);
 }
 
-/* ── Live2D preset card ── */
-.l2d-preset-card {
+/* ── Live2D preset row (inline key: description) ── */
+.l2d-preset-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
-  padding: 10px 12px;
-  margin-bottom: 6px;
-}
-
-.l2d-preset-fields {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
-  min-width: 0;
+  margin-bottom: 4px;
 }
 
 .l2d-preset-key {
+  width: 120px;
+  flex-shrink: 0;
   font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+}
+
+.l2d-preset-colon {
   font-size: 13px;
+  color: var(--muted);
+  flex-shrink: 0;
 }
 
 .l2d-preset-desc {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
-  resize: vertical;
-  min-height: 56px;
+}
+
+.l2d-state-section-hint {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.6;
+  margin-left: 4px;
 }
 
 /* ── Live2D clip row ── */
