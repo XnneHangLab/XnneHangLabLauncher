@@ -244,8 +244,8 @@ export function ModelsPage({
                     <div className="models-page__file-progress">
                       <div className="models-page__file-progress-bar">
                         <div
-                          className="models-page__file-progress-fill"
-                          style={{ width: `${fp.percent}%` }}
+                          className={`models-page__file-progress-fill${fp.percent === 0 ? ' models-page__file-progress-fill--indeterminate' : ''}`}
+                          style={fp.percent > 0 ? { width: `${fp.percent}%` } : undefined}
                         />
                       </div>
                       <div className="models-page__file-progress-meta">
