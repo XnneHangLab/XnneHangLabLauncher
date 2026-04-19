@@ -225,6 +225,8 @@ fn validate_download_target(target: &str) -> Result<(&'static str, &'static str)
         "gsv-baoqiao" => Ok(("gsv-baoqiao", "薄巧 GSV 角色模型")),
         "local-embedding" => Ok(("local-embedding", "BGE-M3 本地嵌入模型")),
         "llm-translate" => Ok(("llm-translate", "Qwen2.5 0.5B 翻译辅助")),
+        "sherpa-paraformer" => Ok(("sherpa-paraformer", "Sherpa Paraformer ZH")),
+        "silero-vad" => Ok(("silero-vad", "Silero VAD")),
         other => Err(format!("unsupported download target: {other}")),
     }
 }

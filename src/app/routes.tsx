@@ -35,6 +35,8 @@ interface RenderPageOptions {
   onDownloadGsvBaoqiao: () => void;
   onDownloadLocalEmbedding: () => void;
   onDownloadLlmTranslate: () => void;
+  onDownloadSherpaParaformer: () => void;
+  onDownloadSileroVad: () => void;
   onOpenPath: (pathKey: string) => void;
   onLaunchWebui: () => void;
   webuiRunning: boolean;
@@ -130,6 +132,8 @@ export function renderPage(
           onDownloadGsvBaoqiao={options.onDownloadGsvBaoqiao}
           onDownloadLocalEmbedding={options.onDownloadLocalEmbedding}
           onDownloadLlmTranslate={options.onDownloadLlmTranslate}
+          onDownloadSherpaParaformer={options.onDownloadSherpaParaformer}
+          onDownloadSileroVad={options.onDownloadSileroVad}
           scriptsReady={options.scriptsReady}
         />
       );

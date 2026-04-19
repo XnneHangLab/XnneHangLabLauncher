@@ -9,6 +9,27 @@ import '../../styles/models.css';
 
 const MODEL_GROUPS: Array<{ title: string; specs: ModelSpec[] }> = [
   {
+    title: '语音识别',
+    specs: [
+      {
+        key: 'sherpa-paraformer',
+        title: 'Sherpa Paraformer ZH',
+        description: 'sherpa-onnx Paraformer 中文 ASR 模型，CPU 可用，配合 Silero VAD 使用。',
+        icon: '🎧',
+        tags: ['ASR', 'CPU'],
+        requiresGpu: false,
+      },
+      {
+        key: 'silero-vad',
+        title: 'Silero VAD',
+        description: 'Silero 语音活动检测模型，Sherpa ASR 与 Qwen ASR 均依赖此模型进行断句。',
+        icon: '🔉',
+        tags: ['VAD', 'CPU'],
+        requiresGpu: false,
+      },
+    ],
+  },
+  {
     title: '推理基础资源',
     specs: [
       {
@@ -107,6 +128,8 @@ interface ModelsPageProps {
   onDownloadGsvBaoqiao: () => void;
   onDownloadLocalEmbedding: () => void;
   onDownloadLlmTranslate: () => void;
+  onDownloadSherpaParaformer: () => void;
+  onDownloadSileroVad: () => void;
   scriptsReady: boolean;
 }
 
@@ -123,6 +146,8 @@ export function ModelsPage({
   onDownloadGsvBaoqiao,
   onDownloadLocalEmbedding,
   onDownloadLlmTranslate,
+  onDownloadSherpaParaformer,
+  onDownloadSileroVad,
   scriptsReady,
 }: ModelsPageProps) {
   const gpuReady =
@@ -146,6 +171,10 @@ export function ModelsPage({
       onDownloadLocalEmbedding();
     } else if (key === 'llm-translate') {
       onDownloadLlmTranslate();
+    } else if (key === 'sherpa-paraformer') {
+      onDownloadSherpaParaformer();
+    } else if (key === 'silero-vad') {
+      onDownloadSileroVad();
     }
   }
 

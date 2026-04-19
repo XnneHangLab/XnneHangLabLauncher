@@ -423,6 +423,64 @@ export function AppShell() {
     }
   }
 
+  async function handleDownloadSherpaParaformer() {
+    if (!isEnvironmentReady(environmentProbe)) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', '环境未就绪，已禁止执行运行时脚本'),
+      ]);
+      return;
+    }
+
+    try {
+      const task = await enqueueDownload('sherpa-paraformer');
+      setTasks((current) => {
+        const next = current.filter((item) => item.taskId !== task.taskId);
+        next.push(task);
+        return next;
+      });
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('system', `${task.label}: ${task.message}`),
+      ]);
+      setActivePage('models');
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
+  async function handleDownloadSileroVad() {
+    if (!isEnvironmentReady(environmentProbe)) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', '环境未就绪，已禁止执行运行时脚本'),
+      ]);
+      return;
+    }
+
+    try {
+      const task = await enqueueDownload('silero-vad');
+      setTasks((current) => {
+        const next = current.filter((item) => item.taskId !== task.taskId);
+        next.push(task);
+        return next;
+      });
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('system', `${task.label}: ${task.message}`),
+      ]);
+      setActivePage('models');
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', toErrorMessage(error)),
+      ]);
+    }
+  }
+
   async function handleWorkspaceProbe(nextProbe: EnvironmentProbe) {
     setEnvironmentProbe(nextProbe);
     setInspection(null);
@@ -605,6 +663,8 @@ export function AppShell() {
               onDownloadGsvBaoqiao: handleDownloadGsvBaoqiao,
               onDownloadLocalEmbedding: handleDownloadLocalEmbedding,
               onDownloadLlmTranslate: handleDownloadLlmTranslate,
+              onDownloadSherpaParaformer: handleDownloadSherpaParaformer,
+              onDownloadSileroVad: handleDownloadSileroVad,
               onOpenPath: handleOpenManagedPath,
               onLaunchWebui: handleLaunchWebui,
               webuiRunning,
