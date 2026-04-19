@@ -2,6 +2,7 @@ import { ModelCard, type ModelSpec } from '../../components/models/ModelCard/Mod
 import type {
   EnvironmentProbe,
   FileProgress,
+  ResourceStatus,
   RuntimeInspection,
   RuntimeTaskRecord,
 } from '../../services/runtime/runtime';
@@ -135,6 +136,7 @@ interface ModelsPageProps {
   onDownloadLlmTranslate: () => void;
   onDownloadSherpaParaformer: () => void;
   onDownloadSileroVad: () => void;
+  modelStatuses: Record<string, string>;
   scriptsReady: boolean;
 }
 
@@ -153,6 +155,7 @@ export function ModelsPage({
   onDownloadLlmTranslate,
   onDownloadSherpaParaformer,
   onDownloadSileroVad,
+  modelStatuses,
   scriptsReady,
 }: ModelsPageProps) {
   const gpuReady =
@@ -202,7 +205,7 @@ export function ModelsPage({
                 <ModelCard
                   key={spec.key}
                   spec={spec}
-                  status={inspection?.resources[spec.key]?.status ?? null}
+                  status={(modelStatuses[spec.key] as ResourceStatus) ?? null}
                   scriptsReady={scriptsReady}
                   gpuReady={gpuReady}
                   onDownload={() => handleDownload(spec.key)}

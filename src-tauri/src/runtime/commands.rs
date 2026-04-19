@@ -93,6 +93,41 @@ pub fn list_download_tasks(state: State<'_, RuntimeState>) -> Result<serde_json:
 }
 
 #[tauri::command]
+pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value {
+    let m = state.current_workspace_root().join("models");
+
+    let dir_ready = |rel: &str| -> bool {
+        std::fs::read_dir(m.join(rel))
+            .map(|mut iter| iter.next().is_some())
+            .unwrap_or(false)
+    };
+    let file_ready = |rel: &str| -> bool { m.join(rel).is_file() };
+
+    let gsv_parts = [
+        "GSVLiteData/chinese-hubert-base",
+        "GSVLiteData/chinese-roberta-wwm-ext-large",
+        "GSVLiteData/g2p",
+        "GSVLiteData/sv",
+    ];
+    let gsv_count = gsv_parts.iter().filter(|&&p| dir_ready(p)).count();
+    let gsv_status = if gsv_count == gsv_parts.len() { "ready" } else if gsv_count > 0 { "partial" } else { "missing" };
+
+    let mut out = serde_json::Map::new();
+    let mut s = |key: &str, status: &str| out.insert(key.into(), status.into());
+    s("sherpa-paraformer",          if dir_ready("sherpa-onnx-paraformer-zh-2023-09-14") { "ready" } else { "missing" });
+    s("silero-vad",                 if file_ready("silero_vad.onnx") { "ready" } else { "missing" });
+    s("genie-base",                 if dir_ready("GenieData") { "ready" } else { "missing" });
+    s("gsv-lite",                   gsv_status);
+    s("luming-genie-tts-v2-pro-plus", if dir_ready("genie-tts/luming-v2-pro-plus") { "ready" } else { "missing" });
+    s("gsv-baoqiao",                if dir_ready("gsv-tts-lite/baoqiao") { "ready" } else { "missing" });
+    s("qwen-tts-0.6b",              if dir_ready("Qwen3-TTS-12Hz-0.6B-Base") { "ready" } else { "missing" });
+    s("qwen-tts-1.7b",              if dir_ready("Qwen3-TTS-12Hz-1.7B-Base") { "ready" } else { "missing" });
+    s("local-embedding",            if file_ready("bge-m3-q8_0.gguf") { "ready" } else { "missing" });
+    s("llm-translate",              if file_ready("qwen2.5-0.5b-instruct-q8_0.gguf") { "ready" } else { "missing" });
+    serde_json::Value::Object(out)
+}
+
+#[tauri::command]
 pub fn list_managed_folders(state: State<'_, RuntimeState>) -> Result<serde_json::Value, String> {
     let workspace_root = state.current_workspace_root();
     let models_root = workspace_root.join("models");

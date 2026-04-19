@@ -16,6 +16,7 @@ import {
   launchWebui,
   listDownloadTasks,
   listManagedFolders,
+  listModelStatuses,
   openManagedPath,
   pickPythonPath,
   probeEnvironment,
@@ -67,6 +68,7 @@ export function AppShell() {
   const [webuiRunning, setWebuiRunning] = useState(false);
   const [frontendRunning, setFrontendRunning] = useState(false);
   const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
+  const [modelStatuses, setModelStatuses] = useState<Record<string, string>>({});
   const lastLogWasReplaceRef = useRef(false);
 
   useEffect(() => {
@@ -81,6 +83,10 @@ export function AppShell() {
       try {
         listManagedFolders()
           .then((paths) => { if (!disposed) setFolders(buildFolderItemsFromPaths(paths)); })
+          .catch(() => {});
+
+        listModelStatuses()
+          .then((statuses) => { if (!disposed) setModelStatuses(statuses); })
           .catch(() => {});
 
         readLabConfig()
@@ -121,6 +127,9 @@ export function AppShell() {
         }
         if (event.event === 'download.completed' || event.event === 'download.failed') {
           setFileProgress(null);
+          if (event.event === 'download.completed') {
+            listModelStatuses().then(setModelStatuses).catch(() => {});
+          }
         }
         setTasks((current) => applyRuntimeEvent(current, event));
         setLogs((current) => [...current, createConsoleLogFromRuntimeEvent(event)]);
@@ -677,6 +686,7 @@ export function AppShell() {
               onDownloadLlmTranslate: handleDownloadLlmTranslate,
               onDownloadSherpaParaformer: handleDownloadSherpaParaformer,
               onDownloadSileroVad: handleDownloadSileroVad,
+              modelStatuses,
               onOpenPath: handleOpenManagedPath,
               onLaunchWebui: handleLaunchWebui,
               webuiRunning,

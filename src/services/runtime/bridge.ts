@@ -27,6 +27,10 @@ export function listDownloadTasks() {
   return invoke<RuntimeTaskRecord[]>('list_download_tasks');
 }
 
+export function listModelStatuses() {
+  return invoke<Record<string, string>>('list_model_statuses');
+}
+
 export function listManagedFolders() {
   return invoke<ManagedPath[]>('list_managed_folders');
 }

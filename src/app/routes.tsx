@@ -37,6 +37,7 @@ interface RenderPageOptions {
   onDownloadLlmTranslate: () => void;
   onDownloadSherpaParaformer: () => void;
   onDownloadSileroVad: () => void;
+  modelStatuses: Record<string, string>;
   onOpenPath: (pathKey: string) => void;
   onLaunchWebui: () => void;
   webuiRunning: boolean;
@@ -134,6 +135,7 @@ export function renderPage(
           onDownloadLlmTranslate={options.onDownloadLlmTranslate}
           onDownloadSherpaParaformer={options.onDownloadSherpaParaformer}
           onDownloadSileroVad={options.onDownloadSileroVad}
+          modelStatuses={options.modelStatuses}
           scriptsReady={options.scriptsReady}
         />
       );
