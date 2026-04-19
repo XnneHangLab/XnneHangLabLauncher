@@ -34,10 +34,10 @@ interface PluginField { key: string; type: PluginFieldType; description?: string
 
 const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   memory: [
-    { key: 'base_url', type: 'text', description: 'Memory Bench 服务基础地址' },
-    { key: 'user_id', type: 'text', description: '记忆读写使用的用户 ID' },
-    { key: 'agent_id', type: 'text', description: '记忆读写使用的角色 ID' },
-    { key: 'search_limit', type: 'number', description: '每轮注入的最大记忆条数' },
+    { key: 'base_url', type: 'text', description: 'Memory Bench 服务基础地址', defaultValue: 'http://localhost:12393' },
+    { key: 'user_id', type: 'text', description: '记忆读写使用的用户 ID', defaultValue: 'xnne' },
+    { key: 'agent_id', type: 'text', description: '记忆读写使用的角色 ID', defaultValue: 'congyin' },
+    { key: 'search_limit', type: 'number', description: '每轮注入的最大记忆条数', defaultValue: 10 },
   ],
   mood_chat: [
     { key: 'prompt', type: 'textarea', description: '主动对话时发送给 agent 的提示词', defaultValue: '请根据上下文，主动说些什么。' },
@@ -51,31 +51,31 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分', defaultValue: 10 },
   ],
   pre_tool_preview: [
-    { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数' },
-    { key: 'preview_when_latency_over_ms', type: 'number', description: '预计等待超过该毫秒数时倾向输出预告' },
-    { key: 'allow_skip_on_user_request', type: 'boolean', description: '用户明确要求直接执行时是否允许跳过预告' },
-    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools' },
+    { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数', defaultValue: 30 },
+    { key: 'preview_when_latency_over_ms', type: 'number', description: '预计等待超过该毫秒数时倾向输出预告', defaultValue: 3000 },
+    { key: 'allow_skip_on_user_request', type: 'boolean', description: '用户明确要求直接执行时是否允许跳过预告', defaultValue: true },
+    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools', defaultValue: 'before_tools' },
   ],
   tool_call_integrity: [
-    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools' },
+    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools', defaultValue: 'before_tools' },
   ],
   web_fetch: [
-    { key: 'user_agent', type: 'text', description: '抓取网页时使用的 User-Agent 头' },
-    { key: 'respect_robots', type: 'boolean', description: '是否遵守目标站点的 robots.txt' },
-    { key: 'robots_fail_closed', type: 'boolean', description: 'robots.txt 检查失败时是否默认拒绝' },
-    { key: 'use_jina_fallback', type: 'boolean', description: '正文提取效果不佳时是否启用 Jina Reader 回退' },
-    { key: 'jina_api_key', type: 'text', description: 'Jina Reader API Key，未配置时留空' },
-    { key: 'timeout_s', type: 'number', description: '网页抓取默认超时时间（秒）' },
-    { key: 'max_chars_default', type: 'number', description: '默认返回的最大正文字符数' },
+    { key: 'user_agent', type: 'text', description: '抓取网页时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
+    { key: 'respect_robots', type: 'boolean', description: '是否遵守目标站点的 robots.txt', defaultValue: false },
+    { key: 'robots_fail_closed', type: 'boolean', description: 'robots.txt 检查失败时是否默认拒绝', defaultValue: false },
+    { key: 'use_jina_fallback', type: 'boolean', description: '正文提取效果不佳时是否启用 Jina Reader 回退', defaultValue: false },
+    { key: 'jina_api_key', type: 'text', description: 'Jina Reader API Key，未配置时留空', defaultValue: '' },
+    { key: 'timeout_s', type: 'number', description: '网页抓取默认超时时间（秒）', defaultValue: 10.0 },
+    { key: 'max_chars_default', type: 'number', description: '默认返回的最大正文字符数', defaultValue: 8000 },
   ],
   web_search_ddg: [
-    { key: 'user_agent', type: 'text', description: '请求 DuckDuckGo 时使用的 User-Agent 头' },
-    { key: 'timeout_s', type: 'number', description: 'DuckDuckGo 搜索请求超时时间（秒）' },
+    { key: 'user_agent', type: 'text', description: '请求 DuckDuckGo 时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
+    { key: 'timeout_s', type: 'number', description: 'DuckDuckGo 搜索请求超时时间（秒）', defaultValue: 10.0 },
   ],
   web_search_searxng: [
-    { key: 'searxng_url', type: 'text', description: 'SearXNG 实例基础 URL，留空时插件不会注册' },
-    { key: 'user_agent', type: 'text', description: '请求 SearXNG 时使用的 User-Agent 头' },
-    { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）' },
+    { key: 'searxng_url', type: 'text', description: 'SearXNG 实例基础 URL，留空时插件不会注册', defaultValue: '' },
+    { key: 'user_agent', type: 'text', description: '请求 SearXNG 时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
+    { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）', defaultValue: 10.0 },
   ],
 };
 
