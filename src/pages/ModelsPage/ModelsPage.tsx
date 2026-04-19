@@ -224,6 +224,8 @@ export function ModelsPage({
                 task.status === 'downloading' && fileProgress?.target === task.target
                   ? fileProgress
                   : null;
+              const showProgress =
+                task.status === 'downloading' || task.status === 'preparing';
               return (
                 <div key={task.taskId} className="models-page__task">
                   <div className="models-page__task-info">
@@ -240,22 +242,30 @@ export function ModelsPage({
                       {task.progressCurrent} / {task.progressTotal}
                     </span>
                   </div>
-                  {fp && (
+                  {showProgress && (
                     <div className="models-page__file-progress">
                       <div className="models-page__file-progress-bar">
                         <div
-                          className={`models-page__file-progress-fill${fp.percent === 0 ? ' models-page__file-progress-fill--indeterminate' : ''}`}
-                          style={fp.percent > 0 ? { width: `${fp.percent}%` } : undefined}
+                          className={`models-page__file-progress-fill${!fp || fp.percent === 0 ? ' models-page__file-progress-fill--indeterminate' : ''}`}
+                          style={fp && fp.percent > 0 ? { width: `${fp.percent}%` } : undefined}
                         />
                       </div>
                       <div className="models-page__file-progress-meta">
-                        <span className="models-page__file-progress-desc">
-                          {fp.desc.split('/').pop()}
-                        </span>
-                        <span className="models-page__file-progress-info">
-                          {fp.percent}%
-                          {fp.downloaded && fp.total && ` · ${fp.downloaded} / ${fp.total}`}
-                        </span>
+                        {fp ? (
+                          <>
+                            <span className="models-page__file-progress-desc">
+                              {fp.desc.split('/').pop()}
+                            </span>
+                            <span className="models-page__file-progress-info">
+                              {fp.percent}%
+                              {fp.downloaded && fp.total && ` · ${fp.downloaded} / ${fp.total}`}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="models-page__file-progress-desc">
+                            正在下载，详细进度请查看控制台
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
