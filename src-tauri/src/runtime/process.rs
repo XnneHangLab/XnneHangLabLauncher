@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -274,11 +274,44 @@ pub fn run_download_command(
 
     let app_for_stderr = app.clone();
     let stderr_reader = thread::spawn(move || -> Result<(), String> {
-        for line_result in BufReader::new(stderr).lines() {
-            let line = line_result.map_err(|error| error.to_string())?;
-            if !line.trim().is_empty() {
-                emit_raw_log(&app_for_stderr, &line);
+        let mut reader = BufReader::new(stderr);
+        let mut buf = Vec::<u8>::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            let n = reader.read(&mut chunk).map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
             }
+            for &byte in &chunk[..n] {
+                if byte == b'\r' {
+                    let text = String::from_utf8_lossy(&buf);
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        app_for_stderr
+                            .emit("runtime:raw-log-replace", text)
+                            .map_err(|e| e.to_string())?;
+                    }
+                    buf.clear();
+                } else if byte == b'\n' {
+                    let text = String::from_utf8_lossy(&buf);
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        app_for_stderr
+                            .emit("runtime:raw-log", text)
+                            .map_err(|e| e.to_string())?;
+                    }
+                    buf.clear();
+                } else {
+                    buf.push(byte);
+                }
+            }
+        }
+        let text = String::from_utf8_lossy(&buf);
+        let text = text.trim();
+        if !text.is_empty() {
+            app_for_stderr
+                .emit("runtime:raw-log", text)
+                .map_err(|e| e.to_string())?;
         }
         Ok(())
     });

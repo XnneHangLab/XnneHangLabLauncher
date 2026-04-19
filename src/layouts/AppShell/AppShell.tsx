@@ -127,6 +127,14 @@ export function AppShell() {
       (line) => {
         setLogs((current) => [...current, createConsoleLog('stdout', line)]);
       },
+      (line) => {
+        setLogs((current) => {
+          if (current.length > 0 && current[current.length - 1].kind === 'stdout') {
+            return [...current.slice(0, -1), { ...current[current.length - 1], text: line }];
+          }
+          return [...current, createConsoleLog('stdout', line)];
+        });
+      },
     )
       .then((cleanup) => {
         if (disposed) {
