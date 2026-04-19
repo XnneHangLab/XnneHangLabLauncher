@@ -113,11 +113,26 @@ function PluginJsonField({ fileKey, value, onChange }: { fileKey: string; value:
 // ── Live2D Control structured editor ─────────────────────────────────────────
 
 type AppearancePreset = { key: string; description: string };
-type IdleClip = { id: string; url: string; weight: number };
-type IdleStateAssignment = { mode: string; clip_ids: string[] };
-type MixerStateWeights = { idle_layer: number; speech_layer: number; backend_pose_layer: number; mouse_attention_layer: number };
+type StateClip = { url: string };
+type StateConfig = {
+  mode: 'random' | 'random_no_repeat';
+  clips: StateClip[];
+  idle_layer: number;
+  speech_layer: number;
+  backend_pose_layer: number;
+  mouse_attention_layer: number;
+};
 
-const MIXER_LAYERS: Array<[keyof MixerStateWeights, string]> = [
+const DEFAULT_STATE_CONFIG: StateConfig = {
+  mode: 'random_no_repeat',
+  clips: [],
+  idle_layer: 1.0,
+  speech_layer: 1.0,
+  backend_pose_layer: 1.0,
+  mouse_attention_layer: 0.35,
+};
+
+const MIXER_LAYERS: Array<[keyof StateConfig & string, string]> = [
   ['idle_layer', '待机层'],
   ['speech_layer', '说话层'],
   ['backend_pose_layer', '后端姿态层'],
@@ -126,43 +141,38 @@ const MIXER_LAYERS: Array<[keyof MixerStateWeights, string]> = [
 
 function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; onPatch: (patch: Record<string, unknown>) => void }) {
   const presets = (cfg.appearance_presets as AppearancePreset[] | undefined) ?? [];
-  const clips = (cfg.idle_clips as IdleClip[] | undefined) ?? [];
-  const assignmentsRaw = cfg.idle_assignments as { listening?: IdleStateAssignment; speaking?: IdleStateAssignment } | undefined;
-  const defaultState: IdleStateAssignment = { mode: 'random_no_repeat', clip_ids: [] };
-  const assignments = { listening: assignmentsRaw?.listening ?? defaultState, speaking: assignmentsRaw?.speaking ?? defaultState };
-  const mixerRaw = cfg.mixer_weights_by_state as { listening?: MixerStateWeights; speaking?: MixerStateWeights } | undefined;
-  const defaultMixer: MixerStateWeights = { idle_layer: 1, speech_layer: 1, backend_pose_layer: 1, mouse_attention_layer: 0.35 };
-  const mixerWeights = { listening: mixerRaw?.listening ?? defaultMixer, speaking: mixerRaw?.speaking ?? defaultMixer };
+  const statesRaw = (cfg.states as Record<string, unknown> | undefined) ?? {};
+  const states = {
+    listening: (statesRaw.listening as StateConfig | undefined) ?? { ...DEFAULT_STATE_CONFIG },
+    speaking: (statesRaw.speaking as StateConfig | undefined) ?? { ...DEFAULT_STATE_CONFIG },
+  };
 
   function setPreset(i: number, patch: Partial<AppearancePreset>) {
     const next = [...presets]; next[i] = { ...next[i], ...patch };
     onPatch({ appearance_presets: next });
   }
-  function setClip(i: number, patch: Partial<IdleClip>) {
-    const next = [...clips]; next[i] = { ...next[i], ...patch };
-    onPatch({ idle_clips: next });
+  function setState(state: 'listening' | 'speaking', patch: Partial<StateConfig>) {
+    onPatch({ states: { ...statesRaw, [state]: { ...states[state], ...patch } } });
   }
-  function setAssignment(state: 'listening' | 'speaking', patch: Partial<IdleStateAssignment>) {
-    onPatch({ idle_assignments: { ...assignments, [state]: { ...assignments[state], ...patch } } });
-  }
-  function setMixer(state: 'listening' | 'speaking', patch: Partial<MixerStateWeights>) {
-    onPatch({ mixer_weights_by_state: { ...mixerWeights, [state]: { ...mixerWeights[state], ...patch } } });
+  function setClipUrl(state: 'listening' | 'speaking', i: number, url: string) {
+    const next = [...states[state].clips]; next[i] = { url };
+    setState(state, { clips: next });
   }
 
   return (
     <div className="l2d-editor">
 
-      {/* appearance_presets — card per item */}
+      {/* appearance_presets */}
       <div className="l2d-section">
         <div className="l2d-section-header">
           <span className="l2d-section-title">appearance_presets</span>
-          <span className="l2d-section-desc">可切换的外观预设</span>
+          <span className="l2d-section-desc">可切换的外观预设，key 须与模型 emotion map 一致</span>
         </div>
         <div className="l2d-list">
           {presets.map((p, i) => (
             <div key={i} className="l2d-preset-card">
               <div className="l2d-preset-fields">
-                <input className="proxy-input l2d-preset-key" placeholder="key" value={p.key}
+                <input className="proxy-input l2d-preset-key" placeholder="key（对应 emotion map）" value={p.key}
                   onChange={e => setPreset(i, { key: e.target.value })} />
                 <textarea className="proxy-input l2d-preset-desc" placeholder="description" value={p.description}
                   onChange={e => setPreset(i, { description: e.target.value })} />
@@ -176,91 +186,51 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
         </div>
       </div>
 
-      {/* idle_clips — compact rows */}
-      <div className="l2d-section">
-        <div className="l2d-section-header">
-          <span className="l2d-section-title">idle_clips</span>
-          <span className="l2d-section-desc">待机动作片段</span>
-        </div>
-        <div className="l2d-list">
-          {clips.map((c, i) => (
-            <div key={i} className="l2d-clip-row">
-              <input className="proxy-input l2d-clip-id" placeholder="id" value={c.id}
-                onChange={e => setClip(i, { id: e.target.value })} />
-              <input className="proxy-input l2d-clip-url" placeholder="url (*.motion3.json)" value={c.url}
-                onChange={e => setClip(i, { url: e.target.value })} />
-              <input className="proxy-input l2d-clip-weight" type="number" step="0.1" min="0" placeholder="w" value={c.weight}
-                onChange={e => setClip(i, { weight: Number(e.target.value) })} />
-              <button type="button" className="l2d-remove-btn"
-                onClick={() => onPatch({ idle_clips: clips.filter((_, idx) => idx !== i) })}>×</button>
+      {/* state cards */}
+      {(['listening', 'speaking'] as const).map(state => (
+        <div key={state} className="l2d-state-card">
+          <div className="l2d-state-card-header">
+            <span className="l2d-state-name">{state}</span>
+            <div className="driver-select-wrap">
+              {(['random_no_repeat', 'random'] as const).map(m => (
+                <button key={m} type="button"
+                  className={`driver-option${states[state].mode === m ? ' driver-option--active' : ''}`}
+                  onClick={() => setState(state, { mode: m })}>
+                  {m}
+                </button>
+              ))}
             </div>
-          ))}
-          <button type="button" className="l2d-add-btn"
-            onClick={() => onPatch({ idle_clips: [...clips, { id: '', url: '', weight: 1 }] })}>＋ 添加片段</button>
-        </div>
-      </div>
-
-      {/* idle_assignments — table */}
-      <div className="l2d-section">
-        <div className="l2d-section-header">
-          <span className="l2d-section-title">idle_assignments</span>
-          <span className="l2d-section-desc">各状态的待机动作分配</span>
-        </div>
-        <table className="l2d-table">
-          <thead>
-            <tr><th /><th>listening</th><th>speaking</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>mode</td>
-              {(['listening', 'speaking'] as const).map(s => (
-                <td key={s}>
-                  <input className="proxy-input l2d-table-input" value={assignments[s].mode}
-                    onChange={e => setAssignment(s, { mode: e.target.value })} />
-                </td>
+          </div>
+          <div className="l2d-state-card-body">
+            <div className="l2d-state-section">
+              <span className="l2d-state-section-title">clips</span>
+              {states[state].clips.map((c, i) => (
+                <div key={i} className="l2d-clip-row">
+                  <input className="proxy-input l2d-clip-url" placeholder="xxx.motion3.json"
+                    value={c.url} onChange={e => setClipUrl(state, i, e.target.value)} />
+                  <button type="button" className="l2d-remove-btn"
+                    onClick={() => setState(state, { clips: states[state].clips.filter((_, idx) => idx !== i) })}>×</button>
+                </div>
               ))}
-            </tr>
-            <tr>
-              <td className="l2d-td-top">clip_ids</td>
-              {(['listening', 'speaking'] as const).map(s => (
-                <td key={s}>
-                  <textarea className="proxy-input l2d-table-textarea" placeholder="每行一个 ID"
-                    value={assignments[s].clip_ids.join('\n')}
-                    onChange={e => setAssignment(s, { clip_ids: e.target.value.split('\n').map(x => x.trim()).filter(Boolean) })} />
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* mixer_weights_by_state — table */}
-      <div className="l2d-section">
-        <div className="l2d-section-header">
-          <span className="l2d-section-title">mixer_weights_by_state</span>
-          <span className="l2d-section-desc">Pose Mixer 各层权重</span>
-        </div>
-        <table className="l2d-table">
-          <thead>
-            <tr><th /><th>listening</th><th>speaking</th></tr>
-          </thead>
-          <tbody>
-            {MIXER_LAYERS.map(([key, label]) => (
-              <tr key={key}>
-                <td>{label}</td>
-                {(['listening', 'speaking'] as const).map(s => (
-                  <td key={s}>
-                    <input className="proxy-input l2d-table-input l2d-table-input--num"
-                      type="number" step="0.05" min="0"
-                      value={mixerWeights[s][key]}
-                      onChange={e => setMixer(s, { [key]: Number(e.target.value) })} />
-                  </td>
+              <button type="button" className="l2d-add-btn"
+                onClick={() => setState(state, { clips: [...states[state].clips, { url: '' }] })}>＋ 添加片段</button>
+            </div>
+            <div className="l2d-state-section">
+              <span className="l2d-state-section-title">mixer</span>
+              <div className="l2d-mixer-compact">
+                {MIXER_LAYERS.map(([key, label]) => (
+                  <div key={key} className="l2d-mixer-compact-row">
+                    <span className="l2d-mixer-label">{label}</span>
+                    <input className="proxy-input l2d-mixer-input" type="number" step="0.05" min="0"
+                      value={states[state][key] as number}
+                      onChange={e => setState(state, { [key]: Number(e.target.value) })} />
+                  </div>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
 
     </div>
   );
