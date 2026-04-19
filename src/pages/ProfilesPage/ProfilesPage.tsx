@@ -341,17 +341,12 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
                 value={character.character_name ?? ''} onChange={e => setCharacter({ character_name: e.target.value })} />
             </div>
             <div className="profile-id-group">
-              <span className="profile-id-label">name <em>Profile 标识</em></span>
-              <input className="profile-id-input" placeholder="（Profile 文件名兜底）"
-                value={profile.name} onChange={e => setProfile({ name: e.target.value })} />
-            </div>
-            <div className="profile-id-group">
               <span className="profile-id-label">description</span>
               <input className="profile-id-input profile-id-input--dim" placeholder="（备注）"
                 value={profile.description} onChange={e => setProfile({ description: e.target.value })} />
             </div>
-            <div className="profile-id-group profile-id-group--full">
-              <span className="profile-id-label">agent_name <em>替换提示词里的 {'{agent_name}'}</em></span>
+            <div className="profile-id-group">
+              <span className="profile-id-label">agent_name <em>提示词 {'{agent_name}'}</em></span>
               <input className="profile-id-input profile-id-input--dim" placeholder="（注入系统提示词的角色名）"
                 value={profile.agent_name} onChange={e => setProfile({ agent_name: e.target.value })} />
             </div>
@@ -499,6 +494,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
         </button>
         {showAdvanced && (
           <SettingCard>
+            <SettingRow name="name" description="Profile 标识，用于日志及 TTS 角色名兜底">
+              <input className="proxy-input" value={profile.name}
+                onChange={e => setProfile({ name: e.target.value })} />
+            </SettingRow>
             <SettingRow name="conf_name" description="Live2D 配置文件名">
               <input className="proxy-input" value={character.conf_name ?? ''}
                 onChange={e => setCharacter({ conf_name: e.target.value })} />
