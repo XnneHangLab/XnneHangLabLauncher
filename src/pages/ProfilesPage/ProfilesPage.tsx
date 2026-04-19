@@ -364,14 +364,26 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
             <button type="button" className="profile-avatar-browse-btn" title="更换头像" onClick={browseAvatar}>…</button>
           </div>
           <div className="profile-identity-fields">
-            <input className="profile-id-input profile-id-input--name" placeholder="character_name"
-              value={character.character_name ?? ''} onChange={e => setCharacter({ character_name: e.target.value })} />
-            <input className="profile-id-input" placeholder="name"
-              value={profile.name} onChange={e => setProfile({ name: e.target.value })} />
-            <input className="profile-id-input profile-id-input--dim" placeholder="description"
-              value={profile.description} onChange={e => setProfile({ description: e.target.value })} />
-            <input className="profile-id-input profile-id-input--dim" placeholder="agent_name"
-              value={profile.agent_name} onChange={e => setProfile({ agent_name: e.target.value })} />
+            <div className="profile-id-group profile-id-group--full">
+              <span className="profile-id-label">character_name <em>对话气泡展示名</em></span>
+              <input className="profile-id-input profile-id-input--name" placeholder="（展示名）"
+                value={character.character_name ?? ''} onChange={e => setCharacter({ character_name: e.target.value })} />
+            </div>
+            <div className="profile-id-group">
+              <span className="profile-id-label">name <em>Profile 标识</em></span>
+              <input className="profile-id-input" placeholder="（Profile 文件名兜底）"
+                value={profile.name} onChange={e => setProfile({ name: e.target.value })} />
+            </div>
+            <div className="profile-id-group">
+              <span className="profile-id-label">description</span>
+              <input className="profile-id-input profile-id-input--dim" placeholder="（备注）"
+                value={profile.description} onChange={e => setProfile({ description: e.target.value })} />
+            </div>
+            <div className="profile-id-group profile-id-group--full">
+              <span className="profile-id-label">agent_name <em>替换提示词里的 {'{agent_name}'}</em></span>
+              <input className="profile-id-input profile-id-input--dim" placeholder="（注入系统提示词的角色名）"
+                value={profile.agent_name} onChange={e => setProfile({ agent_name: e.target.value })} />
+            </div>
           </div>
           <span className="profile-file-badge profile-file-badge--corner">{file}.toml</span>
         </div>
