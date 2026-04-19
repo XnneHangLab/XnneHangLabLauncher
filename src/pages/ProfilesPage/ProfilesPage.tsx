@@ -29,8 +29,8 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
   { id: 'mood_chat', description: '主动发起情绪化对话' },
 ];
 
-type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json';
-interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; }
+type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'select';
+interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; options?: string[]; }
 
 const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   memory: [
@@ -54,10 +54,10 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数', defaultValue: 30 },
     { key: 'preview_when_latency_over_ms', type: 'number', description: '预计等待超过该毫秒数时倾向输出预告', defaultValue: 3000 },
     { key: 'allow_skip_on_user_request', type: 'boolean', description: '用户明确要求直接执行时是否允许跳过预告', defaultValue: true },
-    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools', defaultValue: 'before_tools' },
+    { key: 'injection_position', type: 'select', description: '提示词注入位置', defaultValue: 'before_tools', options: ['before_tools', 'after_tools'] },
   ],
   tool_call_integrity: [
-    { key: 'injection_position', type: 'text', description: '提示词注入位置：before_tools 或 after_tools', defaultValue: 'before_tools' },
+    { key: 'injection_position', type: 'select', description: '提示词注入位置', defaultValue: 'before_tools', options: ['before_tools', 'after_tools'] },
   ],
   web_fetch: [
     { key: 'user_agent', type: 'text', description: '抓取网页时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
@@ -458,6 +458,12 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
                           ) : f.type === 'boolean' ? (
                             <ToggleSwitch label={f.key} checked={(effective as boolean) ?? false}
                               onChange={(v) => setPluginCfg(id, { [f.key]: v })} />
+                          ) : f.type === 'select' ? (
+                            <select className="proxy-input"
+                              value={(effective as string) ?? ''}
+                              onChange={(e) => setPluginCfg(id, { [f.key]: e.target.value })}>
+                              {(f.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
                           ) : (
                             <input className="proxy-input" type={f.type}
                               value={(effective as string | number) ?? ''}
