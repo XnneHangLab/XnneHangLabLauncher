@@ -30,7 +30,7 @@ const MODEL_GROUPS: Array<{ title: string; specs: ModelSpec[] }> = [
     ],
   },
   {
-    title: '推理基础资源',
+    title: '语音合成基础资源',
     specs: [
       {
         key: 'genie-base',
@@ -51,7 +51,7 @@ const MODEL_GROUPS: Array<{ title: string; specs: ModelSpec[] }> = [
     ],
   },
   {
-    title: '推理模型',
+    title: '语音合成模型',
     specs: [
       {
         key: 'luming-genie-tts-v2-pro-plus',
@@ -85,6 +85,11 @@ const MODEL_GROUPS: Array<{ title: string; specs: ModelSpec[] }> = [
         tags: ['TTS', 'GPU', '12~16GB'],
         requiresGpu: true,
       },
+    ],
+  },
+  {
+    title: '工具模型',
+    specs: [
       {
         key: 'local-embedding',
         title: 'BGE-M3 本地嵌入模型',
