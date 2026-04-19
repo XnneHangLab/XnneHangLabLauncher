@@ -494,10 +494,6 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
         </button>
         {showAdvanced && (
           <SettingCard>
-            <SettingRow name="name" description="Profile 标识，用于日志及 TTS 角色名兜底">
-              <input className="proxy-input" value={profile.name}
-                onChange={e => setProfile({ name: e.target.value })} />
-            </SettingRow>
             <SettingRow name="conf_name" description="Live2D 配置文件名">
               <input className="proxy-input" value={character.conf_name ?? ''}
                 onChange={e => setCharacter({ conf_name: e.target.value })} />
