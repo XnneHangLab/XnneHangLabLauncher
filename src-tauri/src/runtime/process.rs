@@ -256,7 +256,7 @@ pub fn run_download_command(
         &state.repo_root,
         &state.current_workspace_root(),
         &driver,
-        ["-m", "xnnehanglab_tts.cli", "download"],
+        ["scripts/lab_download.py"],
     );
     command.arg(&target).stdout(Stdio::piped()).stderr(Stdio::piped());
 
