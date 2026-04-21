@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import type {
   EnvironmentProbe,
   ManagedPath,
+  ModelStatusEntry,
   RuntimeEvent,
   RuntimeTaskRecord,
 } from './runtime';
@@ -28,7 +29,7 @@ export function listDownloadTasks() {
 }
 
 export function listModelStatuses() {
-  return invoke<Record<string, string>>('list_model_statuses');
+  return invoke<Record<string, ModelStatusEntry>>('list_model_statuses');
 }
 
 export function listManagedFolders() {

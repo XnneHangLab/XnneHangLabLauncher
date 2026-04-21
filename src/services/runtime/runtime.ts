@@ -2,6 +2,7 @@ import { createConsoleLog, type ConsoleLogEntry } from '../launcher/launcher';
 
 export type RuntimeMode = 'cpu' | 'gpu';
 export type ResourceStatus = 'missing' | 'partial' | 'ready';
+export interface ModelStatusEntry { status: ResourceStatus; path: string; }
 export type RuntimeDriver = 'uv' | 'conda';
 export type EnvironmentProbeStatus =
   | 'workspace-invalid'

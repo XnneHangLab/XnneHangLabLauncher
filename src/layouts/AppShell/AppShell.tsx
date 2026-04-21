@@ -37,6 +37,7 @@ import {
   type EnvironmentProbe,
   type FileProgress,
   type ManagedFolderItem,
+  type ModelStatusEntry,
   type RuntimeDriver,
   type RuntimeInspection,
   type RuntimeTaskRecord,
@@ -68,7 +69,7 @@ export function AppShell() {
   const [webuiRunning, setWebuiRunning] = useState(false);
   const [frontendRunning, setFrontendRunning] = useState(false);
   const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
-  const [modelStatuses, setModelStatuses] = useState<Record<string, string>>({});
+  const [modelStatuses, setModelStatuses] = useState<Record<string, ModelStatusEntry>>({});
   useEffect(() => {
     writeStoredTheme(theme);
   }, [theme]);

@@ -13,6 +13,7 @@ export interface ModelSpec {
 interface ModelCardProps {
   spec: ModelSpec;
   status: ResourceStatus | null;
+  resolvedPath?: string;
   scriptsReady: boolean;
   gpuReady: boolean;
   onDownload: () => void;
@@ -33,6 +34,7 @@ const statusMod: Record<ResourceStatus, string> = {
 export function ModelCard({
   spec,
   status,
+  resolvedPath,
   scriptsReady,
   gpuReady,
   onDownload,
@@ -69,12 +71,18 @@ export function ModelCard({
         {currentStatus ? (
           <span
             className={`model-card__status model-card__status--${statusMod[currentStatus]}`}
+            title={resolvedPath}
           >
             {statusLabel[currentStatus]}
           </span>
         ) : (
           <span className="model-card__status model-card__status--unknown">
             未检测
+          </span>
+        )}
+        {resolvedPath && (
+          <span className="model-card__path" title={resolvedPath}>
+            {resolvedPath.split(/[\\/]/).pop()}
           </span>
         )}
         <button

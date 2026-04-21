@@ -234,17 +234,19 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
         || baoqiao_dir.join("infer.json").is_file();
 
     let mut out = serde_json::Map::new();
-    let mut s = |key: &str, status: &str| out.insert(key.into(), status.into());
-    s("sherpa-paraformer",            if sherpa_ok    { "ready" } else { "missing" });
-    s("silero-vad",                   if file_nonempty(&vad_path) { "ready" } else { "missing" });
-    s("genie-base",                   if genie_ok     { "ready" } else { "missing" });
-    s("gsv-lite",                     gsv_status);
-    s("luming-genie-tts-v2-pro-plus", if luming_ok    { "ready" } else { "missing" });
-    s("gsv-baoqiao",                  if baoqiao_ok   { "ready" } else { "missing" });
-    s("qwen-tts-0.6b",                if dir_nonempty("Qwen3-TTS-12Hz-0.6B-Base")  { "ready" } else { "missing" });
-    s("qwen-tts-1.7b",                if dir_nonempty("Qwen3-TTS-12Hz-1.7B-Base")  { "ready" } else { "missing" });
-    s("local-embedding",              if is_valid_gguf(&embedding_path) { "ready" } else { "missing" });
-    s("llm-translate",                if is_valid_gguf(&translate_path) { "ready" } else { "missing" });
+    let mut s = |key: &str, status: &str, path: &Path| {
+        out.insert(key.into(), serde_json::json!({ "status": status, "path": path.display().to_string() }))
+    };
+    s("sherpa-paraformer",            if sherpa_ok    { "ready" } else { "missing" }, &sherpa_dir);
+    s("silero-vad",                   if file_nonempty(&vad_path) { "ready" } else { "missing" }, &vad_path);
+    s("genie-base",                   if genie_ok     { "ready" } else { "missing" }, &gd);
+    s("gsv-lite",                     gsv_status,                                     &m.join("GSVLiteData"));
+    s("luming-genie-tts-v2-pro-plus", if luming_ok    { "ready" } else { "missing" }, &ld);
+    s("gsv-baoqiao",                  if baoqiao_ok   { "ready" } else { "missing" }, &baoqiao_dir);
+    s("qwen-tts-0.6b",                if dir_nonempty("Qwen3-TTS-12Hz-0.6B-Base")  { "ready" } else { "missing" }, &m.join("Qwen3-TTS-12Hz-0.6B-Base"));
+    s("qwen-tts-1.7b",                if dir_nonempty("Qwen3-TTS-12Hz-1.7B-Base")  { "ready" } else { "missing" }, &m.join("Qwen3-TTS-12Hz-1.7B-Base"));
+    s("local-embedding",              if is_valid_gguf(&embedding_path) { "ready" } else { "missing" }, &embedding_path);
+    s("llm-translate",                if is_valid_gguf(&translate_path) { "ready" } else { "missing" }, &translate_path);
     serde_json::Value::Object(out)
 }
 
