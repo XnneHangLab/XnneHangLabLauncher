@@ -82,7 +82,7 @@ export function ModelCard({
         )}
         {resolvedPath && (
           <span className="model-card__path" title={resolvedPath}>
-            {resolvedPath.split(/[\\/]/).pop()}
+            {(() => { const p = resolvedPath.split(/[\\/]/); return p.length >= 2 ? p.slice(-2).join('/') : p[p.length - 1]; })()}
           </span>
         )}
         <button
