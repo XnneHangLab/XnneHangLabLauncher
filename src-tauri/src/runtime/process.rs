@@ -967,6 +967,54 @@ pub fn cleanup_webui_processes(app: &AppHandle, state: &RuntimeState) -> Result<
     Ok(true)
 }
 
+fn run_get_root(
+    app: &AppHandle,
+    repo_root: &Path,
+    workspace_root: &Path,
+    driver: &RuntimeDriverConfig,
+) -> Result<(), String> {
+    let mut command = match driver {
+        RuntimeDriverConfig::Uv => {
+            let mut cmd = Command::new("uv");
+            cmd.arg("run")
+                .arg("--no-sync")
+                .arg("get_root")
+                .current_dir(repo_root)
+                .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
+                .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+                .env("PYTHONUTF8", "1")
+                .env("PYTHONIOENCODING", "utf-8");
+            cmd
+        }
+        RuntimeDriverConfig::DirectPython { python_path } => {
+            let mut cmd = Command::new(python_path);
+            cmd.arg("-m")
+                .arg("lab.config_manager.abs_root")
+                .current_dir(repo_root)
+                .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
+                .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+                .env("PYTHONUTF8", "1")
+                .env("PYTHONIOENCODING", "utf-8");
+            cmd
+        }
+    };
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            emit_raw_log(app, "[webui] get_root 完成，root_dir 已更新");
+            Ok(())
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            emit_raw_log(app, &format!("[webui] get_root 失败: {}", stderr.trim()));
+            Err(format!("get_root exited with {}", output.status))
+        }
+        Err(error) => {
+            emit_raw_log(app, &format!("[webui] 无法运行 get_root: {error}"));
+            Err(format!("failed to run get_root: {error}"))
+        }
+    }
+}
+
 pub fn spawn_backend_process(
     app: AppHandle,
     state: RuntimeState,
@@ -974,6 +1022,7 @@ pub fn spawn_backend_process(
     workspace_root: &Path,
     driver: &RuntimeDriverConfig,
 ) -> Result<(), String> {
+    run_get_root(&app, repo_root, workspace_root, driver)?;
     let mut command = build_python_command_for_driver(
         repo_root,
         workspace_root,
