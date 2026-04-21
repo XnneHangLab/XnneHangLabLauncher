@@ -38,6 +38,24 @@ struct LabTomlAsr {
 #[derive(Deserialize, Default)]
 struct LabTomlSherpa    { #[serde(default)] asr_model_dir: String }
 
+fn is_valid_gguf(path: &Path) -> bool {
+    use std::io::Read;
+    std::fs::File::open(path)
+        .ok()
+        .and_then(|mut f| {
+            let mut magic = [0u8; 4];
+            f.read_exact(&mut magic).ok().map(|_| magic)
+        })
+        .map(|magic| magic == [0x47, 0x47, 0x55, 0x46])
+        .unwrap_or(false)
+}
+
+fn file_nonempty(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .map(|m| m.is_file() && m.len() > 0)
+        .unwrap_or(false)
+}
+
 fn load_lab_toml(workspace_root: &Path) -> LabToml {
     let path = workspace_root.join("config").join("lab.toml");
     std::fs::read_to_string(path)
@@ -155,43 +173,78 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
     let root_dir = &lab.root.root_dir;
     let m = workspace_root.join("models");
 
-    let dir_ready = |rel: &str| -> bool {
+    let dir_nonempty = |rel: &str| -> bool {
         std::fs::read_dir(m.join(rel))
             .map(|mut iter| iter.next().is_some())
             .unwrap_or(false)
     };
 
-    // For file checks, resolve from lab.toml config (falls back to default if unconfigured).
     let rp = |configured: &str, default: &str| -> PathBuf {
         resolve_model_path(root_dir, &workspace_root, configured, default)
     };
 
-    let embedding_path  = rp(&lab.local_embedding.model_path,              "models/bge-m3-q8_0.gguf");
-    let translate_path  = rp(&lab.agent.translate.llm.model_path,          "models/qwen2.5-0.5b-instruct-q8_0.gguf");
-    let vad_path        = rp(&lab.asr.vad_model_path,                      "models/silero_vad.onnx");
-    let sherpa_path     = rp(&lab.asr.sherpa.asr_model_dir,               "models/sherpa-onnx-paraformer-zh-2023-09-14");
+    let embedding_path = rp(&lab.local_embedding.model_path,     "models/bge-m3-q8_0.gguf");
+    let translate_path = rp(&lab.agent.translate.llm.model_path, "models/qwen2.5-0.5b-instruct-q8_0.gguf");
+    let vad_path       = rp(&lab.asr.vad_model_path,             "models/silero_vad.onnx");
+    let sherpa_dir     = rp(&lab.asr.sherpa.asr_model_dir,       "models/sherpa-onnx-paraformer-zh-2023-09-14");
 
+    // sherpa: tokens.txt + at least one onnx layout (offline or streaming)
+    let sherpa_ok = sherpa_dir.join("tokens.txt").is_file()
+        && (file_nonempty(&sherpa_dir.join("model.int8.onnx"))
+            || file_nonempty(&sherpa_dir.join("model.onnx"))
+            || (file_nonempty(&sherpa_dir.join("encoder.int8.onnx"))
+                && file_nonempty(&sherpa_dir.join("decoder.int8.onnx"))));
+
+    // genie-base: key onnx + bin files that the Genie-TTS package requires
+    let gd = m.join("GenieData");
+    let genie_ok = file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base.onnx"))
+        && file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base_weights_fp16.bin"))
+        && file_nonempty(&gd.join("speaker_encoder.onnx"));
+
+    // gsv-lite: 4 sub-dirs non-empty + roberta pytorch_model.bin present
     let gsv_parts = [
         "GSVLiteData/chinese-hubert-base",
         "GSVLiteData/chinese-roberta-wwm-ext-large",
         "GSVLiteData/g2p",
         "GSVLiteData/sv",
     ];
-    let gsv_count = gsv_parts.iter().filter(|&&p| dir_ready(p)).count();
-    let gsv_status = if gsv_count == gsv_parts.len() { "ready" } else if gsv_count > 0 { "partial" } else { "missing" };
+    let gsv_roberta_bin = m.join("GSVLiteData/chinese-roberta-wwm-ext-large/pytorch_model.bin");
+    let gsv_dirs_ready = gsv_parts.iter().filter(|&&p| dir_nonempty(p)).count() == gsv_parts.len();
+    let gsv_status = if gsv_dirs_ready && file_nonempty(&gsv_roberta_bin) {
+        "ready"
+    } else if gsv_parts.iter().any(|&p| dir_nonempty(p)) {
+        "partial"
+    } else {
+        "missing"
+    };
+
+    // luming: v2-pro-plus specific onnx + bin files
+    let ld = m.join("genie-tts/luming-v2-pro-plus");
+    let luming_ok = file_nonempty(&ld.join("vits_fp32.onnx"))
+        && file_nonempty(&ld.join("t2s_encoder_fp32.onnx"))
+        && file_nonempty(&ld.join("t2s_encoder_fp32.bin"))
+        && file_nonempty(&ld.join("t2s_shared_fp16.bin"))
+        && file_nonempty(&ld.join("vits_fp16.bin"))
+        && file_nonempty(&ld.join("prompt_encoder_fp32.onnx"))
+        && file_nonempty(&ld.join("prompt_encoder_fp16.bin"));
+
+    // gsv-baoqiao: infer config must exist so the engine knows gpt/sovits paths
+    let baoqiao_dir = m.join("gsv-tts-lite/baoqiao");
+    let baoqiao_ok = baoqiao_dir.join("infer_config.json").is_file()
+        || baoqiao_dir.join("infer.json").is_file();
 
     let mut out = serde_json::Map::new();
     let mut s = |key: &str, status: &str| out.insert(key.into(), status.into());
-    s("sherpa-paraformer",            if sherpa_path.is_dir() { "ready" } else { "missing" });
-    s("silero-vad",                   if vad_path.is_file() { "ready" } else { "missing" });
-    s("genie-base",                   if dir_ready("GenieData") { "ready" } else { "missing" });
+    s("sherpa-paraformer",            if sherpa_ok    { "ready" } else { "missing" });
+    s("silero-vad",                   if file_nonempty(&vad_path) { "ready" } else { "missing" });
+    s("genie-base",                   if genie_ok     { "ready" } else { "missing" });
     s("gsv-lite",                     gsv_status);
-    s("luming-genie-tts-v2-pro-plus", if dir_ready("genie-tts/luming-v2-pro-plus") { "ready" } else { "missing" });
-    s("gsv-baoqiao",                  if dir_ready("gsv-tts-lite/baoqiao") { "ready" } else { "missing" });
-    s("qwen-tts-0.6b",                if dir_ready("Qwen3-TTS-12Hz-0.6B-Base") { "ready" } else { "missing" });
-    s("qwen-tts-1.7b",                if dir_ready("Qwen3-TTS-12Hz-1.7B-Base") { "ready" } else { "missing" });
-    s("local-embedding",              if embedding_path.is_file() { "ready" } else { "missing" });
-    s("llm-translate",                if translate_path.is_file() { "ready" } else { "missing" });
+    s("luming-genie-tts-v2-pro-plus", if luming_ok    { "ready" } else { "missing" });
+    s("gsv-baoqiao",                  if baoqiao_ok   { "ready" } else { "missing" });
+    s("qwen-tts-0.6b",                if dir_nonempty("Qwen3-TTS-12Hz-0.6B-Base")  { "ready" } else { "missing" });
+    s("qwen-tts-1.7b",                if dir_nonempty("Qwen3-TTS-12Hz-1.7B-Base")  { "ready" } else { "missing" });
+    s("local-embedding",              if is_valid_gguf(&embedding_path) { "ready" } else { "missing" });
+    s("llm-translate",                if is_valid_gguf(&translate_path) { "ready" } else { "missing" });
     serde_json::Value::Object(out)
 }
 
