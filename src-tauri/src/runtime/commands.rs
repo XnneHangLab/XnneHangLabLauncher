@@ -1,4 +1,6 @@
 use tauri::{AppHandle, State};
+use std::path::{Path, PathBuf};
+use serde::Deserialize;
 
 use super::process::{
     cleanup_frontend_processes, cleanup_webui_port_conflicts, cleanup_webui_processes,
@@ -7,6 +9,60 @@ use super::process::{
     spawn_backend_process, spawn_frontend_process, write_console_log,
 };
 use super::state::{resolve_repo_root, resolve_workspace_root, RuntimeDriverConfig, RuntimeState};
+
+// ── lab.toml minimal reader ────────────────────────────────────────────────
+
+#[derive(Deserialize, Default)]
+struct LabToml {
+    #[serde(default)] root:            LabTomlRoot,
+    #[serde(default)] local_embedding: LabTomlEmbedding,
+    #[serde(default)] agent:           LabTomlAgent,
+    #[serde(default)] asr:             LabTomlAsr,
+}
+
+#[derive(Deserialize, Default)]
+struct LabTomlRoot      { #[serde(default)] root_dir:    String }
+#[derive(Deserialize, Default)]
+struct LabTomlEmbedding { #[serde(default)] model_path:  String }
+#[derive(Deserialize, Default)]
+struct LabTomlAgent     { #[serde(default)] translate:   LabTomlTranslate }
+#[derive(Deserialize, Default)]
+struct LabTomlTranslate { #[serde(default)] llm:         LabTomlLlm }
+#[derive(Deserialize, Default)]
+struct LabTomlLlm       { #[serde(default)] model_path:  String }
+#[derive(Deserialize, Default)]
+struct LabTomlAsr {
+    #[serde(default)] vad_model_path: String,
+    #[serde(default)] sherpa:         LabTomlSherpa,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlSherpa    { #[serde(default)] asr_model_dir: String }
+
+fn load_lab_toml(workspace_root: &Path) -> LabToml {
+    let path = workspace_root.join("config").join("lab.toml");
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| toml::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Mirrors Python's `_resolve_path`: absolute paths pass through,
+/// relative paths are resolved against `root_dir` (or `workspace_root`).
+fn resolve_model_path(root_dir: &str, workspace_root: &Path, configured: &str, default: &str) -> PathBuf {
+    let s = if configured.is_empty() { default } else { configured };
+    let p = Path::new(s);
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    let base = if !root_dir.is_empty() {
+        Path::new(root_dir)
+    } else {
+        workspace_root
+    };
+    // Strip leading "./" or ".\"
+    let rel = s.strip_prefix("./").or_else(|| s.strip_prefix(".\\")).unwrap_or(s);
+    base.join(rel)
+}
 
 #[tauri::command]
 pub async fn probe_environment(
@@ -94,14 +150,26 @@ pub fn list_download_tasks(state: State<'_, RuntimeState>) -> Result<serde_json:
 
 #[tauri::command]
 pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value {
-    let m = state.current_workspace_root().join("models");
+    let workspace_root = state.current_workspace_root();
+    let lab = load_lab_toml(&workspace_root);
+    let root_dir = &lab.root.root_dir;
+    let m = workspace_root.join("models");
 
     let dir_ready = |rel: &str| -> bool {
         std::fs::read_dir(m.join(rel))
             .map(|mut iter| iter.next().is_some())
             .unwrap_or(false)
     };
-    let file_ready = |rel: &str| -> bool { m.join(rel).is_file() };
+
+    // For file checks, resolve from lab.toml config (falls back to default if unconfigured).
+    let rp = |configured: &str, default: &str| -> PathBuf {
+        resolve_model_path(root_dir, &workspace_root, configured, default)
+    };
+
+    let embedding_path  = rp(&lab.local_embedding.model_path,              "models/bge-m3-q8_0.gguf");
+    let translate_path  = rp(&lab.agent.translate.llm.model_path,          "models/qwen2.5-0.5b-instruct-q8_0.gguf");
+    let vad_path        = rp(&lab.asr.vad_model_path,                      "models/silero_vad.onnx");
+    let sherpa_path     = rp(&lab.asr.sherpa.asr_model_dir,               "models/sherpa-onnx-paraformer-zh-2023-09-14");
 
     let gsv_parts = [
         "GSVLiteData/chinese-hubert-base",
@@ -114,16 +182,16 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
 
     let mut out = serde_json::Map::new();
     let mut s = |key: &str, status: &str| out.insert(key.into(), status.into());
-    s("sherpa-paraformer",          if dir_ready("sherpa-onnx-paraformer-zh-2023-09-14") { "ready" } else { "missing" });
-    s("silero-vad",                 if file_ready("silero_vad.onnx") { "ready" } else { "missing" });
-    s("genie-base",                 if dir_ready("GenieData") { "ready" } else { "missing" });
-    s("gsv-lite",                   gsv_status);
+    s("sherpa-paraformer",            if sherpa_path.is_dir() { "ready" } else { "missing" });
+    s("silero-vad",                   if vad_path.is_file() { "ready" } else { "missing" });
+    s("genie-base",                   if dir_ready("GenieData") { "ready" } else { "missing" });
+    s("gsv-lite",                     gsv_status);
     s("luming-genie-tts-v2-pro-plus", if dir_ready("genie-tts/luming-v2-pro-plus") { "ready" } else { "missing" });
-    s("gsv-baoqiao",                if dir_ready("gsv-tts-lite/baoqiao") { "ready" } else { "missing" });
-    s("qwen-tts-0.6b",              if dir_ready("Qwen3-TTS-12Hz-0.6B-Base") { "ready" } else { "missing" });
-    s("qwen-tts-1.7b",              if dir_ready("Qwen3-TTS-12Hz-1.7B-Base") { "ready" } else { "missing" });
-    s("local-embedding",            if file_ready("bge-m3-q8_0.gguf") { "ready" } else { "missing" });
-    s("llm-translate",              if file_ready("qwen2.5-0.5b-instruct-q8_0.gguf") { "ready" } else { "missing" });
+    s("gsv-baoqiao",                  if dir_ready("gsv-tts-lite/baoqiao") { "ready" } else { "missing" });
+    s("qwen-tts-0.6b",                if dir_ready("Qwen3-TTS-12Hz-0.6B-Base") { "ready" } else { "missing" });
+    s("qwen-tts-1.7b",                if dir_ready("Qwen3-TTS-12Hz-1.7B-Base") { "ready" } else { "missing" });
+    s("local-embedding",              if embedding_path.is_file() { "ready" } else { "missing" });
+    s("llm-translate",                if translate_path.is_file() { "ready" } else { "missing" });
     serde_json::Value::Object(out)
 }
 
