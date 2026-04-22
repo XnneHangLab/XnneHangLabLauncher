@@ -195,11 +195,12 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
             || (file_nonempty(&sherpa_dir.join("encoder.int8.onnx"))
                 && file_nonempty(&sherpa_dir.join("decoder.int8.onnx"))));
 
-    // genie-base: key onnx + bin files that the Genie-TTS package requires
+    // genie-base: key onnx + bin files that the Genie-TTS package requires, plus lid.176.bin for fast-langdetect
     let gd = m.join("GenieData");
     let genie_ok = file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base.onnx"))
         && file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base_weights_fp16.bin"))
-        && file_nonempty(&gd.join("speaker_encoder.onnx"));
+        && file_nonempty(&gd.join("speaker_encoder.onnx"))
+        && file_nonempty(&gd.join("lid.176.bin"));
 
     // gsv-lite: 4 sub-dirs non-empty + roberta pytorch_model.bin present
     let gsv_parts = [

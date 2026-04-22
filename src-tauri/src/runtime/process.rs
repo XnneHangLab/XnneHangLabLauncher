@@ -652,7 +652,8 @@ where
         .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
-        .env("PYTHONUNBUFFERED", "1");
+        .env("PYTHONUNBUFFERED", "1")
+        .env("FTLANG_CACHE", workspace_root.join("models").join("GenieData"));
     for arg in python_args {
         command.arg(arg.as_ref());
     }
@@ -676,7 +677,8 @@ where
         .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
-        .env("PYTHONUNBUFFERED", "1");
+        .env("PYTHONUNBUFFERED", "1")
+        .env("FTLANG_CACHE", workspace_root.join("models").join("GenieData"));
     for arg in python_args {
         command.arg(arg.as_ref());
     }
