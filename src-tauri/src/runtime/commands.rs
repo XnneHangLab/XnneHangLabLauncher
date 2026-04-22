@@ -229,7 +229,7 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
         && file_nonempty(&ld.join("prompt_encoder_fp16.bin"));
 
     // gsv-baoqiao: character.tts.character_name = "luming" in baoqiao.toml → runtime looks up gsv-tts-lite/luming
-    let baoqiao_dir = m.join("gsv-tts-lite/luming");
+    let baoqiao_dir = m.join("gsv-tts-lite/luming-v2-pro-plus");
     let baoqiao_ok = baoqiao_dir.join("infer_config.json").is_file()
         || baoqiao_dir.join("infer.json").is_file();
 
