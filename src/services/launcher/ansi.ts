@@ -26,7 +26,14 @@ function codesToStyle(codes: number[]): string {
 }
 
 export function ansiToHtml(raw: string): string {
-  const safe = raw
+  // \r: terminal carriage-return semantics — keep only text after the last \r
+  const afterCr = raw.includes('\r') ? (raw.split('\r').pop() ?? raw) : raw;
+  // strip non-SGR ANSI CSI codes (cursor movement, clear-line, etc.) while keeping SGR (\x1b[...m)
+  const clean = afterCr.replace(/\x1b\[[0-9;]*([A-Za-z])/g, (full, letter) =>
+    letter === 'm' ? full : '',
+  );
+
+  const safe = clean
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');

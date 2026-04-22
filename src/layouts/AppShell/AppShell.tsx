@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sidebar } from '../../components/navigation/Sidebar/Sidebar';
 import { Topbar } from '../../components/window/Topbar/Topbar';
 import { navItems, type PageId } from '../../data/nav';
@@ -70,6 +70,7 @@ export function AppShell() {
   const [frontendRunning, setFrontendRunning] = useState(false);
   const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
   const [modelStatuses, setModelStatuses] = useState<Record<string, ModelStatusEntry>>({});
+  const lastLogWasReplace = useRef(false);
   useEffect(() => {
     writeStoredTheme(theme);
   }, [theme]);
@@ -134,10 +135,17 @@ export function AppShell() {
         setLogs((current) => [...current, createConsoleLogFromRuntimeEvent(event)]);
       },
       (line) => {
+        lastLogWasReplace.current = false;
         setLogs((current) => [...current, createConsoleLog('stdout', line)]);
       },
       (line) => {
-        setLogs((current) => [...current, createConsoleLog('stdout', line)]);
+        const entry = createConsoleLog('stdout', line);
+        if (lastLogWasReplace.current) {
+          setLogs((current) => [...current.slice(0, -1), entry]);
+        } else {
+          setLogs((current) => [...current, entry]);
+        }
+        lastLogWasReplace.current = true;
       },
     )
       .then((cleanup) => {
