@@ -28,7 +28,7 @@
 }
 
 .community-group-card {
-  min-width: 220px;
+  width: 220px;
   border-radius: var(--radius);
   background: linear-gradient(160deg, var(--elevated-card-bg-start), var(--elevated-card-bg-end));
   border: 1px solid var(--elevated-card-border);
@@ -48,10 +48,6 @@
   gap: 4px;
   padding: 14px 16px 16px;
   border-top: 1px solid var(--line);
-}
-
-.community-group-card__meta--no-qr {
-  border-top: none;
 }
 
 .community-group-card__badge {
