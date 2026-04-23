@@ -19,7 +19,7 @@ const groups: GroupEntry[] = [
 ];
 
 const REPO_URL = 'https://github.com/XnneHangLab/XnneHangLab';
-const BILIBILI_URL = 'https://space.bilibili.com/3461562564086372';
+const BILIBILI_URL = 'https://space.bilibili.com/556737824';
 
 function GitHubIcon() {
   return (
@@ -54,8 +54,8 @@ export function CommunityPage() {
         <button type="button" className="community-link-card" onClick={() => openUrl(BILIBILI_URL)}>
           <BilibiliIcon />
           <div className="community-link-card__body">
-            <span className="community-link-card__title">Korewaxnne</span>
-            <span className="community-link-card__desc">space.bilibili.com/3461562564086372</span>
+            <span className="community-link-card__title">一目生</span>
+            <span className="community-link-card__desc">space.bilibili.com/556737824</span>
           </div>
           <span className="community-link-card__arrow">›</span>
         </button>
