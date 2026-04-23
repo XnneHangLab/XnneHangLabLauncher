@@ -5,6 +5,9 @@ import { ModelsPage } from '../pages/ModelsPage/ModelsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage/SettingsPage';
 import { ProfilesPage } from '../pages/ProfilesPage/ProfilesPage';
+import { TroubleshootingPage } from '../pages/TroubleshootingPage/TroubleshootingPage';
+import { VersionsPage } from '../pages/VersionsPage/VersionsPage';
+import { CommunityPage } from '../pages/CommunityPage/CommunityPage';
 import type { PageId } from '../data/nav';
 import type { ConsoleLogEntry } from '../services/launcher/launcher';
 import type {
@@ -97,27 +100,10 @@ export function renderPage(
       );
     case 'profiles':
       return <ProfilesPage />;
-    case 'advanced':
-      return (
-        <PlaceholderPage
-          title="高级选项"
-          description="预留更细粒度的运行参数与后端切换入口。"
-        />
-      );
     case 'troubleshooting':
-      return (
-        <PlaceholderPage
-          title="疑难解答"
-          description="预留更细粒度的运行诊断与修复入口。"
-        />
-      );
+      return <TroubleshootingPage />;
     case 'versions':
-      return (
-        <PlaceholderPage
-          title="版本管理"
-          description="预留运行时版本切换和回滚能力。"
-        />
-      );
+      return <VersionsPage />;
     case 'models':
       return (
         <ModelsPage
@@ -147,12 +133,7 @@ export function renderPage(
         />
       );
     case 'community':
-      return (
-        <PlaceholderPage
-          title="交流群"
-          description="预留社区入口和外链跳转。"
-        />
-      );
+      return <CommunityPage />;
     case 'console':
       return (
         <ConsolePage

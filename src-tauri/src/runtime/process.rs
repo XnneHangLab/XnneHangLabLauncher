@@ -428,6 +428,33 @@ pub fn open_path(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub fn open_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut cmd = Command::new("powershell");
+        cmd.args(["-NoProfile", "-Command", "Start-Process $env:LAB_OPEN_URL"])
+            .env("LAB_OPEN_URL", url);
+        cmd
+    };
+
+    #[cfg(target_os = "linux")]
+    let mut command = {
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(url);
+        cmd
+    };
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut cmd = Command::new("open");
+        cmd.arg(url);
+        cmd
+    };
+
+    command.spawn().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub fn pick_workspace_root() -> Result<Option<PathBuf>, String> {
     #[cfg(target_os = "windows")]
     {

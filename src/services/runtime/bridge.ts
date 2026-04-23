@@ -40,6 +40,10 @@ export function openManagedPath(pathKey: string) {
   return invoke<void>('open_managed_path', { pathKey });
 }
 
+export function openUrl(url: string) {
+  return invoke<void>('open_url_command', { url });
+}
+
 export function exportConsoleLogs(contents: string) {
   return invoke<string>('export_console_logs', { contents });
 }

@@ -2,7 +2,6 @@ export type PageId =
   | 'home'
   | 'profiles'
   | 'settings'
-  | 'advanced'
   | 'troubleshooting'
   | 'versions'
   | 'models'
@@ -33,7 +32,6 @@ export const navItems: NavItemData[] = [
   { type: 'page', id: 'home', label: '一键启动', icon: '▶', section: 'primary' },
   { type: 'page', id: 'profiles', label: '角色卡片', icon: '◉', section: 'primary' },
   { type: 'page', id: 'settings', label: '启动设置', icon: '⚙', section: 'primary' },
-  { type: 'page', id: 'advanced', label: '高级选项', icon: '≣', section: 'primary' },
   { type: 'page', id: 'troubleshooting', label: '疑难解答', icon: '⌘', section: 'primary' },
   { type: 'page', id: 'versions', label: '版本管理', icon: '🕘', section: 'primary' },
   { type: 'page', id: 'models', label: '模型管理', icon: '◫', section: 'primary' },

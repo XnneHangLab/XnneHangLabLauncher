@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use super::process::{
     cleanup_frontend_processes, cleanup_webui_port_conflicts, cleanup_webui_processes,
-    drain_download_queue, ensure_environment_ready, open_path, pick_python_path,
+    drain_download_queue, ensure_environment_ready, open_path, open_url, pick_python_path,
     pick_workspace_root, resolve_managed_path, run_probe_command,
     spawn_backend_process, spawn_frontend_process, write_console_log,
 };
@@ -269,6 +269,11 @@ pub fn open_managed_path(state: State<'_, RuntimeState>, path_key: String) -> Re
     let workspace_root = state.current_workspace_root();
     let path = resolve_managed_path(&workspace_root, &path_key)?;
     open_path(&path)
+}
+
+#[tauri::command]
+pub fn open_url_command(url: String) -> Result<(), String> {
+    open_url(&url)
 }
 
 #[tauri::command]
