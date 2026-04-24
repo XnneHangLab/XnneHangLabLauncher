@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { pickAnyFile, readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
 import type { Live2DPreset } from '../../services/config/bridge';
 import { useLive2DCanvas } from './useLive2DCanvas';
+
+// convertFileSrc encodes the whole path as one component, turning \ into %5C.
+// pixi-live2d-display resolves sub-resource URLs using standard URL parsing
+// which only treats / as a separator — so %5C breaks relative path resolution.
+// Encoding each segment individually preserves / as a separator in the URL.
+function filePathToAssetUrl(filePath: string): string {
+  const parts = filePath.replace(/\\/g, '/').split('/');
+  const encoded = parts.map(encodeURIComponent).join('/');
+  return navigator.userAgent.includes('Windows')
+    ? `https://asset.localhost/${encoded}`
+    : `asset://localhost/${encoded}`;
+}
 
 interface Live2DPreviewToolProps {
   onBack: () => void;
@@ -24,7 +35,7 @@ export function Live2DPreviewTool({ onBack }: Live2DPreviewToolProps) {
 
   useEffect(() => {
     if (modelPath) {
-      setModelUrl(convertFileSrc(modelPath));
+      setModelUrl(filePathToAssetUrl(modelPath));
     } else {
       setModelUrl(null);
     }
