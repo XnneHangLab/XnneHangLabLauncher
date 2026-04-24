@@ -50,6 +50,8 @@ pub fn run() {
             runtime::config::pick_file_for_profile,
             runtime::config::pick_any_file,
             runtime::config::pick_any_dir,
+            runtime::live2d::read_live2d_presets,
+            runtime::live2d::write_live2d_presets,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

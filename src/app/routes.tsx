@@ -2,12 +2,12 @@ import type { ReactElement } from 'react';
 import { HomePage } from '../pages/HomePage/HomePage';
 import { ConsolePage } from '../pages/ConsolePage/ConsolePage';
 import { ModelsPage } from '../pages/ModelsPage/ModelsPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage/SettingsPage';
 import { ProfilesPage } from '../pages/ProfilesPage/ProfilesPage';
 import { TroubleshootingPage } from '../pages/TroubleshootingPage/TroubleshootingPage';
 import { VersionsPage } from '../pages/VersionsPage/VersionsPage';
 import { CommunityPage } from '../pages/CommunityPage/CommunityPage';
+import { ToolsPage } from '../pages/ToolsPage/ToolsPage';
 import type { PageId } from '../data/nav';
 import type { ConsoleLogEntry } from '../services/launcher/launcher';
 import type {
@@ -126,12 +126,7 @@ export function renderPage(
         />
       );
     case 'tools':
-      return (
-        <PlaceholderPage
-          title="小工具"
-          description="预留下载修复、目录清理和附加操作入口。"
-        />
-      );
+      return <ToolsPage />;
     case 'community':
       return <CommunityPage />;
     case 'console':
