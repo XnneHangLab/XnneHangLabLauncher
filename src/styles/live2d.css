@@ -1,7 +1,6 @@
 .live2d-tool {
   display: flex;
   flex-direction: column;
-  height: 100%;
   gap: 0;
 }
 
@@ -78,26 +77,21 @@
 /* ── main area ── */
 .live2d-main {
   display: flex;
-  flex: 1;
-  min-height: 0;
   gap: 12px;
 }
 
 .live2d-canvas-wrap {
   flex: 1;
+  height: 440px;
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
   background: linear-gradient(160deg, var(--elevated-card-bg-start), var(--elevated-card-bg-end));
   border: 1px solid var(--elevated-card-border);
-  min-height: 320px;
 }
 
 .live2d-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  display: block;
 }
 
 .live2d-empty,
@@ -119,6 +113,7 @@
 /* ── motion panel ── */
 .live2d-motion-panel {
   width: 200px;
+  height: 440px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
