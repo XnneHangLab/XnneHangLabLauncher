@@ -6,6 +6,11 @@ export interface Live2DPreset {
   modelPath: string;
 }
 
+export interface Live2DModelData {
+  modelJson: Record<string, unknown>;
+  files: Record<string, string>;
+}
+
 export function readLabConfig() {
   return invoke<LabConfig>('read_lab_config');
 }
@@ -32,4 +37,12 @@ export function readLive2DPresets() {
 
 export function writeLive2DPresets(presets: Live2DPreset[]) {
   return invoke<void>('write_live2d_presets', { presets });
+}
+
+export function readLive2DModelData(model3Path: string) {
+  return invoke<Live2DModelData>('read_live2d_model_data', { model3Path });
+}
+
+export function writeLive2DMotion(model3Path: string, group: string, index: number, motionJson: unknown) {
+  return invoke<void>('write_live2d_motion', { model3Path, group, index, motionJson });
 }

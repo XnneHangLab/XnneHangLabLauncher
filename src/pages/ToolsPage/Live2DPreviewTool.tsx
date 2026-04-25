@@ -1,50 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
-import { pickAnyFile, readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
+import { useEffect, useState } from 'react';
+import { readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
 import type { Live2DPreset } from '../../services/config/bridge';
-import { useLive2DCanvas } from './useLive2DCanvas';
-
-// convertFileSrc encodes the whole path as one component, turning \ into %5C.
-// pixi-live2d-display resolves sub-resource URLs using standard URL parsing
-// which only treats / as a separator — so %5C breaks relative path resolution.
-// Encoding each segment individually preserves / as a separator in the URL.
-function filePathToAssetUrl(filePath: string): string {
-  const parts = filePath.replace(/\\/g, '/').split('/');
-  const encoded = parts.map(encodeURIComponent).join('/');
-  return navigator.userAgent.includes('Windows')
-    ? `https://asset.localhost/${encoded}`
-    : `asset://localhost/${encoded}`;
-}
+import { EditorProvider, useEditor } from './EditorProvider';
+import { ParameterPanel } from './ParameterPanel';
+import { Timeline } from './Timeline';
 
 interface Live2DPreviewToolProps {
   onBack: () => void;
 }
 
 export function Live2DPreviewTool({ onBack }: Live2DPreviewToolProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [modelPath, setModelPath] = useState<string | null>(null);
-  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  return (
+    <EditorProvider>
+      <Live2DToolInner onBack={onBack} />
+    </EditorProvider>
+  );
+}
+
+function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
+  const { canvasRef, modelLoaded, modelError, modelPath, openImportDialog, loadModelByPath } =
+    useEditor();
+
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
   const [presetName, setPresetName] = useState('');
-
-  const { motions, currentMotion, progress, isPlaying, playMotion, modelLoaded, modelError } =
-    useLive2DCanvas(canvasRef, modelUrl);
 
   useEffect(() => {
     readLive2DPresets().then(setPresets).catch(console.error);
   }, []);
-
-  useEffect(() => {
-    if (modelPath) {
-      setModelUrl(filePathToAssetUrl(modelPath));
-    } else {
-      setModelUrl(null);
-    }
-  }, [modelPath]);
-
-  async function handleImport() {
-    const path = await pickAnyFile('选择 Live2D 模型文件 (.model3.json)');
-    if (path) setModelPath(path);
-  }
 
   async function handleSavePreset() {
     const name = presetName.trim();
@@ -57,35 +39,24 @@ export function Live2DPreviewTool({ onBack }: Live2DPreviewToolProps) {
 
   function handleSelectPreset(e: React.ChangeEvent<HTMLSelectElement>) {
     const path = e.target.value;
-    if (path) setModelPath(path);
+    if (path) loadModelByPath(path);
     e.target.value = '';
   }
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
 
-  const progressPct = Math.round(progress * 100);
-
   return (
     <div className="live2d-tool">
+      {/* ── Top bar ─────────────────────────────────────────────── */}
       <div className="live2d-topbar">
-        <button type="button" className="live2d-back-btn" onClick={onBack}>
-          ← 返回
-        </button>
-        <span className="live2d-model-path" title={modelPath ?? ''}>
-          {filename}
-        </span>
-        <button type="button" className="live2d-btn" onClick={handleImport}>
-          导入模型
-        </button>
+        <button type="button" className="live2d-back-btn" onClick={onBack}>← 返回</button>
+        <span className="live2d-model-path" title={modelPath ?? ''}>{filename}</span>
+        <button type="button" className="live2d-btn" onClick={openImportDialog}>导入模型</button>
         {presets.length > 0 && (
           <select className="live2d-select" onChange={handleSelectPreset} defaultValue="">
-            <option value="" disabled>
-              预设
-            </option>
+            <option value="" disabled>预设</option>
             {presets.map((p) => (
-              <option key={p.name} value={p.modelPath}>
-                {p.name}
-              </option>
+              <option key={p.name} value={p.modelPath}>{p.name}</option>
             ))}
           </select>
         )}
@@ -96,62 +67,21 @@ export function Live2DPreviewTool({ onBack }: Live2DPreviewToolProps) {
           value={presetName}
           onChange={(e) => setPresetName(e.target.value)}
         />
-        <button type="button" className="live2d-btn" onClick={handleSavePreset}>
-          保存预设
-        </button>
+        <button type="button" className="live2d-btn" onClick={handleSavePreset}>保存预设</button>
       </div>
 
+      {/* ── Main area: canvas + parameter panel ────────────────── */}
       <div className="live2d-main">
         <div className="live2d-canvas-wrap">
-          {!modelPath && (
-            <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>
-          )}
+          {!modelPath && <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>}
           {modelError && <div className="live2d-error">{modelError}</div>}
           <canvas ref={canvasRef} className="live2d-canvas" />
         </div>
-
-        {modelLoaded && motions.length > 0 && (
-          <div className="live2d-motion-panel">
-            <div className="live2d-motion-panel__title">动作列表</div>
-            <div className="live2d-motion-list">
-              {motions.map((m) => (
-                <button
-                  key={`${m.group}-${m.index}`}
-                  type="button"
-                  className={`live2d-motion-item${
-                    currentMotion?.group === m.group && currentMotion?.index === m.index
-                      ? ' live2d-motion-item--active'
-                      : ''
-                  }`}
-                  onClick={() => playMotion(m.group, m.index)}
-                >
-                  <span className="live2d-motion-item__group">{m.group}</span>
-                  <span className="live2d-motion-item__index">#{m.index}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {modelLoaded && <ParameterPanel />}
       </div>
 
-      {modelLoaded && (
-        <div className="live2d-timeline">
-          <span className="live2d-timeline__status">{isPlaying ? '▶' : '■'}</span>
-          <span className="live2d-timeline__label">
-            {currentMotion ? `${currentMotion.group} #${currentMotion.index}` : '—'}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={progressPct}
-            className="live2d-timeline__bar"
-            onChange={() => {
-              if (currentMotion) playMotion(currentMotion.group, currentMotion.index);
-            }}
-          />
-        </div>
-      )}
+      {/* ── Timeline + motion list ─────────────────────────────── */}
+      {modelLoaded && <Timeline />}
     </div>
   );
 }

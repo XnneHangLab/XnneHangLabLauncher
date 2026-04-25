@@ -15,7 +15,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@framework/*": ["src/live2d/framework/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "src/test/**"]
