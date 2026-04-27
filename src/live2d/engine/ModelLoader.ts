@@ -123,10 +123,12 @@ export class ModelInstance {
     const m = this.model;
     if (!m) return;
     const count = m.getParameterCount();
-    const rawIds: string[] | undefined = (m as any)._model?.parameters?.ids;
     this.parameterIds = [];
     for (let i = 0; i < count; i++) {
-      this.parameterIds.push(rawIds ? rawIds[i] : String(i));
+      const handle = m.getParameterId(i);
+      // CubismId._id is csmString; csmString.s is the raw JS string
+      const str: string = (handle as any)?._id?.s ?? String(i);
+      this.parameterIds.push(str);
     }
   }
 
@@ -430,6 +432,7 @@ export async function loadModelFromData(
 
   // ── Collect motion entries & load motions ────────────────────────────
   const motionEntries: Array<{ group: string; index: number; name: string; file: string }> = [];
+  const loadedMotions = new csmMap<string, ACubismMotion>();
   const groupCount = setting.getMotionGroupCount();
   for (let g = 0; g < groupCount; g++) {
     const group = setting.getMotionGroupName(g);
@@ -448,7 +451,7 @@ export async function loadModelFromData(
           if (fadeIn >= 0) motion.setFadeInTime(fadeIn);
           const fadeOut = setting.getMotionFadeOutTimeValue(group, i);
           if (fadeOut >= 0) motion.setFadeOutTime(fadeOut);
-          (userModel as any)['_motions'].setValue(`${group}_${i}`, motion);
+          loadedMotions.setValue(`${group}_${i}`, motion);
         }
       }
     }
@@ -477,10 +480,7 @@ export async function loadModelFromData(
   userModel.setInitialized(true);
 
   const instance = new ModelInstance(userModel, setting, textureInfos, motionEntries);
-
-  // Transfer loaded motions to instance
-  const motions = (userModel as any)['_motions'] as csmMap<string, ACubismMotion>;
-  (instance as any)['_loadedMotions'] = motions;
+  (instance as any)['_loadedMotions'] = loadedMotions;
 
   return { instance, setting };
 }

@@ -226,20 +226,27 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     if (!instance) return;
     const path = await pickAnyFile('选择动作文件 (.motion3.json)');
     if (!path) return;
-    const b64 = await readFileBase64(path);
-    const fileName = path.split(/[/\\]/).pop() ?? path;
-    const group = 'imported';
-    const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
-    const key = `${group}_${nextIndex}`;
-    const buf = base64ToArrayBuffer(b64);
-    const ok = instance.addLoadedMotion(key, buf);
-    if (!ok) return;
-    if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
-    const motionName = fileName.replace(/\.motion3\.json$/i, '');
-    const entry = { group, index: nextIndex, name: motionName, file: fileName };
-    instance.motionEntries.push(entry);
-    setMotionAliases(prev => ({ ...prev, [key]: motionName }));
-    setMotionEntries(prev => [...prev, entry]);
+    try {
+      const b64 = await readFileBase64(path);
+      const fileName = path.split(/[/\\]/).pop() ?? path;
+      const group = 'imported';
+      const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
+      const key = `${group}_${nextIndex}`;
+      const buf = base64ToArrayBuffer(b64);
+      const ok = instance.addLoadedMotion(key, buf);
+      if (!ok) {
+        console.error('[Live2D] Failed to create motion from', fileName);
+        return;
+      }
+      if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
+      const motionName = fileName.replace(/\.motion3\.json$/i, '');
+      const entry = { group, index: nextIndex, name: motionName, file: fileName };
+      instance.motionEntries.push(entry);
+      setMotionAliases(prev => ({ ...prev, [key]: motionName }));
+      setMotionEntries(prev => [...prev, entry]);
+    } catch (err) {
+      console.error('[Live2D] Motion import error:', err);
+    }
   }, []);
 
   const playMotion = useCallback((group: string, index: number) => {
