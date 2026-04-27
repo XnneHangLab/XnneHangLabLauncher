@@ -119,16 +119,21 @@ export class ModelInstance {
 
   // ── Parameter API ──────────────────────────────────────────────────────────
 
+  // ── Core SDK accessor ─────────────────────────────────────────────────────
+
+  /** Returns the native Live2DCubismCore.Model (two private hops deep). */
+  private get _core(): any {
+    return (this._userModel as any)?._model?._model ?? null;
+  }
+
   private refreshParameterIds(): void {
-    const m = this.model;
-    if (!m) return;
-    const count = m.getParameterCount();
+    const core = this._core;
+    if (!core) return;
+    const count: number = core.parameters?.count ?? 0;
+    const ids: string[] = core.parameters?.ids ?? [];
     this.parameterIds = [];
     for (let i = 0; i < count; i++) {
-      const handle = m.getParameterId(i);
-      // CubismId._id is csmString; csmString.s is the raw JS string
-      const str: string = (handle as any)?._id?.s ?? String(i);
-      this.parameterIds.push(str);
+      this.parameterIds.push(ids[i] ?? String(i));
     }
   }
 
@@ -141,10 +146,22 @@ export class ModelInstance {
   }
 
   getParameterValueAt(index: number): number {
+    const core = this._core;
+    if (core) return (core.parameters.values as Float32Array)[index] ?? 0;
     return this.model.getParameterValueByIndex(index);
   }
 
   setParameterValue(id: string, value: number): void {
+    const core = this._core;
+    if (core) {
+      const idx = this.parameterIds.indexOf(id);
+      if (idx >= 0) {
+        const min = (core.parameters.minimumValues as Float32Array)[idx];
+        const max = (core.parameters.maximumValues as Float32Array)[idx];
+        (core.parameters.values as Float32Array)[idx] = Math.min(Math.max(value, min), max);
+        return;
+      }
+    }
     this.model.setParameterValueById(this.resolveId(id), value);
   }
 
@@ -161,6 +178,14 @@ export class ModelInstance {
   }
 
   getParameterRangeAt(index: number): { min: number; max: number; default: number } {
+    const core = this._core;
+    if (core) {
+      return {
+        min: (core.parameters.minimumValues as Float32Array)[index],
+        max: (core.parameters.maximumValues as Float32Array)[index],
+        default: (core.parameters.defaultValues as Float32Array)[index],
+      };
+    }
     return {
       min: this.model.getParameterMinimumValue(index),
       max: this.model.getParameterMaximumValue(index),
