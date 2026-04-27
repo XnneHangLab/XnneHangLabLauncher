@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: calc(100dvh - 115px);
+  height: calc(100dvh - 115px);
+  overflow: hidden;
 }
 
 /* ── top bar ── */
@@ -55,6 +56,7 @@
 }
 .live2d-btn:hover { opacity: 0.8; }
 .live2d-btn--full { width: 100%; }
+.live2d-btn--xs { padding: 2px 7px; font-size: 11px; }
 
 .live2d-preset-input {
   width: 100%;
@@ -70,7 +72,7 @@
 /* ── [3,1] main grid ── */
 .live2d-main {
   display: grid;
-  grid-template-columns: 180px 1fr 220px;
+  grid-template-columns: 240px 1fr 280px;
   gap: 10px;
   flex: 1;
   min-height: 0;
@@ -145,6 +147,13 @@
   min-height: 0;
   overflow: hidden;
   border-bottom: none;
+}
+
+.live2d-resource-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .live2d-panel-title {

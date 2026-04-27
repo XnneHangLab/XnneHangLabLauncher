@@ -155,6 +155,12 @@ pub async fn read_live2d_model_data(model3_path: String) -> Result<Live2DModelDa
     Ok(Live2DModelData { model_json, files })
 }
 
+/// Read any file and return its content as a base64 string.
+#[tauri::command]
+pub async fn read_file_base64(path: String) -> Result<String, String> {
+    read_file_as_base64(std::path::Path::new(&path))
+}
+
 /// Save a motion3.json file to disk.
 /// The file path is derived from model3_path, group, and index
 /// by reading the model3.json's Motion references.

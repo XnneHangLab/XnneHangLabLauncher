@@ -31,7 +31,7 @@ import { createTextures, TextureInfo } from './TextureManager';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const byteChars = atob(base64);
   const len = byteChars.length;
   const bytes = new Uint8Array(len);
@@ -123,12 +123,10 @@ export class ModelInstance {
     const m = this.model;
     if (!m) return;
     const count = m.getParameterCount();
+    const rawIds: string[] | undefined = (m as any)._model?.parameters?.ids;
     this.parameterIds = [];
     for (let i = 0; i < count; i++) {
-      const handle = m.getParameterId(i);
-      // CubismIdHandle._id is a csmString, ._id.s is the actual string
-      const str = (handle as any)?._id?.s ?? String(handle);
-      this.parameterIds.push(str);
+      this.parameterIds.push(rawIds ? rawIds[i] : String(i));
     }
   }
 
@@ -137,28 +135,35 @@ export class ModelInstance {
   }
 
   getParameterValue(id: string): number {
-    return this.model.getParameterValue(this.resolveId(id));
+    return this.model.getParameterValueById(this.resolveId(id));
   }
 
   setParameterValue(id: string, value: number): void {
-    this.model.setParameterValue(this.resolveId(id), value);
+    this.model.setParameterValueById(this.resolveId(id), value);
   }
 
   getParameterMin(id: string): number {
-    return this.model.getParameterMinimumValue(this.resolveId(id));
+    return this.model.getParameterMinimumValue(this.model.getParameterIndex(this.resolveId(id)));
   }
 
   getParameterMax(id: string): number {
-    return this.model.getParameterMaximumValue(this.resolveId(id));
+    return this.model.getParameterMaximumValue(this.model.getParameterIndex(this.resolveId(id)));
   }
 
   getParameterDefault(id: string): number {
-    return this.model.getParameterDefaultValue(this.resolveId(id));
+    return this.model.getParameterDefaultValue(this.model.getParameterIndex(this.resolveId(id)));
   }
 
   private resolveId(id: string): CubismIdHandle {
     const idManager = CubismFramework.getIdManager();
     return idManager!.getId(id);
+  }
+
+  addLoadedMotion(key: string, buf: ArrayBuffer): boolean {
+    const motion = CubismMotion.create(buf, buf.byteLength) as CubismMotion;
+    if (!motion) return false;
+    this._loadedMotions.setValue(key, motion);
+    return true;
   }
 
   // ── Standard param accessors (for drag etc.) ─────────────────────────────

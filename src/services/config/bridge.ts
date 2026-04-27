@@ -45,6 +45,10 @@ export function readLive2DModelData(model3Path: string) {
   return invoke<Live2DModelData>('read_live2d_model_data', { model3Path });
 }
 
+export function readFileBase64(path: string) {
+  return invoke<string>('read_file_base64', { path });
+}
+
 export function writeLive2DMotion(model3Path: string, group: string, index: number, motionJson: unknown) {
   return invoke<void>('write_live2d_motion', { model3Path, group, index, motionJson });
 }

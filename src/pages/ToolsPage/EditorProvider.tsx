@@ -5,12 +5,12 @@
 
 import React, { useEffect, useRef, useState, useCallback, createContext, useContext } from 'react';
 import { CubismInit } from '../../live2d/engine/CubismFrameworkInit';
-import { loadModelFromData } from '../../live2d/engine/ModelLoader';
+import { loadModelFromData, base64ToArrayBuffer } from '../../live2d/engine/ModelLoader';
 import type { ModelInstance } from '../../live2d/engine/ModelLoader';
 import { MotionPlayer } from '../../live2d/engine/MotionPlayer';
 import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
 import { parseMotion } from '../../live2d/engine/MotionParser';
-import { readLive2DModelData, pickAnyFile } from '../../services/config/bridge';
+import { readLive2DModelData, pickAnyFile, readFileBase64 } from '../../services/config/bridge';
 import type { Live2DModelData } from '../../services/config/bridge';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ export interface EditorContextValue {
 
   loadModelByPath: (path: string) => Promise<void>;
   openImportDialog: () => Promise<void>;
+  openMotionImportDialog: () => Promise<void>;
   playMotion: (group: string, index: number) => void;
   setParameter: (id: string, value: number) => void;
   togglePlay: () => void;
@@ -224,6 +225,25 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     if (path) await loadModelByPath(path);
   }, [loadModelByPath]);
 
+  const openMotionImportDialog = useCallback(async () => {
+    const instance = modelRef.current;
+    if (!instance) return;
+    const path = await pickAnyFile('选择动作文件 (.motion3.json)');
+    if (!path) return;
+    const b64 = await readFileBase64(path);
+    const fileName = path.split(/[/\\]/).pop() ?? path;
+    const group = 'imported';
+    const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
+    const key = `${group}_${nextIndex}`;
+    const buf = base64ToArrayBuffer(b64);
+    const ok = instance.addLoadedMotion(key, buf);
+    if (!ok) return;
+    if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
+    const entry = { group, index: nextIndex, name: fileName.replace(/\.motion3\.json$/i, ''), file: fileName };
+    instance.motionEntries.push(entry);
+    setMotionEntries(prev => [...prev, entry]);
+  }, []);
+
   const playMotion = useCallback((group: string, index: number) => {
     modelRef.current?.startMotion(group, index);
     setCurrentMotion({ group, index });
@@ -300,6 +320,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     timelineClips,
     loadModelByPath,
     openImportDialog,
+    openMotionImportDialog,
     playMotion,
     setParameter,
     togglePlay,

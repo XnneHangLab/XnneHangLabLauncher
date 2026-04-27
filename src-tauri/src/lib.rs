@@ -54,6 +54,7 @@ pub fn run() {
             runtime::live2d::write_live2d_presets,
             runtime::live2d::read_live2d_model_data,
             runtime::live2d::write_live2d_motion,
+            runtime::live2d::read_file_base64,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

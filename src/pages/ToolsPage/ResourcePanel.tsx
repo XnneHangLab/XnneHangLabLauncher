@@ -6,7 +6,7 @@ import type { Live2DPreset } from '../../services/config/bridge';
 export function ResourcePanel() {
   const {
     modelLoaded, modelPath, motionEntries, motionAliases,
-    addClipToTimeline, timelineClips, loadModelByPath, openImportDialog,
+    addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
   } = useEditor();
 
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
@@ -67,6 +67,14 @@ export function ResourcePanel() {
       </div>
 
       <div className="live2d-resource-section live2d-resource-section--scroll">
+        <div className="live2d-resource-section-header">
+          <div className="live2d-panel-title">动作 ({motionEntries.length})</div>
+          {modelLoaded && (
+            <button type="button" className="live2d-btn live2d-btn--xs" onClick={openMotionImportDialog}>
+              + 导入
+            </button>
+          )}
+        </div>
         <div className="live2d-resource-list">
           {!modelLoaded ? (
             <div className="live2d-panel-empty">未加载模型</div>
