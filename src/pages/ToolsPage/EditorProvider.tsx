@@ -132,7 +132,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         const ids = model.parameterIds;
         if (ids.length > 0) {
           const vals: Record<string, number> = {};
-          for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValue(ids[i]);
+          for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValueAt(i);
           setParamValues(vals);
         }
       }
@@ -185,14 +185,10 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setMotionEntries(instance.motionEntries);
       setModelLoaded(true);
 
-      // Collect parameter ranges from model
+      // Collect parameter ranges from model by index (avoids ID-handle lookup issues)
       const ranges: Record<string, ParamRange> = {};
-      for (const id of instance.parameterIds) {
-        ranges[id] = {
-          min: instance.getParameterMin(id),
-          max: instance.getParameterMax(id),
-          default: instance.getParameterDefault(id),
-        };
+      for (let i = 0; i < instance.parameterIds.length; i++) {
+        ranges[instance.parameterIds[i]] = instance.getParameterRangeAt(i);
       }
       setParamRanges(ranges);
 
@@ -239,8 +235,10 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const ok = instance.addLoadedMotion(key, buf);
     if (!ok) return;
     if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
-    const entry = { group, index: nextIndex, name: fileName.replace(/\.motion3\.json$/i, ''), file: fileName };
+    const motionName = fileName.replace(/\.motion3\.json$/i, '');
+    const entry = { group, index: nextIndex, name: motionName, file: fileName };
     instance.motionEntries.push(entry);
+    setMotionAliases(prev => ({ ...prev, [key]: motionName }));
     setMotionEntries(prev => [...prev, entry]);
   }, []);
 

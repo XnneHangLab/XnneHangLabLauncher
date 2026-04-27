@@ -138,6 +138,10 @@ export class ModelInstance {
     return this.model.getParameterValueById(this.resolveId(id));
   }
 
+  getParameterValueAt(index: number): number {
+    return this.model.getParameterValueByIndex(index);
+  }
+
   setParameterValue(id: string, value: number): void {
     this.model.setParameterValueById(this.resolveId(id), value);
   }
@@ -152,6 +156,14 @@ export class ModelInstance {
 
   getParameterDefault(id: string): number {
     return this.model.getParameterDefaultValue(this.model.getParameterIndex(this.resolveId(id)));
+  }
+
+  getParameterRangeAt(index: number): { min: number; max: number; default: number } {
+    return {
+      min: this.model.getParameterMinimumValue(index),
+      max: this.model.getParameterMaximumValue(index),
+      default: this.model.getParameterDefaultValue(index),
+    };
   }
 
   private resolveId(id: string): CubismIdHandle {
@@ -343,15 +355,15 @@ export async function loadModelFromData(
   (userModel as any)['_model'] = coreModel;
 
   // Create model matrix
-  // CubismModelMatrix constructor already calls setHeight(2.0) which sets the correct
-  // uniform scale (2 / canvasHeight). Do NOT call scale() after this — it's a SET
-  // operation that would overwrite the scale to kScale (destroying the fit).
+  // Cubism model origin is at center: (0,0) in model space = center of canvas.
+  // setHeight(2.0) sets scale = 2/canvasHeight. With no translation, center maps to NDC(0,0).
+  // DO NOT call setCenterPosition — it assumes canvas origin is top-left and adds tx=-1,ty=-1,
+  // which pushes the model center to NDC(-1,-1) = bottom-left corner.
   const modelMatrix = new CubismModelMatrix(
     coreModel.getCanvasWidth(),
     coreModel.getCanvasHeight(),
   );
   if (kScale !== 1) modelMatrix.scaleRelative(kScale, kScale);
-  modelMatrix.setCenterPosition(0, 0);
   (userModel as any)['_modelMatrix'] = modelMatrix;
 
   // ── Load expressions ──────────────────────────────────────────────────
