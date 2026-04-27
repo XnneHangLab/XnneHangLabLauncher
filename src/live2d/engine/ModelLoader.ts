@@ -240,8 +240,15 @@ export class ModelInstance {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     const ratio = w / h;
+    const modelAspect = m.getCanvasWidth() / m.getCanvasHeight();
     const projection = new CubismMatrix44();
-    projection.scale(1.0 / ratio, 1.0);
+    if (modelAspect <= ratio) {
+      // model narrower than canvas: fit by height, pillarbox sides
+      projection.scale(1.0 / ratio, 1.0);
+    } else {
+      // model wider than canvas: fit by width, letterbox top/bottom
+      projection.scale(1.0 / modelAspect, ratio / modelAspect);
+    }
 
     const modelMtx = this._userModel.getModelMatrix() as CubismModelMatrix;
     projection.multiplyByMatrix(modelMtx);

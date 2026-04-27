@@ -70,18 +70,18 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
         <button type="button" className="live2d-btn" onClick={handleSavePreset}>保存预设</button>
       </div>
 
-      {/* ── Main area: canvas + parameter panel ────────────────── */}
+      {/* ── Main area: canvas | right column (params + timeline) ── */}
       <div className="live2d-main">
         <div className="live2d-canvas-wrap">
           {!modelPath && <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>}
           {modelError && <div className="live2d-error">{modelError}</div>}
           <canvas ref={canvasRef} className="live2d-canvas" />
         </div>
-        {modelLoaded && <ParameterPanel />}
+        <div className="live2d-right-col">
+          <ParameterPanel />
+          <Timeline />
+        </div>
       </div>
-
-      {/* ── Timeline + motion list ─────────────────────────────── */}
-      {modelLoaded && <Timeline />}
     </div>
   );
 }
