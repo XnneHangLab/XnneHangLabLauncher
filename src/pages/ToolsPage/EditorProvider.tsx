@@ -22,6 +22,22 @@ export interface MotionEntry {
   file: string;
 }
 
+export interface ParamRange {
+  min: number;
+  max: number;
+  default: number;
+}
+
+export interface TimelineClip {
+  uid: string;
+  group: string;
+  index: number;
+  /** Display label (alias if set, else "group#index") */
+  label: string;
+  /** Parameters in this motion that are absent from the loaded model */
+  missingParams: string[];
+}
+
 export interface EditorContextValue {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   modelInstance: ModelInstance | null;
@@ -34,12 +50,11 @@ export interface EditorContextValue {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
-  /** Parameter values snapshot (updated each frame) */
   paramValues: Record<string, number>;
-  /** Currently playing motion, if tracked */
+  paramRanges: Record<string, ParamRange>;
   currentMotion: { group: string; index: number } | null;
-  /** Motion rename map: "group_index" → display name */
   motionAliases: Record<string, string>;
+  timelineClips: TimelineClip[];
 
   loadModelByPath: (path: string) => Promise<void>;
   openImportDialog: () => Promise<void>;
@@ -48,6 +63,9 @@ export interface EditorContextValue {
   togglePlay: () => void;
   scrub: (time: number) => void;
   renameMotion: (key: string, name: string) => void;
+  addClipToTimeline: (group: string, index: number) => void;
+  removeClipFromTimeline: (uid: string) => void;
+  clearTimeline: () => void;
 }
 
 const EditorCtx = createContext<EditorContextValue | null>(null);
@@ -67,6 +85,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const rafRef = useRef(0);
   const lastTimeRef = useRef(0);
   const cubismReadyRef = useRef(false);
+  const modelDataRef = useRef<Live2DModelData | null>(null);
 
   const [modelPath, setModelPath] = useState<string | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -76,10 +95,12 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [paramValues, setParamValues] = useState<Record<string, number>>({});
+  const [paramRanges, setParamRanges] = useState<Record<string, ParamRange>>({});
   const [currentMotion, setCurrentMotion] = useState<{ group: string; index: number } | null>(null);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
+  const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
 
-  // ── Init Cubism on canvas mount ────────────────────────────────────────────
+  // ── Init Cubism on canvas mount ──────────────────────────────────────────
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,7 +109,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     cubismReadyRef.current = true;
   }, []);
 
-  // ── Animation loop ─────────────────────────────────────────────────────────
+  // ── Animation loop ───────────────────────────────────────────────────────
 
   useEffect(() => {
     const loop = (now: number) => {
@@ -99,27 +120,18 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       if (model) {
         const player = motionPlayerRef.current;
         player.tick(dt);
-
-        // Apply keyframe overlay
         overlayRef.current.apply(model, player.currentTime);
-
         model.update(dt);
-
         CubismInit.resize();
         model.draw();
-
-        // Sync UI state (throttled — only every ~3 frames)
         setCurrentTime(player.currentTime);
         setDuration(player.duration);
         setIsPlaying(player.isPlaying);
 
-        // Read parameter values
         const ids = model.parameterIds;
         if (ids.length > 0) {
           const vals: Record<string, number> = {};
-          for (let i = 0; i < ids.length; i++) {
-            vals[ids[i]] = model.getParameterValue(ids[i]);
-          }
+          for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValue(ids[i]);
           setParamValues(vals);
         }
       }
@@ -131,15 +143,36 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // ── Model loading ─────────────────────────────────────────────────────────
+  // ── Motion validation helper ─────────────────────────────────────────────
+
+  function validateMotion(file: string, paramIds: Set<string>, files: Record<string, string>): string[] {
+    const b64 = files[file];
+    if (!b64) return [];
+    try {
+      const json = JSON.parse(atob(b64));
+      const curves: Array<{ Target: string; Id: string }> = json?.Curves ?? [];
+      return curves
+        .filter(c => c.Target === 'Parameter' && !paramIds.has(c.Id))
+        .map(c => c.Id)
+        .filter((v, i, a) => a.indexOf(v) === i); // dedupe
+    } catch {
+      return [];
+    }
+  }
+
+  // ── Model loading ────────────────────────────────────────────────────────
 
   const loadModelByPath = useCallback(async (path: string) => {
     setModelLoaded(false);
     setModelError(null);
     setModelPath(path);
+    setParamRanges({});
+    setTimelineClips([]);
 
     try {
       const data: Live2DModelData = await readLive2DModelData(path);
+      modelDataRef.current = data;
+
       const { instance } = await loadModelFromData(
         data.modelJson as Record<string, unknown>,
         data.files,
@@ -151,12 +184,21 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setMotionEntries(instance.motionEntries);
       setModelLoaded(true);
 
+      // Collect parameter ranges from model
+      const ranges: Record<string, ParamRange> = {};
+      for (const id of instance.parameterIds) {
+        ranges[id] = {
+          min: instance.getParameterMin(id),
+          max: instance.getParameterMax(id),
+          default: instance.getParameterDefault(id),
+        };
+      }
+      setParamRanges(ranges);
+
       // Auto-start Idle motion
       const idle = instance.motionEntries.find((e) => e.group.toLowerCase().includes('idle'));
       if (idle) {
         instance.startMotion(idle.group, idle.index);
-
-        // Try loading motion into player for scrubbing
         const fr = (data.modelJson as Record<string, unknown>).FileReferences as Record<string, unknown>;
         const motions = fr.Motions as Record<string, Array<Record<string, unknown>>>;
         const groupArr = motions?.[idle.group];
@@ -184,6 +226,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
 
   const playMotion = useCallback((group: string, index: number) => {
     modelRef.current?.startMotion(group, index);
+    setCurrentMotion({ group, index });
   }, []);
 
   const setParameter = useCallback((id: string, value: number) => {
@@ -204,7 +247,39 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     setMotionAliases((prev) => ({ ...prev, [key]: name }));
   }, []);
 
-  // ── Context value ─────────────────────────────────────────────────────────
+  // ── Timeline clip management ─────────────────────────────────────────────
+
+  const addClipToTimeline = useCallback((group: string, index: number) => {
+    const instance = modelRef.current;
+    const data = modelDataRef.current;
+    if (!instance) return;
+
+    const entry = instance.motionEntries.find(e => e.group === group && e.index === index);
+    if (!entry) return;
+
+    const paramSet = new Set(instance.parameterIds);
+    const missingParams = data
+      ? validateMotion(entry.file, paramSet, data.files)
+      : [];
+
+    setMotionAliases(aliases => {
+      const label = aliases[`${group}_${index}`] ?? `${group}#${index}`;
+      const uid = `${group}_${index}_${Date.now()}`;
+      setTimelineClips(prev => [
+        ...prev,
+        { uid, group, index, label, missingParams },
+      ]);
+      return aliases;
+    });
+  }, []);
+
+  const removeClipFromTimeline = useCallback((uid: string) => {
+    setTimelineClips(prev => prev.filter(c => c.uid !== uid));
+  }, []);
+
+  const clearTimeline = useCallback(() => setTimelineClips([]), []);
+
+  // ── Context value ────────────────────────────────────────────────────────
 
   const ctx: EditorContextValue = {
     canvasRef,
@@ -219,8 +294,10 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     currentTime,
     duration,
     paramValues,
+    paramRanges,
     currentMotion,
     motionAliases,
+    timelineClips,
     loadModelByPath,
     openImportDialog,
     playMotion,
@@ -228,6 +305,9 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     togglePlay,
     scrub,
     renameMotion,
+    addClipToTimeline,
+    removeClipFromTimeline,
+    clearTimeline,
   };
 
   return (

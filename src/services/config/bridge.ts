@@ -4,6 +4,8 @@ import type { LabConfig } from './labConfig';
 export interface Live2DPreset {
   name: string;
   modelPath: string;
+  /** Ordered "group_index" keys for timeline clips. */
+  clipKeys?: string[];
 }
 
 export interface Live2DModelData {

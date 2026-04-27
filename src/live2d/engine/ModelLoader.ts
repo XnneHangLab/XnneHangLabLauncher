@@ -338,11 +338,14 @@ export async function loadModelFromData(
   (userModel as any)['_model'] = coreModel;
 
   // Create model matrix
+  // CubismModelMatrix constructor already calls setHeight(2.0) which sets the correct
+  // uniform scale (2 / canvasHeight). Do NOT call scale() after this — it's a SET
+  // operation that would overwrite the scale to kScale (destroying the fit).
   const modelMatrix = new CubismModelMatrix(
     coreModel.getCanvasWidth(),
     coreModel.getCanvasHeight(),
   );
-  modelMatrix.scale(kScale, kScale);
+  if (kScale !== 1) modelMatrix.scaleRelative(kScale, kScale);
   modelMatrix.setCenterPosition(0, 0);
   (userModel as any)['_modelMatrix'] = modelMatrix;
 
