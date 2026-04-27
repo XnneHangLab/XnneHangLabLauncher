@@ -239,26 +239,14 @@ export class ModelInstance {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    // ── Build a proper MVP matrix ──────────────────────────────────────
-    // View: map logical model coords [-1,1] to screen, preserving aspect ratio
     const ratio = w / h;
-    const viewMtx = new CubismMatrix44();
-    // identity + scale to cover the model in its logical space
-    // The model lives in [-w_model/2, +w_model/2] × [-h_model/2, +h_model/2]
-    // We use ratio to keep the model aspect-preserved
-    viewMtx.scale(1, ratio);
-    viewMtx.translate(0, 0);
+    const projection = new CubismMatrix44();
+    projection.scale(1.0 / ratio, 1.0);
 
-    // Model matrix (scale + offset)
     const modelMtx = this._userModel.getModelMatrix() as CubismModelMatrix;
-    const mvp = new CubismMatrix44();
-    if (modelMtx) {
-      mvp.setMatrix(modelMtx.getArray());
-    }
-    mvp.multiplyByMatrix(viewMtx);
+    projection.multiplyByMatrix(modelMtx);
 
-    // Flip Y so the model renders correctly in WebGL
-    renderer.setMvpMatrix(mvp);
+    renderer.setMvpMatrix(projection);
     renderer.preDraw();
     renderer.setRenderState(null, [0, 0, w, h]);
     renderer.drawModel();
@@ -348,6 +336,7 @@ export async function loadModelFromData(
     coreModel.getCanvasHeight(),
   );
   modelMatrix.scale(kScale, kScale);
+  modelMatrix.setCenterPosition(0, 0);
   (userModel as any)['_modelMatrix'] = modelMatrix;
 
   // ── Load expressions ──────────────────────────────────────────────────
