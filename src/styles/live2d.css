@@ -72,7 +72,7 @@
 /* ── [3,1] main grid ── */
 .live2d-main {
   display: grid;
-  grid-template-columns: 240px 1fr 280px;
+  grid-template-columns: 240px 1fr 360px;
   gap: 10px;
   flex: 1;
   min-height: 0;
@@ -253,7 +253,7 @@
 }
 
 .live2d-param-panel__title {
-  padding: 10px 12px 8px;
+  padding: 8px 10px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.07em;
@@ -261,7 +261,22 @@
   text-transform: uppercase;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.live2d-param-reset-all {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.live2d-param-reset-all:hover { background: var(--nav-hover-bg); color: var(--accent); }
 
 .live2d-param-list {
   flex: 1;
@@ -277,7 +292,7 @@
 }
 
 .live2d-param-label {
-  width: 64px;
+  width: 120px;
   font-size: 10px;
   color: var(--muted);
   overflow: hidden;
@@ -295,14 +310,36 @@
   cursor: pointer;
 }
 
-.live2d-param-value {
-  width: 40px;
+.live2d-param-number {
+  width: 54px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
   font-size: 10px;
-  color: var(--text);
   font-variant-numeric: tabular-nums;
   text-align: right;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
+
+.live2d-param-reset {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.live2d-param-reset:hover { background: var(--nav-hover-bg); color: var(--accent); }
 
 /* ── timeline row ── */
 .live2d-timeline-row {

@@ -128,12 +128,12 @@ export class ModelInstance {
 
   private refreshParameterIds(): void {
     const core = this._core;
-    if (!core) return;
-    const count: number = core.parameters?.count ?? 0;
-    const ids: string[] = core.parameters?.ids ?? [];
+    const ids: string[] = core?.parameters?.ids ?? [];
+    const count = this.model.getParameterCount();
     this.parameterIds = [];
     for (let i = 0; i < count; i++) {
-      this.parameterIds.push(ids[i] ?? String(i));
+      const id = ids[i] ?? this.model.getParameterId(i).getString().s;
+      this.parameterIds.push(id);
     }
   }
 
@@ -159,10 +159,12 @@ export class ModelInstance {
         const min = (core.parameters.minimumValues as Float32Array)[idx];
         const max = (core.parameters.maximumValues as Float32Array)[idx];
         (core.parameters.values as Float32Array)[idx] = Math.min(Math.max(value, min), max);
+        this.model.saveParameters();
         return;
       }
     }
     this.model.setParameterValueById(this.resolveId(id), value);
+    this.model.saveParameters();
   }
 
   getParameterMin(id: string): number {

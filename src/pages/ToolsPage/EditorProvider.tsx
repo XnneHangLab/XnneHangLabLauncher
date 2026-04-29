@@ -168,6 +168,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     setModelError(null);
     setModelPath(path);
     setParamRanges({});
+    setParamValues({});
     setTimelineClips([]);
 
     try {
@@ -183,14 +184,17 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       modelRef.current = instance;
       motionPlayerRef.current.unload();
       setMotionEntries(instance.motionEntries);
-      setModelLoaded(true);
 
-      // Collect parameter ranges from model by index (avoids ID-handle lookup issues)
+      const values: Record<string, number> = {};
       const ranges: Record<string, ParamRange> = {};
       for (let i = 0; i < instance.parameterIds.length; i++) {
-        ranges[instance.parameterIds[i]] = instance.getParameterRangeAt(i);
+        const id = instance.parameterIds[i];
+        values[id] = instance.getParameterValueAt(i);
+        ranges[id] = instance.getParameterRangeAt(i);
       }
+      setParamValues(values);
       setParamRanges(ranges);
+      setModelLoaded(true);
 
       // Auto-start Idle motion
       const idle = instance.motionEntries.find((e) => e.group.toLowerCase().includes('idle'));
@@ -255,8 +259,13 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setParameter = useCallback((id: string, value: number) => {
-    modelRef.current?.setParameterValue(id, value);
-  }, []);
+    const range = paramRanges[id];
+    const nextValue = range
+      ? Math.min(Math.max(value, range.min), range.max)
+      : value;
+    modelRef.current?.setParameterValue(id, nextValue);
+    setParamValues(prev => ({ ...prev, [id]: nextValue }));
+  }, [paramRanges]);
 
   const togglePlay = useCallback(() => {
     const p = motionPlayerRef.current;
