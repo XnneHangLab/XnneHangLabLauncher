@@ -643,6 +643,10 @@ export function AppShell() {
     setLogs([]);
   }
 
+  function handleLive2DDebugLog(text: string, kind: ConsoleLogEntry['kind'] = 'system') {
+    setLogs((current) => [...current, createConsoleLog(kind, text)]);
+  }
+
   const runtimeMode =
     environmentProbe?.mode ?? inspection?.environment.mode ?? 'checking';
   const latestMessage =
@@ -670,7 +674,7 @@ export function AppShell() {
               className={`page-layer page-layer--tools${activePage === 'tools' ? ' page-layer--active' : ''}`}
               aria-hidden={activePage !== 'tools'}
             >
-              <ToolsPage />
+              <ToolsPage onDebugLog={handleLive2DDebugLog} />
             </div>
             {activePage !== 'tools' && (
               <div className="page-layer page-layer--active">

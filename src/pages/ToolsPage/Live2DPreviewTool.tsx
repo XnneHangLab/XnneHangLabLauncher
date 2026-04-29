@@ -1,3 +1,4 @@
+import type { ConsoleLogEntry } from '../../services/launcher/launcher';
 import { EditorProvider, useEditor } from './EditorProvider';
 import { ResourcePanel } from './ResourcePanel';
 import { ParameterPanel } from './ParameterPanel';
@@ -5,11 +6,12 @@ import { Timeline } from './Timeline';
 
 interface Live2DPreviewToolProps {
   onBack: () => void;
+  onDebugLog?: (text: string, kind?: ConsoleLogEntry['kind']) => void;
 }
 
-export function Live2DPreviewTool({ onBack }: Live2DPreviewToolProps) {
+export function Live2DPreviewTool({ onBack, onDebugLog }: Live2DPreviewToolProps) {
   return (
-    <EditorProvider>
+    <EditorProvider onDebugLog={onDebugLog}>
       <Live2DToolInner onBack={onBack} />
     </EditorProvider>
   );

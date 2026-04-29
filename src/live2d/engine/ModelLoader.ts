@@ -334,10 +334,8 @@ export class ModelInstance {
     projection.multiplyByMatrix(modelMtx);
 
     renderer.setMvpMatrix(projection);
-    renderer.preDraw();
-    renderer.setRenderState(null, [0, 0, w, h]);
+    renderer.setRenderState(gl.getParameter(gl.FRAMEBUFFER_BINDING), [0, 0, w, h]);
     renderer.drawModel();
-    renderer.postDraw();
   }
 
   // ── Motion control ─────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, createContext, useContext } from 'react';
+import type { ConsoleLogEntry } from '../../services/launcher/launcher';
 import { CubismInit } from '../../live2d/engine/CubismFrameworkInit';
 import { loadModelFromData, base64ToArrayBuffer } from '../../live2d/engine/ModelLoader';
 import type { ModelInstance } from '../../live2d/engine/ModelLoader';
@@ -206,7 +207,13 @@ function collectParamMetas(
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export function EditorProvider({ children }: { children: React.ReactNode }) {
+export function EditorProvider({
+  children,
+  onDebugLog,
+}: {
+  children: React.ReactNode;
+  onDebugLog?: (text: string, kind?: ConsoleLogEntry['kind']) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modelRef = useRef<ModelInstance | null>(null);
   const motionPlayerRef = useRef(new MotionPlayer());
@@ -234,11 +241,16 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [canvasReady, setCanvasReady] = useState(false);
   const debugParamRef = useRef<string | null>(null);
   const debugFrameRef = useRef(0);
+  const debugLogRef = useRef(onDebugLog);
   const [currentMotion, setCurrentMotion] = useState<{ group: string; index: number } | null>(null);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
 
   // ── Init Cubism on canvas mount ──────────────────────────────────────────
+
+  useEffect(() => {
+    debugLogRef.current = onDebugLog;
+  }, [onDebugLog]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -264,7 +276,12 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         model.update(dt, manualOverridesRef.current);
         if (debugParamRef.current && debugFrameRef.current < 60) {
           debugFrameRef.current++;
-          console.log('[Live2D:param-preview]', model.getDebugSnapshot(debugParamRef.current));
+          const snapshot = model.getDebugSnapshot(debugParamRef.current);
+          const message = `[Live2D:param-preview] frame=${debugFrameRef.current} ${JSON.stringify(snapshot)}`;
+          console.log(message);
+          if (debugFrameRef.current === 1 || debugFrameRef.current % 10 === 0) {
+            debugLogRef.current?.(message, 'system');
+          }
         }
         CubismInit.resize();
         model.draw();
@@ -438,6 +455,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     debugParamRef.current = id;
     debugFrameRef.current = 0;
     modelRef.current?.setParameterValue(id, nextValue);
+    const rangeText = range ? ` range=[${range.min},${range.max}] default=${range.default}` : '';
+    debugLogRef.current?.(
+      `[Live2D:param-set] id=${id} value=${nextValue}${rangeText} overrides=${Object.keys(manualOverridesRef.current).length}`,
+      'system',
+    );
     setParamValues(prev => ({ ...prev, [id]: nextValue }));
   }, [modelPath, motionAliases, paramRanges, timelineClips]);
 
