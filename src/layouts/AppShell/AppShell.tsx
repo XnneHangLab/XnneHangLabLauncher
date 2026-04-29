@@ -3,6 +3,7 @@ import { Sidebar } from '../../components/navigation/Sidebar/Sidebar';
 import { Topbar } from '../../components/window/Topbar/Topbar';
 import { navItems, type PageId } from '../../data/nav';
 import { renderPage } from '../../app/routes';
+import { ToolsPage } from '../../pages/ToolsPage/ToolsPage';
 import {
   createConsoleLog,
   formatConsoleExport,
@@ -664,52 +665,62 @@ export function AppShell() {
 
         <main className="content-shell">
           <Topbar />
-          <section className="page-shell">
-            {renderPage(activePage, {
-              inspection,
-              tasks,
-              fileProgress,
-              folders,
-              logs,
-              autoScroll,
-              wrapLines,
-              latestMessage,
-              onOpenModels: () => setActivePage('models'),
-              onDownloadGenieBase: handleDownloadGenieBase,
-              onDownloadGsvLite: handleDownloadGsvLite,
-              onDownloadQwenTts06b: handleDownloadQwenTts06b,
-              onDownloadQwenTts17b: handleDownloadQwenTts17b,
-              onDownloadLumingGenieTts: handleDownloadLumingGenieTts,
-              onDownloadGsvBaoqiao: handleDownloadGsvBaoqiao,
-              onDownloadLocalEmbedding: handleDownloadLocalEmbedding,
-              onDownloadLlmTranslate: handleDownloadLlmTranslate,
-              onDownloadSherpaParaformer: handleDownloadSherpaParaformer,
-              onDownloadSileroVad: handleDownloadSileroVad,
-              modelStatuses,
-              onOpenPath: handleOpenManagedPath,
-              onLaunchWebui: handleLaunchWebui,
-              webuiRunning,
-              onLaunchFrontend: handleLaunchFrontend,
-              frontendRunning,
-              runtimeDriver,
-              runtimeMode,
-              scriptsReady,
-              workspaceLocked,
-              workspaceRoot:
-                environmentProbe?.workspaceRoot ?? inspection?.managedPaths[0]?.path ?? '',
-              environmentProbe,
-              onChooseWorkspaceRoot: handleChooseWorkspaceRoot,
-              onUseRepoWorkspaceRoot: handleUseRepoWorkspaceRoot,
-              pythonExePath,
-              onChoosePythonExe: handleChoosePythonExe,
-              onSave: handleSaveSettings,
-              labConfig,
-              onSaveLabConfig: handleSaveLabConfig,
-              onSetAutoScroll: setAutoScroll,
-              onSetWrapLines: setWrapLines,
-              onClearLogs: handleClearLogs,
-              onExportLogs: handleExportLogs,
-            })}
+          <section className="page-shell page-shell--stacked">
+            <div
+              className={`page-layer page-layer--tools${activePage === 'tools' ? ' page-layer--active' : ''}`}
+              aria-hidden={activePage !== 'tools'}
+            >
+              <ToolsPage />
+            </div>
+            {activePage !== 'tools' && (
+              <div className="page-layer page-layer--active">
+                {renderPage(activePage, {
+                  inspection,
+                  tasks,
+                  fileProgress,
+                  folders,
+                  logs,
+                  autoScroll,
+                  wrapLines,
+                  latestMessage,
+                  onOpenModels: () => setActivePage('models'),
+                  onDownloadGenieBase: handleDownloadGenieBase,
+                  onDownloadGsvLite: handleDownloadGsvLite,
+                  onDownloadQwenTts06b: handleDownloadQwenTts06b,
+                  onDownloadQwenTts17b: handleDownloadQwenTts17b,
+                  onDownloadLumingGenieTts: handleDownloadLumingGenieTts,
+                  onDownloadGsvBaoqiao: handleDownloadGsvBaoqiao,
+                  onDownloadLocalEmbedding: handleDownloadLocalEmbedding,
+                  onDownloadLlmTranslate: handleDownloadLlmTranslate,
+                  onDownloadSherpaParaformer: handleDownloadSherpaParaformer,
+                  onDownloadSileroVad: handleDownloadSileroVad,
+                  modelStatuses,
+                  onOpenPath: handleOpenManagedPath,
+                  onLaunchWebui: handleLaunchWebui,
+                  webuiRunning,
+                  onLaunchFrontend: handleLaunchFrontend,
+                  frontendRunning,
+                  runtimeDriver,
+                  runtimeMode,
+                  scriptsReady,
+                  workspaceLocked,
+                  workspaceRoot:
+                    environmentProbe?.workspaceRoot ?? inspection?.managedPaths[0]?.path ?? '',
+                  environmentProbe,
+                  onChooseWorkspaceRoot: handleChooseWorkspaceRoot,
+                  onUseRepoWorkspaceRoot: handleUseRepoWorkspaceRoot,
+                  pythonExePath,
+                  onChoosePythonExe: handleChoosePythonExe,
+                  onSave: handleSaveSettings,
+                  labConfig,
+                  onSaveLabConfig: handleSaveLabConfig,
+                  onSetAutoScroll: setAutoScroll,
+                  onSetWrapLines: setWrapLines,
+                  onClearLogs: handleClearLogs,
+                  onExportLogs: handleExportLogs,
+                })}
+              </div>
+            )}
           </section>
         </main>
       </div>

@@ -28,6 +28,13 @@ export interface ParamRange {
   default: number;
 }
 
+export interface ParamMeta {
+  id: string;
+  label: string;
+  group: 'standard' | 'expression' | 'motion' | 'all';
+  sources: string[];
+}
+
 export interface TimelineClip {
   uid: string;
   group: string;
@@ -37,6 +44,23 @@ export interface TimelineClip {
   /** Parameters in this motion that are absent from the loaded model */
   missingParams: string[];
 }
+
+interface ImportedMotionState {
+  path: string;
+  fileName: string;
+  name: string;
+  base64: string;
+}
+
+interface Live2DSessionState {
+  modelPath: string | null;
+  manualOverrides: Record<string, number>;
+  motionAliases: Record<string, string>;
+  timelineClipKeys: string[];
+  importedMotions?: ImportedMotionState[];
+}
+
+const live2dSessionKey = 'live2d.previewSession';
 
 export interface EditorContextValue {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -52,6 +76,7 @@ export interface EditorContextValue {
   duration: number;
   paramValues: Record<string, number>;
   paramRanges: Record<string, ParamRange>;
+  paramMetas: ParamMeta[];
   currentMotion: { group: string; index: number } | null;
   motionAliases: Record<string, string>;
   timelineClips: TimelineClip[];
@@ -76,6 +101,109 @@ export function useEditor(): EditorContextValue {
   return ctx;
 }
 
+function decodeBase64Utf8(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function parseBase64Json(base64: string): unknown {
+  return JSON.parse(decodeBase64Utf8(base64));
+}
+
+function readLive2DSession(): Live2DSessionState | null {
+  try {
+    return JSON.parse(window.localStorage.getItem(live2dSessionKey) ?? 'null');
+  } catch {
+    return null;
+  }
+}
+
+function writeLive2DSession(state: Live2DSessionState): void {
+  window.localStorage.setItem(live2dSessionKey, JSON.stringify(state));
+}
+
+function clipKey(group: string, index: number): string {
+  return `${group}_${index}`;
+}
+
+function collectParamMetas(
+  ids: string[],
+  modelJson: Record<string, unknown>,
+  files: Record<string, string>,
+): ParamMeta[] {
+  const metas = new Map<string, ParamMeta>();
+
+  const ensure = (id: string, group: ParamMeta['group'], source: string, label?: string) => {
+    if (!ids.includes(id)) return;
+    const cleanLabel = label && !/[锟�]/.test(label) ? label : undefined;
+    const current = metas.get(id);
+    if (current) {
+      if (current.group === 'all') current.group = group;
+      if (group === 'expression' && current.group !== 'standard') current.group = group;
+      if (cleanLabel && current.label === id) current.label = cleanLabel;
+      if (!current.sources.includes(source)) current.sources.push(source);
+      return;
+    }
+    metas.set(id, { id, label: cleanLabel ?? id, group, sources: [source] });
+  };
+
+  const fr = modelJson.FileReferences as Record<string, unknown> | undefined;
+  const cdiFile = fr?.DisplayInfo as string | undefined;
+  if (cdiFile && files[cdiFile]) {
+    try {
+      const cdi = parseBase64Json(files[cdiFile]);
+      const params: Array<{ Id: string; Name?: string }> = cdi?.Parameters ?? [];
+      for (const param of params) ensure(param.Id, 'all', 'CDI', param.Name);
+    } catch {
+      // ignore invalid optional display info
+    }
+  }
+
+  const groups: Array<{ Name?: string; Ids?: string[] }> = Array.isArray(modelJson.Groups) ? modelJson.Groups as Array<{ Name?: string; Ids?: string[] }> : [];
+  for (const group of groups) {
+    for (const id of group.Ids ?? []) ensure(id, 'standard', group.Name ?? 'Group');
+  }
+
+  for (const id of ids) {
+    if (/^(Param)?(Angle|Body|Eye|Mouth)|body|eye|mouth/i.test(id)) ensure(id, 'standard', '常用');
+  }
+
+  const expressions = Array.isArray(fr?.Expressions) ? fr.Expressions as Array<{ Name?: string; File?: string }> : [];
+  for (const expression of expressions) {
+    if (!expression.File || !files[expression.File]) continue;
+    try {
+      const exp = parseBase64Json(files[expression.File]);
+      const params: Array<{ Id: string }> = exp?.Parameters ?? [];
+      for (const param of params) ensure(param.Id, 'expression', expression.Name ?? expression.File);
+    } catch {
+      // ignore invalid optional expression
+    }
+  }
+
+  const motions = fr?.Motions as Record<string, Array<{ File?: string }>> | undefined;
+  for (const [group, entries] of Object.entries(motions ?? {})) {
+    for (const entry of entries) {
+      if (!entry.File || !files[entry.File]) continue;
+      try {
+        const motion = parseBase64Json(files[entry.File]);
+        const curves: Array<{ Target?: string; Id?: string }> = motion?.Curves ?? [];
+        for (const curve of curves) {
+          if (curve.Target === 'Parameter' && curve.Id) ensure(curve.Id, 'motion', group);
+        }
+      } catch {
+        // ignore invalid optional motion
+      }
+    }
+  }
+
+  for (const id of ids) ensure(id, 'all', '全部');
+
+  const order: Record<ParamMeta['group'], number> = { standard: 0, expression: 1, motion: 2, all: 3 };
+  return [...metas.values()].sort((a, b) => order[a.group] - order[b.group] || a.label.localeCompare(b.label));
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function EditorProvider({ children }: { children: React.ReactNode }) {
@@ -97,6 +225,15 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [paramValues, setParamValues] = useState<Record<string, number>>({});
   const [paramRanges, setParamRanges] = useState<Record<string, ParamRange>>({});
+  const [paramMetas, setParamMetas] = useState<ParamMeta[]>([]);
+  const manualOverridesRef = useRef<Record<string, number>>({});
+  const importedMotionsRef = useRef<ImportedMotionState[]>([]);
+  const pendingSessionClipKeysRef = useRef<string[] | null>(null);
+  const restoredSessionRef = useRef(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(false);
+  const debugParamRef = useRef<string | null>(null);
+  const debugFrameRef = useRef(0);
   const [currentMotion, setCurrentMotion] = useState<{ group: string; index: number } | null>(null);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
@@ -107,7 +244,9 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const canvas = canvasRef.current;
     if (!canvas || cubismReadyRef.current) return;
     CubismInit.initialize(canvas);
+    CubismInit.resize();
     cubismReadyRef.current = true;
+    setCanvasReady(true);
   }, []);
 
   // ── Animation loop ───────────────────────────────────────────────────────
@@ -122,7 +261,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         const player = motionPlayerRef.current;
         player.tick(dt);
         overlayRef.current.apply(model, player.currentTime);
-        model.update(dt);
+        model.update(dt, manualOverridesRef.current);
+        if (debugParamRef.current && debugFrameRef.current < 60) {
+          debugFrameRef.current++;
+          console.log('[Live2D:param-preview]', model.getDebugSnapshot(debugParamRef.current));
+        }
         CubismInit.resize();
         model.draw();
         setCurrentTime(player.currentTime);
@@ -133,6 +276,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         if (ids.length > 0) {
           const vals: Record<string, number> = {};
           for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValueAt(i);
+          for (const [id, value] of Object.entries(manualOverridesRef.current)) vals[id] = value;
           setParamValues(vals);
         }
       }
@@ -150,7 +294,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const b64 = files[file];
     if (!b64) return [];
     try {
-      const json = JSON.parse(atob(b64));
+      const json = parseBase64Json(b64);
       const curves: Array<{ Target: string; Id: string }> = json?.Curves ?? [];
       return curves
         .filter(c => c.Target === 'Parameter' && !paramIds.has(c.Id))
@@ -163,13 +307,16 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
 
   // ── Model loading ────────────────────────────────────────────────────────
 
-  const loadModelByPath = useCallback(async (path: string) => {
+  const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean }) => {
     setModelLoaded(false);
     setModelError(null);
     setModelPath(path);
     setParamRanges({});
     setParamValues({});
-    setTimelineClips([]);
+    setParamMetas([]);
+    if (!options?.keepManualOverrides) manualOverridesRef.current = {};
+    if (!options?.keepManualOverrides) importedMotionsRef.current = [];
+    if (!options?.keepTimeline) setTimelineClips([]);
 
     try {
       const data: Live2DModelData = await readLive2DModelData(path);
@@ -183,6 +330,14 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       if (modelRef.current) modelRef.current.release();
       modelRef.current = instance;
       motionPlayerRef.current.unload();
+      for (const imported of importedMotionsRef.current) {
+        const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
+        const key = `imported_${nextIndex}`;
+        const buf = base64ToArrayBuffer(imported.base64);
+        if (!instance.addLoadedMotion(key, buf)) continue;
+        if (modelDataRef.current) modelDataRef.current.files[imported.fileName] = imported.base64;
+        instance.motionEntries.push({ group: 'imported', index: nextIndex, name: imported.name, file: imported.fileName });
+      }
       setMotionEntries(instance.motionEntries);
 
       const values: Record<string, number> = {};
@@ -192,8 +347,12 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         values[id] = instance.getParameterValueAt(i);
         ranges[id] = instance.getParameterRangeAt(i);
       }
+      instance.applyParameterValues(manualOverridesRef.current);
+      for (const [id, value] of Object.entries(manualOverridesRef.current)) values[id] = value;
       setParamValues(values);
       setParamRanges(ranges);
+      setParamMetas(collectParamMetas(instance.parameterIds, data.modelJson as Record<string, unknown>, data.files));
+      CubismInit.resize();
       setModelLoaded(true);
 
       // Auto-start Idle motion
@@ -207,8 +366,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
           const file = groupArr[idle.index].File as string;
           const b64 = data.files[file];
           if (b64) {
-            const text = atob(b64);
-            const motionJson = JSON.parse(text);
+            const motionJson = parseBase64Json(b64);
             const parsed = parseMotion(motionJson);
             motionPlayerRef.current.load(parsed, instance, true);
             motionPlayerRef.current.play();
@@ -244,6 +402,10 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       }
       if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
       const motionName = fileName.replace(/\.motion3\.json$/i, '');
+      importedMotionsRef.current = [
+        ...importedMotionsRef.current,
+        { path, fileName, name: motionName, base64: b64 },
+      ];
       const entry = { group, index: nextIndex, name: motionName, file: fileName };
       instance.motionEntries.push(entry);
       setMotionAliases(prev => ({ ...prev, [key]: motionName }));
@@ -263,9 +425,21 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const nextValue = range
       ? Math.min(Math.max(value, range.min), range.max)
       : value;
+    const defaultValue = range?.default ?? 0;
+    if (Math.abs(nextValue - defaultValue) <= 0.001) delete manualOverridesRef.current[id];
+    else manualOverridesRef.current[id] = nextValue;
+    writeLive2DSession({
+      modelPath,
+      manualOverrides: manualOverridesRef.current,
+      motionAliases,
+      timelineClipKeys: timelineClips.map((clip) => clipKey(clip.group, clip.index)),
+      importedMotions: importedMotionsRef.current,
+    });
+    debugParamRef.current = id;
+    debugFrameRef.current = 0;
     modelRef.current?.setParameterValue(id, nextValue);
     setParamValues(prev => ({ ...prev, [id]: nextValue }));
-  }, [paramRanges]);
+  }, [modelPath, motionAliases, paramRanges, timelineClips]);
 
   const togglePlay = useCallback(() => {
     const p = motionPlayerRef.current;
@@ -313,6 +487,49 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
 
   const clearTimeline = useCallback(() => setTimelineClips([]), []);
 
+  useEffect(() => {
+    if (!canvasReady || restoredSessionRef.current) return;
+    restoredSessionRef.current = true;
+    const session = readLive2DSession();
+    if (!session?.modelPath) {
+      setSessionReady(true);
+      return;
+    }
+
+    manualOverridesRef.current = session.manualOverrides ?? {};
+    importedMotionsRef.current = session.importedMotions ?? [];
+    setMotionAliases(session.motionAliases ?? {});
+    pendingSessionClipKeysRef.current = session.timelineClipKeys ?? [];
+    loadModelByPath(session.modelPath, { keepManualOverrides: true })
+      .catch(console.error)
+      .finally(() => setSessionReady(true));
+  }, [canvasReady, loadModelByPath]);
+
+  useEffect(() => {
+    if (!sessionReady || pendingSessionClipKeysRef.current) return;
+    const nextSession = {
+      modelPath,
+      manualOverrides: manualOverridesRef.current,
+      motionAliases,
+      timelineClipKeys: timelineClips.map((clip) => clipKey(clip.group, clip.index)),
+      importedMotions: importedMotionsRef.current,
+    };
+    writeLive2DSession(nextSession);
+  }, [modelPath, motionAliases, sessionReady, timelineClips]);
+
+  useEffect(() => {
+    if (!modelLoaded || !pendingSessionClipKeysRef.current) return;
+    const keys = pendingSessionClipKeysRef.current;
+    pendingSessionClipKeysRef.current = null;
+    for (const key of keys) {
+      const sep = key.lastIndexOf('_');
+      if (sep < 1) continue;
+      const group = key.slice(0, sep);
+      const index = Number(key.slice(sep + 1));
+      if (!Number.isNaN(index)) addClipToTimeline(group, index);
+    }
+  }, [modelLoaded, addClipToTimeline]);
+
   // ── Context value ────────────────────────────────────────────────────────
 
   const ctx: EditorContextValue = {
@@ -329,6 +546,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     duration,
     paramValues,
     paramRanges,
+    paramMetas,
     currentMotion,
     motionAliases,
     timelineClips,

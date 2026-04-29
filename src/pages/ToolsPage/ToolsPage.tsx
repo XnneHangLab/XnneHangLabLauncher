@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import '../../styles/tools.css';
 import '../../styles/live2d.css';
 import { Live2DPreviewTool } from './Live2DPreviewTool';
@@ -17,7 +17,14 @@ const TOOLS: ToolDef[] = [
 ];
 
 export function ToolsPage() {
-  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+  const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
+    return window.localStorage.getItem('live2d.activeTool') === 'live2d' ? 'live2d' : null;
+  });
+
+  useEffect(() => {
+    if (activeTool) window.localStorage.setItem('live2d.activeTool', activeTool);
+    else window.localStorage.removeItem('live2d.activeTool');
+  }, [activeTool]);
 
   if (activeTool === 'live2d') {
     return <Live2DPreviewTool onBack={() => setActiveTool(null)} />;

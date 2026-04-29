@@ -76,10 +76,8 @@ export class CubismModel {
    * モデルのパラメータの更新
    */
   public update(): void {
-    // Update model
-    this._model.update();
-
     this._model.drawables.resetDynamicFlags();
+    this._model.update();
   }
 
   /**

@@ -151,20 +151,52 @@ export class ModelInstance {
     return this.model.getParameterValueByIndex(index);
   }
 
-  setParameterValue(id: string, value: number): void {
+  private clampParameterValue(index: number, value: number): number {
     const core = this._core;
-    if (core) {
-      const idx = this.parameterIds.indexOf(id);
-      if (idx >= 0) {
-        const min = (core.parameters.minimumValues as Float32Array)[idx];
-        const max = (core.parameters.maximumValues as Float32Array)[idx];
-        (core.parameters.values as Float32Array)[idx] = Math.min(Math.max(value, min), max);
-        this.model.saveParameters();
-        return;
-      }
+    const min = core ? (core.parameters.minimumValues as Float32Array)[index] : this.model.getParameterMinimumValue(index);
+    const max = core ? (core.parameters.maximumValues as Float32Array)[index] : this.model.getParameterMaximumValue(index);
+    return Math.min(Math.max(value, min), max);
+  }
+
+  setParameterValue(id: string, value: number, save = true): void {
+    const idx = this.parameterIds.indexOf(id);
+    if (idx >= 0) {
+      const nextValue = this.clampParameterValue(idx, value);
+      const core = this._core;
+      if (core) (core.parameters.values as Float32Array)[idx] = nextValue;
+      this.model.setParameterValueByIndex(idx, nextValue);
+      if (save) this.model.saveParameters();
+      return;
     }
     this.model.setParameterValueById(this.resolveId(id), value);
-    this.model.saveParameters();
+    if (save) this.model.saveParameters();
+  }
+
+  applyParameterValues(values: Record<string, number>, save = false): void {
+    for (const [id, value] of Object.entries(values)) {
+      this.setParameterValue(id, value, false);
+    }
+    if (save) this.model.saveParameters();
+  }
+
+  getDebugSnapshot(paramId: string): { id: string; index: number; value: number; coreValue: number; changedDrawables: number; vertexSample: number } {
+    const index = this.parameterIds.indexOf(paramId);
+    const core = this._core;
+    let changedDrawables = 0;
+    let vertexSample = 0;
+    for (let i = 0; i < this.model.getDrawableCount(); i++) {
+      if (this.model.getDrawableDynamicFlagVertexPositionsDidChange(i)) changedDrawables++;
+      const vertices = this.model.getDrawableVertices(i);
+      for (let j = 0; j < Math.min(vertices.length, 12); j++) vertexSample += vertices[j];
+    }
+    return {
+      id: paramId,
+      index,
+      value: index >= 0 ? this.model.getParameterValueByIndex(index) : NaN,
+      coreValue: index >= 0 && core ? (core.parameters.values as Float32Array)[index] : NaN,
+      changedDrawables,
+      vertexSample: Number(vertexSample.toFixed(4)),
+    };
   }
 
   getParameterMin(id: string): number {
@@ -219,7 +251,7 @@ export class ModelInstance {
 
   // ── Update / Draw ──────────────────────────────────────────────────────────
 
-  update(deltaTimeSeconds: number): void {
+  update(deltaTimeSeconds: number, parameterOverrides?: Record<string, number>): void {
     const m = this.model;
     if (!m) return;
 
@@ -264,6 +296,8 @@ export class ModelInstance {
     if (pose) {
       pose.updateParameters(m, deltaTimeSeconds);
     }
+
+    if (parameterOverrides) this.applyParameterValues(parameterOverrides);
 
     m.update();
   }
