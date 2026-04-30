@@ -1,11 +1,50 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { LabConfig } from './labConfig';
 
+export type Live2DExpressionBlend = 'Add' | 'Multiply' | 'Overwrite';
+export type Live2DExpressionRole = 'expression' | 'appearance' | 'system' | 'watermark' | 'test' | 'unknown';
+export type Live2DExpressionApplyMode = 'transient' | 'persistent' | 'base';
+
+export interface Live2DExpressionParamOp {
+  id: string;
+  value: number;
+  blend: Live2DExpressionBlend;
+}
+
+export interface Live2DExpressionPreset {
+  name: string;
+  label: string;
+  file: string;
+  role: Live2DExpressionRole;
+  applyMode: Live2DExpressionApplyMode;
+  isDefaultStartup: boolean;
+  isWatermarkControl: boolean;
+  description?: string;
+  parameters?: Live2DExpressionParamOp[];
+}
+
 export interface Live2DPreset {
   name: string;
   modelPath: string;
   /** Ordered "group_index" keys for timeline clips. */
   clipKeys?: string[];
+  schemaVersion?: 1;
+  model?: {
+    name: string;
+    modelPath: string;
+    url?: string;
+    kScale: number;
+    initialXshift: number;
+    initialYshift: number;
+  };
+  defaultAppearance?: string;
+  emotionMap?: Record<string, string>;
+  expressions?: Live2DExpressionPreset[];
+  appearancePresets?: Array<{ key: string; expression: string; description?: string }>;
+  excludedExpressions?: Array<{ name: string; label: string; file: string; reason: string }>;
+  timeline?: { clipKeys: string[] };
+  manualOverrides?: Record<string, number>;
+  importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;
 }
 
 export interface Live2DModelData {

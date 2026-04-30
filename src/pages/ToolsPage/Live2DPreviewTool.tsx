@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import type { ConsoleLogEntry } from '../../services/launcher/launcher';
 import { EditorProvider, useEditor } from './EditorProvider';
 import { ResourcePanel } from './ResourcePanel';
 import { ParameterPanel } from './ParameterPanel';
+import { ExpressionPanel } from './ExpressionPanel';
 import { Timeline } from './Timeline';
 
 interface Live2DPreviewToolProps {
@@ -19,6 +21,7 @@ export function Live2DPreviewTool({ onBack, onDebugLog }: Live2DPreviewToolProps
 
 function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
   const { canvasRef, modelPath, modelError } = useEditor();
+  const [rightTab, setRightTab] = useState<'params' | 'expressions'>('params');
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
 
@@ -45,7 +48,23 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
         </div>
 
         <div className="live2d-col live2d-col--params">
-          <ParameterPanel />
+          <div className="live2d-right-tabs">
+            <button
+              type="button"
+              className={`live2d-right-tab${rightTab === 'params' ? ' live2d-right-tab--active' : ''}`}
+              onClick={() => setRightTab('params')}
+            >
+              基础参数
+            </button>
+            <button
+              type="button"
+              className={`live2d-right-tab${rightTab === 'expressions' ? ' live2d-right-tab--active' : ''}`}
+              onClick={() => setRightTab('expressions')}
+            >
+              已有表情/外观
+            </button>
+          </div>
+          {rightTab === 'params' ? <ParameterPanel /> : <ExpressionPanel />}
         </div>
       </div>
 

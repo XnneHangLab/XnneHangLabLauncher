@@ -57,6 +57,10 @@
 .live2d-btn:hover { opacity: 0.8; }
 .live2d-btn--full { width: 100%; }
 .live2d-btn--xs { padding: 2px 7px; font-size: 11px; }
+.live2d-expression-preview--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .live2d-preset-input {
   width: 100%;
@@ -240,6 +244,31 @@
   flex-shrink: 0;
 }
 
+/* ── right panel tabs ── */
+.live2d-right-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+
+.live2d-right-tab {
+  flex: 1;
+  padding: 5px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--elevated-card-border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.live2d-right-tab--active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: linear-gradient(90deg, var(--nav-active-bg-start), var(--nav-active-bg-end));
+}
+
 /* ── parameter panel ── */
 .live2d-param-panel {
   flex: 1;
@@ -373,6 +402,154 @@
   flex-shrink: 0;
 }
 .live2d-param-reset:hover { background: var(--nav-hover-bg); color: var(--accent); }
+
+/* ── expression catalog panel ── */
+.live2d-expression-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.live2d-expression-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live2d-expression-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
+}
+
+.live2d-expression-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.live2d-expression-expand {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.live2d-expression-expand:hover { background: var(--nav-hover-bg); color: var(--accent); }
+
+.live2d-expression-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.live2d-expression-name,
+.live2d-expression-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live2d-expression-name {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.live2d-expression-file {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.live2d-expression-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 5px 0;
+}
+
+.live2d-expression-tags span {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--nav-hover-bg);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.live2d-expression-tags .live2d-expression-tag--warn {
+  color: orange;
+}
+
+.live2d-expression-config {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  gap: 4px;
+  align-items: center;
+}
+
+.live2d-expression-input,
+.live2d-expression-select {
+  min-width: 0;
+  padding: 3px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  font-size: 10px;
+  box-sizing: border-box;
+}
+
+.live2d-expression-input--desc {
+  grid-column: 1 / -1;
+}
+
+.live2d-expression-check {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.live2d-expression-check input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.live2d-expression-ops {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.live2d-expression-op {
+  display: grid;
+  grid-template-columns: 1fr 58px 54px;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.live2d-expression-op span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── timeline row ── */
 .live2d-timeline-row {

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use tauri::State;
 
 use super::state::RuntimeState;
@@ -9,6 +10,10 @@ use super::state::RuntimeState;
 pub struct Live2DPreset {
     pub name: String,
     pub model_path: String,
+    #[serde(default)]
+    pub clip_keys: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -50,6 +55,42 @@ pub fn write_live2d_presets(
 fn read_file_as_base64(path: &std::path::Path) -> Result<String, String> {
     let data = std::fs::read(path).map_err(|e| format!("读取文件失败 {}: {e}", path.display()))?;
     Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data))
+}
+
+fn to_model_relative_path(model_dir: &Path, path: &Path) -> Option<String> {
+    path.strip_prefix(model_dir)
+        .ok()
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+}
+
+fn collect_loose_exp3_files(dir: &Path, model_dir: &Path, files: &mut HashMap<String, String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_loose_exp3_files(&path, model_dir, files);
+            continue;
+        }
+
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !file_name.ends_with(".exp3.json") {
+            continue;
+        }
+        let Some(relative) = to_model_relative_path(model_dir, &path) else {
+            continue;
+        };
+        if files.contains_key(&relative) {
+            continue;
+        }
+        if let Ok(data) = read_file_as_base64(&path) {
+            files.insert(relative, data);
+        }
+    }
 }
 
 /// Collects sub-resource paths from a model3.json FileReferences.
@@ -151,6 +192,7 @@ pub async fn read_live2d_model_data(model3_path: String) -> Result<Live2DModelDa
 
     let mut files = HashMap::new();
     collect_file_refs(&model_json, model_dir, &mut files);
+    collect_loose_exp3_files(model_dir, model_dir, &mut files);
 
     Ok(Live2DModelData { model_json, files })
 }

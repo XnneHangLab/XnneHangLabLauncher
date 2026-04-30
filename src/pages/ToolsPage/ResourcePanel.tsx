@@ -7,6 +7,7 @@ export function ResourcePanel() {
   const {
     modelLoaded, modelPath, motionEntries, motionAliases,
     addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
+    buildAdaptedPreset,
   } = useEditor();
 
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
@@ -35,15 +36,23 @@ export function ResourcePanel() {
     const name = presetName.trim();
     if (!modelPath || !name) return;
     const clipKeys = timelineClips.map(c => `${c.group}_${c.index}`);
-    const next = [...presets.filter(p => p.name !== name), { name, modelPath, clipKeys }];
+    const adaptedPreset = buildAdaptedPreset(name);
+    const nextPreset: Live2DPreset = adaptedPreset
+      ? {
+        ...adaptedPreset,
+        modelPath,
+        clipKeys,
+      }
+      : { name, modelPath, clipKeys };
+    const next = [...presets.filter(p => p.name !== name), nextPreset];
     setPresets(next);
     await writeLive2DPresets(next);
     setPresetName('');
   }
 
   async function handleLoadPreset(preset: Live2DPreset) {
-    setPendingKeys(preset.clipKeys ?? []);
-    await loadModelByPath(preset.modelPath);
+    setPendingKeys(preset.timeline?.clipKeys ?? preset.clipKeys ?? []);
+    await loadModelByPath(preset.model?.modelPath ?? preset.modelPath);
   }
 
   async function handleDeletePreset(name: string) {
