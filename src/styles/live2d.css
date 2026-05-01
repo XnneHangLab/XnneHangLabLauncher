@@ -409,6 +409,40 @@
   font-variant-numeric: tabular-nums;
 }
 
+.live2d-expression-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.live2d-expression-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.live2d-expression-filter:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.live2d-expression-filter:disabled { opacity: 0.45; cursor: default; }
+.live2d-expression-filter--active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: linear-gradient(90deg, var(--nav-active-bg-start), var(--nav-active-bg-end));
+}
+
+.live2d-expression-filter__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .live2d-expression-list {
   flex: 1;
   min-height: 0;

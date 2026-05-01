@@ -11,6 +11,11 @@ const roleLabels: Record<ExpressionRole, string> = {
   unknown: '未分类',
 };
 
+const roleFilterLabels: Record<ExpressionRole | 'all', string> = {
+  all: '全部',
+  ...roleLabels,
+};
+
 export function ExpressionPanel() {
   const {
     modelLoaded,
@@ -21,20 +26,57 @@ export function ExpressionPanel() {
     updateExpressionConfig,
   } = useEditor();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<ExpressionRole | 'all'>('all');
+  const roleCounts = expressionMetas.reduce<Record<ExpressionRole | 'all', number>>((counts, meta) => {
+    const role = expressionConfigs[meta.name]?.role ?? 'unknown';
+    counts.all += 1;
+    counts[role] += 1;
+    return counts;
+  }, {
+    all: 0,
+    expression: 0,
+    appearance: 0,
+    system: 0,
+    watermark: 0,
+    test: 0,
+    unknown: 0,
+  });
+  const filteredExpressionMetas = roleFilter === 'all'
+    ? expressionMetas
+    : expressionMetas.filter((meta) => (expressionConfigs[meta.name]?.role ?? 'unknown') === roleFilter);
 
   return (
     <div className="live2d-param-panel">
       <div className="live2d-param-panel__title">
         <span>EXP 列表</span>
-        {modelLoaded && <span className="live2d-expression-count">{expressionMetas.length}</span>}
+        {modelLoaded && <span className="live2d-expression-count">{filteredExpressionMetas.length}/{expressionMetas.length}</span>}
       </div>
+      {modelLoaded && expressionMetas.length > 0 && (
+        <div className="live2d-expression-filters">
+          {(Object.keys(roleFilterLabels) as Array<ExpressionRole | 'all'>).map((role) => (
+            <button
+              key={role}
+              type="button"
+              className={`live2d-expression-filter${roleFilter === role ? ' live2d-expression-filter--active' : ''}`}
+              onClick={() => setRoleFilter(role)}
+              disabled={role !== 'all' && roleCounts[role] === 0}
+              title={roleFilterLabels[role]}
+            >
+              <span>{roleFilterLabels[role]}</span>
+              <span className="live2d-expression-filter__count">{roleCounts[role]}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="live2d-expression-list">
         {!modelLoaded ? (
           <div className="live2d-panel-empty">加载模型后显示</div>
         ) : expressionMetas.length === 0 ? (
           <div className="live2d-panel-empty">没有找到 exp3 表情；若模型把 exp 放在其它目录，请导入包含 exp 目录的调用版/适配版 model3。</div>
+        ) : filteredExpressionMetas.length === 0 ? (
+          <div className="live2d-panel-empty">该分类下暂无 exp 表情</div>
         ) : (
-          expressionMetas.map((meta) => {
+          filteredExpressionMetas.map((meta) => {
             const config = expressionConfigs[meta.name];
             const isExpanded = expanded === meta.name;
             const expressionPreviewKey = meta.name || meta.file;
