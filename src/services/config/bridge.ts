@@ -23,6 +23,11 @@ export interface Live2DExpressionPreset {
   parameters?: Live2DExpressionParamOp[];
 }
 
+export interface Live2DTimelineClipRef {
+  group: string;
+  index: number;
+}
+
 export interface Live2DPreset {
   name: string;
   modelPath: string;
@@ -42,7 +47,7 @@ export interface Live2DPreset {
   expressions?: Live2DExpressionPreset[];
   appearancePresets?: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions?: Array<{ name: string; label: string; file: string; reason: string }>;
-  timeline?: { clipKeys: string[] };
+  timeline?: { clipKeys: string[]; clips?: Live2DTimelineClipRef[] };
   manualOverrides?: Record<string, number>;
   importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;
 }

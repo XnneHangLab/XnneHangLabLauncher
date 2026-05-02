@@ -456,6 +456,7 @@ export class ModelInstance {
   stopAllMotions(): void {
     const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
     motionMgr.stopAllMotions();
+    this.model.saveParameters();
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

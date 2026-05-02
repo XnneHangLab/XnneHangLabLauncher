@@ -49,10 +49,10 @@ export class MotionPlayer {
     this._duration = 0;
   }
 
-  play(): void {
+  play(startTime = this._currentTime): void {
     if (!this._model || this._group === null || this._index < 0) return;
+    this._currentTime = Math.max(0, Math.min(startTime, this._duration || startTime));
     if (!this._model.startMotion(this._group, this._index, this._loop)) return;
-    if (this._state === 'stopped') this._currentTime = 0;
     this._state = 'playing';
   }
 

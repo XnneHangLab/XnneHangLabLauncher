@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useEditor } from './EditorProvider';
 import { readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
 import type { Live2DPreset } from '../../services/config/bridge';
+import type { TimelineClip } from './EditorProvider';
 
 export function ResourcePanel() {
   const {
@@ -13,38 +14,45 @@ export function ResourcePanel() {
 
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
   const [presetName, setPresetName] = useState('');
-  // Clip keys queued for restoration after next model load
-  const [pendingKeys, setPendingKeys] = useState<string[] | null>(null);
+  const [pendingRefs, setPendingRefs] = useState<Array<{ group: string; index: number }> | null>(null);
+
+  const clipRefs = (clips: TimelineClip[]) => clips.map((clip) => ({ group: clip.group, index: clip.index }));
+  const clipRefsFromKeys = (keys?: string[]) => (keys ?? []).flatMap((key) => {
+    const sep = key.lastIndexOf('_');
+    if (sep < 1) return [];
+    const group = key.slice(0, sep);
+    const index = Number(key.slice(sep + 1));
+    return Number.isNaN(index) ? [] : [{ group, index }];
+  });
 
   useEffect(() => {
     readLive2DPresets().then(setPresets).catch(console.error);
   }, []);
 
-  // Restore clips once a model finishes loading
   useEffect(() => {
-    if (!modelLoaded || !pendingKeys) return;
-    for (const key of pendingKeys) {
-      const sep = key.lastIndexOf('_');
-      if (sep < 1) continue;
-      const group = key.slice(0, sep);
-      const index = Number(key.slice(sep + 1));
-      if (!Number.isNaN(index)) addClipToTimeline(group, index);
-    }
-    setPendingKeys(null);
-  }, [modelLoaded, pendingKeys, addClipToTimeline]);
+    if (!modelLoaded || !pendingRefs) return;
+    for (const ref of pendingRefs) addClipToTimeline(ref.group, ref.index);
+    setPendingRefs(null);
+  }, [modelLoaded, pendingRefs, addClipToTimeline]);
 
   async function handleSavePreset() {
     const name = presetName.trim();
     if (!modelPath || !name) return;
-    const clipKeys = Array.from(new Set(timelineClips.map(c => `${c.group}_${c.index}`)));
+    const refs = clipRefs(timelineClips);
+    const clipKeys = refs.map(c => `${c.group}_${c.index}`);
     const adaptedPreset = buildAdaptedPreset(name);
     const nextPreset: Live2DPreset = adaptedPreset
       ? {
         ...adaptedPreset,
         modelPath,
         clipKeys,
+        timeline: {
+          ...adaptedPreset.timeline,
+          clipKeys,
+          clips: refs,
+        },
       }
-      : { name, modelPath, clipKeys };
+      : { name, modelPath, clipKeys, timeline: { clipKeys, clips: refs } };
     const next = [...presets.filter(p => p.name !== name), nextPreset];
     setPresets(next);
     await writeLive2DPresets(next);
@@ -52,7 +60,7 @@ export function ResourcePanel() {
   }
 
   async function handleLoadPreset(preset: Live2DPreset) {
-    setPendingKeys(preset.timeline?.clipKeys ?? preset.clipKeys ?? []);
+    setPendingRefs(preset.timeline?.clips ?? clipRefsFromKeys(preset.timeline?.clipKeys ?? preset.clipKeys));
     await loadModelByPath(preset.model?.modelPath ?? preset.modelPath);
   }
 
@@ -96,7 +104,16 @@ export function ResourcePanel() {
               const isImported = m.group === 'imported';
               const isPreviewing = currentMotion?.group === m.group && currentMotion.index === m.index;
               return (
-                <div key={key} className="live2d-resource-item live2d-resource-item--motion">
+                <div
+                  key={key}
+                  className="live2d-resource-item live2d-resource-item--motion"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'copy';
+                    event.dataTransfer.setData('application/x-live2d-motion', JSON.stringify({ group: m.group, index: m.index }));
+                    event.dataTransfer.setData('text/plain', label);
+                  }}
+                >
                   <button
                     type="button"
                     className={`live2d-resource-motion-name${isPreviewing ? ' live2d-resource-motion-name--active' : ''}`}
@@ -124,12 +141,14 @@ export function ResourcePanel() {
                     className="live2d-resource-rename"
                     title={`编辑别名，不会修改源文件：${m.file}`}
                     onMouseDown={(event) => event.stopPropagation()}
+                    draggable={false}
                   >
                     <input
                       type="text"
                       className="live2d-resource-alias"
                       value={label}
                       title={`别名，不会修改源文件：${m.file}`}
+                      onDragStart={(event) => event.preventDefault()}
                       onChange={(event) => renameMotion(key, event.target.value)}
                       onBlur={(event) => {
                         if (!event.target.value.trim()) renameMotion(key, defaultLabel);

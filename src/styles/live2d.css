@@ -730,26 +730,157 @@
   margin-right: 8px;
 }
 
-/* ── clip track ── */
-.live2d-clip-track {
+/* ── editor clip track ── */
+.live2d-edit-track {
+  min-height: 74px;
+  border: 1px solid var(--elevated-card-border);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 52%, transparent) 1px, transparent 1px) 0 20px / 28px 44px,
+    color-mix(in srgb, var(--panel) 60%, transparent);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 28%, transparent) transparent;
+}
+
+.live2d-edit-track::-webkit-scrollbar {
+  height: 7px;
+}
+
+.live2d-edit-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.live2d-edit-track::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: color-mix(in srgb, var(--muted) 26%, transparent);
+  background-clip: content-box;
+}
+
+.live2d-edit-track::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  background-clip: content-box;
+}
+
+.live2d-edit-track::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.live2d-track-ruler {
+  height: 18px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 0;
-  min-height: 30px;
-  align-items: flex-start;
-  align-content: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.live2d-track-lane {
+  min-height: 64px;
+  min-width: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 11px 8px;
+  box-sizing: border-box;
+  cursor: crosshair;
+}
+
+.live2d-track-lane--seeking {
+  cursor: ew-resize;
+}
+
+.live2d-track-empty {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  min-height: 36px;
+}
+
+.live2d-playhead {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--panel) 65%, transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.live2d-playhead::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--muted);
+}
+
+.live2d-playhead--active {
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+.live2d-playhead--active::before {
+  border-top-color: var(--accent);
+}
+
+.live2d-clip-slot {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.live2d-drop-marker {
+  width: 3px;
+  height: 44px;
+  margin: 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 75%, transparent);
+  flex-shrink: 0;
 }
 
 .live2d-clip {
+  height: 42px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 6px 3px 4px;
+  gap: 5px;
+  padding: 5px 6px 5px 4px;
   border-radius: var(--radius);
   border: 1px solid var(--elevated-card-border);
   background: linear-gradient(160deg, var(--elevated-card-bg-start), var(--elevated-card-bg-end));
-  max-width: 200px;
+  box-sizing: border-box;
+  cursor: grab;
+  user-select: none;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+}
+
+.live2d-clip:active { cursor: grabbing; }
+
+.live2d-clip--dragging {
+  opacity: 0.45;
+  outline: 1px dashed var(--accent);
 }
 
 .live2d-clip--active {
@@ -777,7 +908,15 @@
   border-radius: 3px;
   line-height: 1;
 }
-.live2d-clip__play:hover, .live2d-clip__remove:hover { background: var(--nav-hover-bg); }
+.live2d-clip__play:hover, .live2d-clip__remove:hover { background: var(--nav-hover-bg); color: var(--accent); }
+
+.live2d-clip__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .live2d-clip__label {
   font-size: 11px;
@@ -785,9 +924,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-  max-width: 120px;
+}
+
+.live2d-clip__duration {
+  font-size: 9px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .live2d-clip__warn {

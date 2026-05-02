@@ -77,6 +77,20 @@ export interface TimelineClip {
   missingParams: string[];
 }
 
+export interface TimelinePlaybackState {
+  active: boolean;
+  clipUid: string | null;
+  clipIndex: number;
+  clipStartTime: number;
+  totalTime: number;
+  totalDuration: number;
+}
+
+interface TimelineClipRef {
+  group: string;
+  index: number;
+}
+
 interface ImportedMotionState {
   path: string;
   fileName: string;
@@ -102,7 +116,7 @@ export interface Live2DAdaptedPreset {
   expressions: Array<ExpressionPresetConfig & { parameters: ExpressionParamOp[] }>;
   appearancePresets: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions: Array<{ name: string; label: string; file: string; reason: string }>;
-  timeline: { clipKeys: string[] };
+  timeline: { clipKeys: string[]; clips?: TimelineClipRef[] };
   manualOverrides: Record<string, number>;
   importedMotions: ImportedMotionState[];
 }
@@ -117,6 +131,7 @@ interface Live2DSessionState {
   manualOverrides: Record<string, number>;
   motionAliases: Record<string, string>;
   timelineClipKeys: string[];
+  timelineClips?: TimelineClipRef[];
   importedMotions?: ImportedMotionState[];
   expressionConfigs?: Record<string, ExpressionPresetConfig>;
 }
@@ -134,6 +149,7 @@ export interface EditorContextValue {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  timelinePlayback: TimelinePlaybackState;
   paramValues: Record<string, number>;
   paramRanges: Record<string, ParamRange>;
   paramMetas: ParamMeta[];
@@ -155,9 +171,12 @@ export interface EditorContextValue {
   buildAdaptedPreset: (name: string) => Live2DAdaptedPreset | null;
   togglePlay: () => void;
   scrub: (time: number) => void;
+  seekTimeline: (time: number) => void;
   renameMotion: (key: string, name: string) => void;
   deleteMotion: (group: string, index: number) => void;
-  addClipToTimeline: (group: string, index: number) => void;
+  addClipToTimeline: (group: string, index: number, beforeUid?: string | null) => void;
+  moveClipInTimeline: (uid: string, beforeUid: string | null) => void;
+  playClip: (uid: string) => void;
   removeClipFromTimeline: (uid: string) => void;
   clearTimeline: () => void;
 }
@@ -194,6 +213,126 @@ function writeLive2DSession(state: Live2DSessionState): void {
 
 function clipKey(group: string, index: number): string {
   return `${group}_${index}`;
+}
+
+function timelineClipRefs(clips: TimelineClip[]): TimelineClipRef[] {
+  return clips.map((clip) => ({ group: clip.group, index: clip.index }));
+}
+
+function clipKeysFromRefs(refs: TimelineClipRef[]): string[] {
+  return refs.map((clip) => clipKey(clip.group, clip.index));
+}
+
+function clipRefsFromKeys(keys?: string[] | null): TimelineClipRef[] {
+  return (keys ?? []).flatMap((key) => {
+    const sep = key.lastIndexOf('_');
+    if (sep < 1) return [];
+    const group = key.slice(0, sep);
+    const index = Number(key.slice(sep + 1));
+    return Number.isNaN(index) ? [] : [{ group, index }];
+  });
+}
+
+function insertClip(clips: TimelineClip[], clip: TimelineClip, beforeUid?: string | null): TimelineClip[] {
+  if (!beforeUid) return [...clips, clip];
+  const index = clips.findIndex((item) => item.uid === beforeUid);
+  if (index < 0) return [...clips, clip];
+  return [...clips.slice(0, index), clip, ...clips.slice(index)];
+}
+
+function moveClip(clips: TimelineClip[], uid: string, beforeUid: string | null): TimelineClip[] {
+  if (uid === beforeUid) return clips;
+  const moving = clips.find((clip) => clip.uid === uid);
+  if (!moving) return clips;
+  const rest = clips.filter((clip) => clip.uid !== uid);
+  if (!beforeUid) return [...rest, moving];
+  const index = rest.findIndex((clip) => clip.uid === beforeUid);
+  if (index < 0) return [...rest, moving];
+  return [...rest.slice(0, index), moving, ...rest.slice(index)];
+}
+
+function timelineTotalDuration(clips: TimelineClip[]): number {
+  return clips.reduce((sum, clip) => sum + clip.duration, 0);
+}
+
+function timelineTimeAtClip(clips: TimelineClip[], index: number, clipTime: number): number {
+  return clips.slice(0, Math.max(0, index)).reduce((sum, clip) => sum + clip.duration, 0) + clipTime;
+}
+
+function makeTimelinePlaybackState(
+  clips: TimelineClip[],
+  index: number,
+  clipTime = 0,
+  active = true,
+): TimelinePlaybackState {
+  const clip = clips[index];
+  return {
+    active,
+    clipUid: clip?.uid ?? null,
+    clipIndex: clip ? index : -1,
+    clipStartTime: clips.slice(0, Math.max(0, index)).reduce((sum, item) => sum + item.duration, 0),
+    totalTime: clip ? timelineTimeAtClip(clips, index, clipTime) : 0,
+    totalDuration: timelineTotalDuration(clips),
+  };
+}
+
+function timelinePlaybackStateAtTime(clips: TimelineClip[], time: number, active = false): TimelinePlaybackState {
+  const totalDuration = timelineTotalDuration(clips);
+  const clamped = Math.max(0, Math.min(time, totalDuration));
+  let cursor = 0;
+  for (let i = 0; i < clips.length; i++) {
+    const end = cursor + clips[i].duration;
+    if (clamped <= end || i === clips.length - 1) {
+      return makeTimelinePlaybackState(clips, i, Math.max(0, clamped - cursor), active);
+    }
+    cursor = end;
+  }
+  return idleTimelinePlaybackState(clips);
+}
+
+function idleTimelinePlaybackState(clips: TimelineClip[] = []): TimelinePlaybackState {
+  return {
+    active: false,
+    clipUid: null,
+    clipIndex: -1,
+    clipStartTime: 0,
+    totalTime: 0,
+    totalDuration: timelineTotalDuration(clips),
+  };
+}
+
+function importKey(group: string, index: number): string {
+  return `${group}_${index}`;
+}
+
+function uniqueImportedFileName(fileName: string, group: string, index: number): string {
+  return `__imported_${group}_${index}__${fileName}`;
+}
+
+function normalizeImportedMotions(motions: ImportedMotionState[] = []): ImportedMotionState[] {
+  const seen = new Set<string>();
+  const next: ImportedMotionState[] = [];
+  for (const motion of motions) {
+    const key = motion.group !== undefined && motion.index !== undefined
+      ? importKey(motion.group, motion.index)
+      : `${motion.path}|${motion.fileName}|${motion.base64}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push({ ...motion });
+  }
+  return next;
+}
+
+function normalizeMotionEntries(entries: MotionEntry[]): MotionEntry[] {
+  const seen = new Set<string>();
+  const next: MotionEntry[] = [];
+  for (const entry of entries) {
+    const key = importKey(entry.group, entry.index);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(entry);
+  }
+  return next;
 }
 
 function normalizeBlend(blend: unknown): ExpressionBlend {
@@ -466,7 +605,9 @@ export function EditorProvider({
   const motionSafeOverridesRef = useRef<Record<string, number>>({});
   const baseParameterValuesRef = useRef<Record<string, number>>({});
   const importedMotionsRef = useRef<ImportedMotionState[]>([]);
-  const pendingSessionClipKeysRef = useRef<string[] | null>(null);
+  const importingMotionRef = useRef(false);
+  const pendingSessionClipRefsRef = useRef<TimelineClipRef[] | null>(null);
+  const restoringTimelineRef = useRef(false);
   const restoredSessionRef = useRef(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
@@ -478,6 +619,18 @@ export function EditorProvider({
   const motionTimeRef = useRef(0);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
+  const [timelinePlayback, setTimelinePlayback] = useState<TimelinePlaybackState>(() => idleTimelinePlaybackState());
+  const timelineClipsRef = useRef<TimelineClip[]>([]);
+  const timelinePlaybackRef = useRef<{ active: boolean; nextIndex: number }>({ active: false, nextIndex: 0 });
+
+  useEffect(() => {
+    timelineClipsRef.current = timelineClips;
+    setTimelinePlayback((prev) => {
+      if (prev.active) return { ...prev, totalDuration: timelineTotalDuration(timelineClips) };
+      if (prev.totalTime > 0 || prev.clipUid) return timelinePlaybackStateAtTime(timelineClips, prev.totalTime, false);
+      return idleTimelinePlaybackState(timelineClips);
+    });
+  }, [timelineClips]);
 
   // ── Init Cubism on canvas mount ──────────────────────────────────────────
 
@@ -504,11 +657,13 @@ export function EditorProvider({
   }, []);
 
   const writeCurrentSession = useCallback((overrides: Record<string, number> = manualOverridesRef.current) => {
+    const refs = timelineClipRefs(timelineClips);
     writeLive2DSession({
       modelPath,
       manualOverrides: getPersistableManualOverrides(overrides),
       motionAliases,
-      timelineClipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))),
+      timelineClipKeys: clipKeysFromRefs(refs),
+      timelineClips: refs,
       importedMotions: importedMotionsRef.current,
       expressionConfigs: expressionConfigsRef.current,
     });
@@ -603,8 +758,15 @@ export function EditorProvider({
           }
           CubismInit.resize();
           model.draw();
-          setCurrentTime(player.currentTime);
-          if (player.hasMotion) setDuration(player.duration);
+          if (motionPreviewActive) {
+            setCurrentTime(player.currentTime);
+            if (timelinePlaybackRef.current.active) {
+              const clips = timelineClipsRef.current;
+              const currentIndex = Math.max(0, timelinePlaybackRef.current.nextIndex - 1);
+              setTimelinePlayback(makeTimelinePlaybackState(clips, currentIndex, player.currentTime, true));
+            }
+            if (player.hasMotion) setDuration(player.duration);
+          }
           setIsPlaying(player.isPlaying);
 
           const ids = model.parameterIds;
@@ -643,6 +805,7 @@ export function EditorProvider({
         }
         setCurrentMotion(null);
         setCurrentTime(0);
+        setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
         if (!activeBeforeError) setDuration(0);
         setIsPlaying(false);
       }
@@ -686,7 +849,13 @@ export function EditorProvider({
     }
   }
 
-  const loadMotionIntoPlayer = useCallback((entry: MotionEntry, loop: boolean, onFinish?: () => void) => {
+  const loadMotionIntoPlayer = useCallback((
+    entry: MotionEntry,
+    loop: boolean,
+    onFinish?: () => void,
+    startTime = 0,
+    options?: { keepTimelinePositionOnFinish?: boolean },
+  ) => {
     const instance = modelRef.current;
     const data = modelDataRef.current;
     if (!instance || !data) return false;
@@ -696,24 +865,27 @@ export function EditorProvider({
       const durationSeconds = getMotionDurationSeconds(entry, instance, data.files);
       const motionBaseOverrides = getPersistableManualOverrides();
       motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(motionBaseOverrides);
-      instance.stopAllMotions();
-      instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionBaseOverrides }, true);
-      motionTimeRef.current = 0;
+      const clampedStartTime = Math.max(0, Math.min(startTime, durationSeconds || startTime));
+      motionTimeRef.current = clampedStartTime;
       motionPlayerRef.current.load(entry.group, entry.index, instance, durationSeconds, loop);
+      motionPlayerRef.current.scrub(clampedStartTime);
       motionPlayerRef.current.setOnFinish(() => {
         motionPlayerRef.current.unload();
         activeMotionRef.current = null;
         motionTimeRef.current = 0;
         setCurrentMotion(null);
-        setCurrentTime(0);
-        setDuration(0);
+        if (!options?.keepTimelinePositionOnFinish) {
+          setCurrentTime(0);
+          setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+          setDuration(0);
+        }
         setIsPlaying(false);
         onFinish?.();
       });
-      motionPlayerRef.current.play();
+      motionPlayerRef.current.play(clampedStartTime);
       activeMotionRef.current = { group: entry.group, index: entry.index, loop, onFinish };
       setDuration(durationSeconds);
-      setCurrentTime(0);
+      setCurrentTime(clampedStartTime);
       setIsPlaying(true);
       return true;
     } catch (error) {
@@ -722,19 +894,22 @@ export function EditorProvider({
     }
   }, [getPersistableManualOverrides, stripTransientExpressionParameterOverrides]);
 
-  const returnToBasePose = useCallback(() => {
+  const returnToBasePose = useCallback((options?: { keepTimelinePosition?: boolean }) => {
     const instance = modelRef.current;
     motionPlayerRef.current.unload();
     instance?.stopAllMotions();
     activeMotionRef.current = null;
     motionTimeRef.current = 0;
     motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(getPersistableManualOverrides());
-    if (instance) {
+    if (instance && !options?.keepTimelinePosition) {
       instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverridesRef.current }, true);
     }
     setCurrentMotion(null);
-    setCurrentTime(0);
-    setDuration(0);
+    if (!options?.keepTimelinePosition) {
+      setCurrentTime(0);
+      setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+      setDuration(0);
+    }
     setIsPlaying(false);
   }, [getPersistableManualOverrides, stripTransientExpressionParameterOverrides]);
 
@@ -754,6 +929,7 @@ export function EditorProvider({
     setModelLoaded(false);
     setModelError(null);
     setModelPath(path);
+    setTimelinePlayback(idleTimelinePlaybackState(options?.keepTimeline ? timelineClipsRef.current : []));
     setParamRanges({});
     setParamValues({});
     setParamMetas([]);
@@ -781,19 +957,27 @@ export function EditorProvider({
       modelRef.current?.stopAllMotions();
       activeMotionRef.current = null;
       motionTimeRef.current = 0;
-      for (const imported of importedMotionsRef.current) {
+      const loadedImportedMotions = normalizeImportedMotions(importedMotionsRef.current);
+      for (const imported of loadedImportedMotions) {
         const usedIndices = instance.motionEntries
           .filter(e => e.group === 'imported')
           .map(e => e.index);
         const nextIndex = imported.index ?? (usedIndices.length > 0 ? Math.max(...usedIndices) + 1 : 0);
-        const key = `imported_${nextIndex}`;
-        const buf = base64ToArrayBuffer(imported.base64);
-        if (!instance.addLoadedMotion(key, buf)) continue;
-        if (modelDataRef.current) modelDataRef.current.files[imported.fileName] = imported.base64;
-        instance.motionEntries.push({ group: 'imported', index: nextIndex, name: imported.name, file: imported.fileName });
+        const group = imported.group ?? 'imported';
+        const key = importKey(group, nextIndex);
+        const motionFileName = uniqueImportedFileName(imported.fileName, group, nextIndex);
+        const alreadyLoaded = instance.motionEntries.some(e => e.group === group && e.index === nextIndex);
+        if (!alreadyLoaded) {
+          const buf = base64ToArrayBuffer(imported.base64);
+          if (!instance.addLoadedMotion(key, buf)) continue;
+          if (modelDataRef.current) modelDataRef.current.files[motionFileName] = imported.base64;
+          instance.motionEntries.push({ group, index: nextIndex, name: imported.name, file: motionFileName });
+        }
         imported.index = nextIndex;
-        imported.group = 'imported';
+        imported.group = group;
       }
+      importedMotionsRef.current = normalizeImportedMotions(loadedImportedMotions);
+      instance.motionEntries = normalizeMotionEntries(instance.motionEntries);
       setMotionEntries(instance.motionEntries);
 
       const values: Record<string, number> = {};
@@ -828,41 +1012,59 @@ export function EditorProvider({
   }, [loadModelByPath]);
 
   const openMotionImportDialog = useCallback(async () => {
+    if (importingMotionRef.current) return;
     const instance = modelRef.current;
     if (!instance) return;
-    const path = await pickAnyFile('选择动作文件 (.motion3.json)');
-    if (!path) return;
+    importingMotionRef.current = true;
     try {
+      const path = await pickAnyFile('选择动作文件 (.motion3.json)');
+      if (!path) return;
       const b64 = await readFileBase64(path);
       const fileName = path.split(/[/\\]/).pop() ?? path;
+      const existingImport = importedMotionsRef.current.find((motion) => motion.path === path || motion.base64 === b64);
+      const existingGroup = existingImport?.group ?? 'imported';
+      const existingIndex = existingImport?.index;
+      if (existingIndex !== undefined) {
+        const existingEntry = instance.motionEntries.find((entry) => entry.group === existingGroup && entry.index === existingIndex);
+        if (existingEntry) {
+          setMotionEntries(normalizeMotionEntries(instance.motionEntries));
+          return;
+        }
+      }
+
       const group = 'imported';
       const usedIndices = instance.motionEntries
         .filter(e => e.group === group)
         .map(e => e.index);
       const nextIndex = usedIndices.length > 0 ? Math.max(...usedIndices) + 1 : 0;
-      const key = `${group}_${nextIndex}`;
+      const key = importKey(group, nextIndex);
+      const motionFileName = uniqueImportedFileName(fileName, group, nextIndex);
       const buf = base64ToArrayBuffer(b64);
       const ok = instance.addLoadedMotion(key, buf);
       if (!ok) {
         console.error('[Live2D] Failed to create motion from', fileName);
         return;
       }
-      if (modelDataRef.current) modelDataRef.current.files[fileName] = b64;
+      if (modelDataRef.current) modelDataRef.current.files[motionFileName] = b64;
       const motionName = fileName.replace(/\.motion3\.json$/i, '');
-      importedMotionsRef.current = [
+      const entry = { group, index: nextIndex, name: motionName, file: motionFileName };
+      instance.motionEntries = normalizeMotionEntries([...instance.motionEntries, entry]);
+      importedMotionsRef.current = normalizeImportedMotions([
         ...importedMotionsRef.current,
         { path, fileName, name: motionName, base64: b64, group, index: nextIndex },
-      ];
-      const entry = { group, index: nextIndex, name: motionName, file: fileName };
-      instance.motionEntries.push(entry);
+      ]);
       setMotionAliases(prev => ({ ...prev, [key]: motionName }));
-      setMotionEntries(prev => [...prev, entry]);
+      setMotionEntries(instance.motionEntries);
     } catch (err) {
       console.error('[Live2D] Motion import error:', err);
+    } finally {
+      importingMotionRef.current = false;
     }
   }, []);
 
   const playMotion = useCallback((group: string, index: number) => {
+    timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+    setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
     if (currentMotion?.group === group && currentMotion.index === index) {
       returnToBasePose();
       return;
@@ -1088,19 +1290,87 @@ export function EditorProvider({
       expressions,
       appearancePresets,
       excludedExpressions,
-      timeline: { clipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))) },
+      timeline: {
+        clipKeys: clipKeysFromRefs(timelineClipRefs(timelineClips)),
+        clips: timelineClipRefs(timelineClips),
+      },
       manualOverrides: getPersistableManualOverrides(),
       importedMotions: importedMotionsRef.current,
     };
   }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineClips]);
 
+  const playTimelineFromIndex = useCallback((index: number, startTime = 0) => {
+    const clips = timelineClipsRef.current;
+    const clip = clips[index];
+    if (!clip) {
+      timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+      setTimelinePlayback(idleTimelinePlaybackState(clips));
+      returnToBasePose();
+      return;
+    }
+
+    const entry = modelRef.current?.motionEntries.find((motion) => motion.group === clip.group && motion.index === clip.index);
+    if (!entry) return;
+
+    const clipStartTime = Math.max(0, Math.min(startTime, clip.duration || startTime));
+    timelinePlaybackRef.current = { active: true, nextIndex: index + 1 };
+    setTimelinePlayback(makeTimelinePlaybackState(clips, index, clipStartTime, true));
+    setDuration(timelineTotalDuration(clips));
+    setCurrentTime(timelineTimeAtClip(clips, index, clipStartTime));
+    if (loadMotionIntoPlayer(entry, false, () => {
+      const nextIndex = timelinePlaybackRef.current.nextIndex;
+      if (!timelinePlaybackRef.current.active || nextIndex >= timelineClipsRef.current.length) {
+        timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+        const finishedClips = timelineClipsRef.current;
+        const finishedTime = timelineTotalDuration(finishedClips);
+        const finishedPlayback = timelinePlaybackStateAtTime(finishedClips, finishedTime, false);
+        setTimelinePlayback(finishedPlayback);
+        setCurrentTime(finishedPlayback.totalTime);
+        setDuration(finishedPlayback.totalDuration);
+        returnToBasePose({ keepTimelinePosition: true });
+        return;
+      }
+      playTimelineFromIndex(nextIndex);
+    }, clipStartTime, { keepTimelinePositionOnFinish: true })) {
+      setDuration(timelineTotalDuration(clips));
+      setCurrentMotion({ group: clip.group, index: clip.index });
+    }
+  }, [loadMotionIntoPlayer, returnToBasePose]);
+
   const togglePlay = useCallback(() => {
     const active = activeMotionRef.current;
     if (active) {
+      const clips = timelineClipsRef.current;
+      const preserveTimeline = timelinePlaybackRef.current.active && clips.length > 0;
+      const playerTime = motionPlayerRef.current.currentTime;
+      const currentIndex = preserveTimeline
+        ? Math.max(0, Math.min(clips.length - 1, timelinePlaybackRef.current.nextIndex - 1))
+        : -1;
+      timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+      if (preserveTimeline && currentIndex >= 0) {
+        const nextPlayback = makeTimelinePlaybackState(clips, currentIndex, playerTime, false);
+        setTimelinePlayback(nextPlayback);
+        setCurrentTime(nextPlayback.totalTime);
+        setDuration(nextPlayback.totalDuration);
+      }
       motionPlayerRef.current.unload();
       modelRef.current?.stopAllMotions();
       activeMotionRef.current = null;
       setIsPlaying(false);
+      return;
+    }
+
+    if (timelineClipsRef.current.length > 0) {
+      const playback = timelinePlayback;
+      const startIndex = playback.clipIndex >= 0
+        ? playback.clipIndex
+        : currentMotion
+          ? Math.max(0, timelineClipsRef.current.findIndex((clip) => clip.group === currentMotion.group && clip.index === currentMotion.index))
+          : 0;
+      const startClipTime = playback.clipIndex >= 0
+        ? Math.max(0, playback.totalTime - playback.clipStartTime)
+        : 0;
+      playTimelineFromIndex(startIndex < 0 ? 0 : startIndex, startClipTime);
       return;
     }
 
@@ -1111,14 +1381,42 @@ export function EditorProvider({
 
     const entry = modelRef.current?.motionEntries.find(e => e.group === currentMotion.group && e.index === currentMotion.index);
     if (entry) loadMotionIntoPlayer(entry, false, returnToBasePose);
-  }, [currentMotion, loadMotionIntoPlayer, returnToBasePose, startIdlePreview]);
+  }, [currentMotion, loadMotionIntoPlayer, playTimelineFromIndex, returnToBasePose, startIdlePreview, timelinePlayback]);
 
   const scrub = useCallback((time: number) => {
     // SDK-driven preview is intentionally used for correctness (same as frontend).
     // Precise non-linear scrubbing will need a separate verified evaluator/export path.
-    motionTimeRef.current = Math.max(0, Math.min(time, duration || time));
+    const timelineSeeking = timelineClipsRef.current.length > 0 && !motionPlayerRef.current.hasMotion;
+    const total = timelinePlaybackRef.current.active || timelineSeeking
+      ? timelineTotalDuration(timelineClipsRef.current)
+      : duration;
+    motionTimeRef.current = Math.max(0, Math.min(time, total || time));
     setCurrentTime(motionTimeRef.current);
+    if (timelinePlaybackRef.current.active || timelineSeeking) {
+      const clips = timelineClipsRef.current;
+      setTimelinePlayback(timelinePlaybackStateAtTime(clips, motionTimeRef.current, timelinePlaybackRef.current.active));
+    }
   }, [duration]);
+
+  const seekTimeline = useCallback((time: number) => {
+    const clips = timelineClipsRef.current;
+    if (clips.length === 0) return;
+    timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+    motionPlayerRef.current.unload();
+    modelRef.current?.stopAllMotions();
+    activeMotionRef.current = null;
+    const nextPlayback = timelinePlaybackStateAtTime(clips, time, false);
+    motionTimeRef.current = Math.max(0, nextPlayback.totalTime - nextPlayback.clipStartTime);
+    setTimelinePlayback(nextPlayback);
+    setCurrentTime(nextPlayback.totalTime);
+    setDuration(nextPlayback.totalDuration);
+    setCurrentMotion(
+      nextPlayback.clipIndex >= 0 && clips[nextPlayback.clipIndex]
+        ? { group: clips[nextPlayback.clipIndex].group, index: clips[nextPlayback.clipIndex].index }
+        : null,
+    );
+    setIsPlaying(false);
+  }, []);
 
   const renameMotion = useCallback((key: string, name: string) => {
     setMotionAliases((prev) => {
@@ -1146,16 +1444,20 @@ export function EditorProvider({
     if (modelRef.current) {
       modelRef.current.motionEntries = modelRef.current.motionEntries.filter((entry) => !(entry.group === group && entry.index === index));
     }
-    importedMotionsRef.current = importedMotionsRef.current.filter((motion) => !(
+    importedMotionsRef.current = normalizeImportedMotions(importedMotionsRef.current.filter((motion) => !(
       (motion.group ?? 'imported') === group && motion.index === index
-    ));
+    )));
     setMotionEntries((prev) => prev.filter((entry) => !(entry.group === group && entry.index === index)));
     setMotionAliases((prev) => {
       const next = { ...prev };
       delete next[key];
       return next;
     });
-    setTimelineClips((prev) => prev.filter((clip) => !(clip.group === group && clip.index === index)));
+    setTimelineClips((prev) => {
+      const next = prev.filter((clip) => !(clip.group === group && clip.index === index));
+      setTimelinePlayback(idleTimelinePlaybackState(next));
+      return next;
+    });
     setCurrentMotion((current) => (
       current?.group === group && current.index === index ? null : current
     ));
@@ -1163,68 +1465,69 @@ export function EditorProvider({
 
   // ── Timeline clip management ─────────────────────────────────────────────
 
-  const addClipToTimeline = useCallback((group: string, index: number) => {
+  function createTimelineClip(group: string, index: number, uidSuffix = `${Date.now()}`): TimelineClip | null {
     const instance = modelRef.current;
     const data = modelDataRef.current;
-    if (!instance) return;
+    if (!instance) return null;
 
     const entry = instance.motionEntries.find(e => e.group === group && e.index === index);
-    if (!entry) return;
+    if (!entry) return null;
 
     const paramSet = new Set(instance.parameterIds);
     const missingParams = data
       ? validateMotion(entry.file, paramSet, data.files)
       : [];
+    const label = motionAliases[`${group}_${index}`] ?? `${group}#${index}`;
+    return {
+      uid: `${group}_${index}_${uidSuffix}`,
+      group,
+      index,
+      label,
+      duration: getMotionDurationSeconds(entry, instance, data?.files),
+      missingParams,
+    };
+  }
 
-    setMotionAliases(aliases => {
-      const label = aliases[`${group}_${index}`] ?? `${group}#${index}`;
-      const uid = `${group}_${index}_${Date.now()}`;
-      setTimelineClips(prev => [
-        ...prev,
-        { uid, group, index, label, duration: getMotionDurationSeconds(entry, instance, data?.files), missingParams },
-      ]);
-      return aliases;
+  const addClipToTimeline = useCallback((group: string, index: number, beforeUid?: string | null) => {
+    const clip = createTimelineClip(group, index);
+    if (!clip) return;
+    setTimelineClips(prev => insertClip(prev, clip, beforeUid));
+  }, [motionAliases]);
+
+  const restoreTimelineClips = useCallback((refs: TimelineClipRef[]) => {
+    const restoredClips = refs.flatMap((ref, index) => {
+      const clip = createTimelineClip(ref.group, ref.index, `restored_${index}_${Date.now()}`);
+      return clip ? [clip] : [];
     });
+    setTimelineClips(restoredClips);
+    setTimelinePlayback(idleTimelinePlaybackState(restoredClips));
+  }, [motionAliases]);
+
+  const moveClipInTimeline = useCallback((uid: string, beforeUid: string | null) => {
+    setTimelineClips(prev => moveClip(prev, uid, beforeUid));
   }, []);
 
-  const restoreClipToTimeline = useCallback((group: string, index: number) => {
-    const instance = modelRef.current;
-    const data = modelDataRef.current;
-    if (!instance) return;
-
-    const entry = instance.motionEntries.find(e => e.group === group && e.index === index);
-    if (!entry) return;
-
-    const paramSet = new Set(instance.parameterIds);
-    const missingParams = data
-      ? validateMotion(entry.file, paramSet, data.files)
-      : [];
-
-    setMotionAliases(aliases => {
-      const label = aliases[`${group}_${index}`] ?? `${group}#${index}`;
-      setTimelineClips(prev => {
-        if (prev.some((clip) => clip.group === group && clip.index === index)) return prev;
-        return [
-          ...prev,
-          {
-            uid: `${group}_${index}_restored`,
-            group,
-            index,
-            label,
-            duration: getMotionDurationSeconds(entry, instance, data?.files),
-            missingParams,
-          },
-        ];
-      });
-      return aliases;
-    });
-  }, []);
+  const playClip = useCallback((uid: string) => {
+    const index = timelineClipsRef.current.findIndex((clip) => clip.uid === uid);
+    if (index < 0) return;
+    timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+    setTimelinePlayback(makeTimelinePlaybackState(timelineClipsRef.current, index, 0, true));
+    playTimelineFromIndex(index);
+  }, [playTimelineFromIndex]);
 
   const removeClipFromTimeline = useCallback((uid: string) => {
-    setTimelineClips(prev => prev.filter(c => c.uid !== uid));
+    setTimelineClips((prev) => {
+      const next = prev.filter(c => c.uid !== uid);
+      setTimelinePlayback(idleTimelinePlaybackState(next));
+      return next;
+    });
   }, []);
 
-  const clearTimeline = useCallback(() => setTimelineClips([]), []);
+  const clearTimeline = useCallback(() => {
+    timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+    setTimelinePlayback(idleTimelinePlaybackState());
+    setTimelineClips([]);
+  }, []);
 
   useEffect(() => {
     if (!canvasReady || restoredSessionRef.current) return;
@@ -1236,42 +1539,44 @@ export function EditorProvider({
     }
 
     manualOverridesRef.current = session.manualOverrides ?? {};
-    importedMotionsRef.current = session.importedMotions ?? [];
+    importedMotionsRef.current = normalizeImportedMotions(session.importedMotions ?? []);
     expressionConfigsRef.current = session.expressionConfigs ?? {};
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
     setMotionAliases(session.motionAliases ?? {});
-    pendingSessionClipKeysRef.current = session.timelineClipKeys ?? [];
+    pendingSessionClipRefsRef.current = session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
+    setTimelineClips([]);
+    setTimelinePlayback(idleTimelinePlaybackState());
     loadModelByPath(session.modelPath, { keepManualOverrides: true })
       .catch(console.error)
       .finally(() => setSessionReady(true));
   }, [canvasReady, clearExpressionPreviewState, loadModelByPath]);
 
   useEffect(() => {
-    if (!sessionReady || pendingSessionClipKeysRef.current) return;
+    if (!sessionReady || pendingSessionClipRefsRef.current || restoringTimelineRef.current || !modelLoaded) return;
+    const refs = timelineClipRefs(timelineClips);
     const nextSession = {
       modelPath,
       manualOverrides: getPersistableManualOverrides(),
       motionAliases,
-      timelineClipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))),
+      timelineClipKeys: clipKeysFromRefs(refs),
+      timelineClips: refs,
       importedMotions: importedMotionsRef.current,
       expressionConfigs,
     };
     writeLive2DSession(nextSession);
-  }, [modelPath, motionAliases, sessionReady, timelineClips, expressionConfigs, getPersistableManualOverrides]);
+  }, [modelPath, motionAliases, sessionReady, modelLoaded, timelineClips, expressionConfigs, getPersistableManualOverrides]);
 
   useEffect(() => {
-    if (!modelLoaded || !pendingSessionClipKeysRef.current) return;
-    const keys = Array.from(new Set(pendingSessionClipKeysRef.current));
-    pendingSessionClipKeysRef.current = null;
-    for (const key of keys) {
-      const sep = key.lastIndexOf('_');
-      if (sep < 1) continue;
-      const group = key.slice(0, sep);
-      const index = Number(key.slice(sep + 1));
-      if (!Number.isNaN(index)) restoreClipToTimeline(group, index);
-    }
-  }, [modelLoaded, restoreClipToTimeline]);
+    if (!modelLoaded || !pendingSessionClipRefsRef.current) return;
+    const refs = pendingSessionClipRefsRef.current;
+    pendingSessionClipRefsRef.current = null;
+    restoringTimelineRef.current = true;
+    restoreTimelineClips(refs);
+    window.setTimeout(() => {
+      restoringTimelineRef.current = false;
+    }, 0);
+  }, [modelLoaded, restoreTimelineClips]);
 
   // ── Context value ────────────────────────────────────────────────────────
 
@@ -1286,6 +1591,7 @@ export function EditorProvider({
     isPlaying,
     currentTime,
     duration,
+    timelinePlayback,
     paramValues,
     paramRanges,
     paramMetas,
@@ -1306,9 +1612,12 @@ export function EditorProvider({
     buildAdaptedPreset,
     togglePlay,
     scrub,
+    seekTimeline,
     renameMotion,
     deleteMotion,
     addClipToTimeline,
+    moveClipInTimeline,
+    playClip,
     removeClipFromTimeline,
     clearTimeline,
   };
