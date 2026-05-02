@@ -10,7 +10,7 @@ const groupLabels: Record<ParamMeta['group'], string> = {
 };
 
 export function ParameterPanel() {
-  const { modelLoaded, paramValues, paramRanges, paramMetas, setParameter } = useEditor();
+  const { modelLoaded, paramValues, paramRanges, paramMetas, isPlaying, setParameter, resetAllParameters } = useEditor();
   const [showAll, setShowAll] = useState(false);
 
   const visibleMetas = useMemo(() => {
@@ -21,13 +21,6 @@ export function ParameterPanel() {
   }, [paramMetas, paramValues, showAll]);
 
   const ids = Object.keys(paramValues);
-
-  function resetAllParameters() {
-    for (const id of ids) {
-      const range = paramRanges[id] ?? { min: -30, max: 30, default: 0 };
-      setParameter(id, range.default);
-    }
-  }
 
   return (
     <div className="live2d-param-panel">
@@ -40,7 +33,13 @@ export function ParameterPanel() {
             </button>
           )}
           {modelLoaded && ids.length > 0 && (
-            <button type="button" className="live2d-param-reset-all" onClick={resetAllParameters}>
+            <button
+              type="button"
+              className="live2d-param-reset-all"
+              onClick={resetAllParameters}
+              disabled={isPlaying}
+              title={isPlaying ? '播放动作时暂不支持全部重置，避免重写 motion 基线' : '全部重置为默认参数'}
+            >
               全部重置
             </button>
           )}

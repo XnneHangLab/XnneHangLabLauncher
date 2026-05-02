@@ -361,10 +361,11 @@ export class ModelInstance {
       eyeBlink.updateParameters(m, deltaTimeSeconds);
     }
 
-    // Expression. EXP preview in the launcher is handled as explicit manual
-    // overrides, not by CubismExpressionMotionManager. During motion-only
-    // preview/timeline playback we skip the SDK expression manager so queued
-    // model3 expressions cannot repeatedly re-apply themselves over the motion.
+    // Expressions are applied after the motion just like the frontend runtime.
+    // The launcher usually keeps skipExpressions=true during editor preview
+    // because EXP clips/appearance states are represented as manual overrides,
+    // but leaving this path intact allows SDK expression-manager composition
+    // when a caller needs exact frontend behavior.
     const exprMgr = this._userModel['_expressionManager'] as CubismExpressionMotionManager | null;
     if (exprMgr && !options?.skipExpressions) {
       exprMgr.updateMotion(m, deltaTimeSeconds);

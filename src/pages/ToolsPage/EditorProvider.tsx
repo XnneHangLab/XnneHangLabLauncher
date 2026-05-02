@@ -149,6 +149,7 @@ export interface EditorContextValue {
   openMotionImportDialog: () => Promise<void>;
   playMotion: (group: string, index: number) => void;
   setParameter: (id: string, value: number) => void;
+  resetAllParameters: () => void;
   previewExpression: (name: string) => void;
   updateExpressionConfig: (name: string, patch: Partial<Omit<ExpressionPresetConfig, 'name' | 'file'>>) => void;
   buildAdaptedPreset: (name: string) => Live2DAdaptedPreset | null;
@@ -539,15 +540,22 @@ export function EditorProvider({
     setActiveExpressionPreviews([]);
   }, []);
 
-  const stripExpressionParameterOverrides = useCallback((overrides: Record<string, number>) => {
-    const next = { ...overrides };
-    const expressionParamIds = new Set<string>();
+  const collectTransientExpressionParamIds = useCallback(() => {
+    const ids = new Set<string>();
     for (const meta of expressionMetasRef.current) {
-      for (const operation of meta.parameters) expressionParamIds.add(operation.id);
+      const key = expressionKey(meta.name, meta.file);
+      const config = expressionConfigsRef.current[key] ?? createDefaultExpressionConfig(meta);
+      if (config.applyMode !== 'transient') continue;
+      for (const operation of meta.parameters) ids.add(operation.id);
     }
-    for (const id of expressionParamIds) delete next[id];
-    return next;
+    return ids;
   }, []);
+
+  const stripTransientExpressionParameterOverrides = useCallback((overrides: Record<string, number>) => {
+    const next = { ...overrides };
+    for (const id of collectTransientExpressionParamIds()) delete next[id];
+    return next;
+  }, [collectTransientExpressionParamIds]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -571,7 +579,11 @@ export function EditorProvider({
           const player = motionPlayerRef.current;
           const motionPreviewActive = player.hasMotion;
           if (motionPreviewActive) {
-            model.update(dt, motionSafeOverridesRef.current, {
+            model.update(dt, manualOverridesRef.current, {
+              // EXP preview in the launcher is applied through manualOverridesRef so
+              // motion playback can compose with persistent appearance/watermark and
+              // transient expression keyframes without the SDK expression manager
+              // replaying model3 startup expressions over the same parameters.
               skipExpressions: true,
             });
             player.tick(dt);
@@ -611,7 +623,7 @@ export function EditorProvider({
         modelRef.current?.stopAllMotions();
         activeMotionRef.current = null;
         motionTimeRef.current = 0;
-        motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
+        motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(getPersistableManualOverrides());
         const model = modelRef.current;
         if (model) {
           const recoveredDuration = activeBeforeError
@@ -682,11 +694,10 @@ export function EditorProvider({
     if (!b64) return false;
     try {
       const durationSeconds = getMotionDurationSeconds(entry, instance, data.files);
-      const motionSafeOverrides = stripExpressionParameterOverrides(getPersistableManualOverrides());
-      restoreExpressionPreviewBaseline();
-      motionSafeOverridesRef.current = motionSafeOverrides;
+      const motionBaseOverrides = getPersistableManualOverrides();
+      motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(motionBaseOverrides);
       instance.stopAllMotions();
-      instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverrides }, true);
+      instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionBaseOverrides }, true);
       motionTimeRef.current = 0;
       motionPlayerRef.current.load(entry.group, entry.index, instance, durationSeconds, loop);
       motionPlayerRef.current.setOnFinish(() => {
@@ -709,7 +720,7 @@ export function EditorProvider({
       console.error('[Live2D] Motion preview parse error:', error);
       return false;
     }
-  }, [getPersistableManualOverrides, restoreExpressionPreviewBaseline, stripExpressionParameterOverrides]);
+  }, [getPersistableManualOverrides, stripTransientExpressionParameterOverrides]);
 
   const returnToBasePose = useCallback(() => {
     const instance = modelRef.current;
@@ -717,7 +728,7 @@ export function EditorProvider({
     instance?.stopAllMotions();
     activeMotionRef.current = null;
     motionTimeRef.current = 0;
-    motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
+    motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(getPersistableManualOverrides());
     if (instance) {
       instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverridesRef.current }, true);
     }
@@ -725,7 +736,7 @@ export function EditorProvider({
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
-  }, [getPersistableManualOverrides, stripExpressionParameterOverrides]);
+  }, [getPersistableManualOverrides, stripTransientExpressionParameterOverrides]);
 
   const startIdlePreview = useCallback(() => {
     const idle = modelRef.current?.motionEntries.find((e) => e.group.toLowerCase().includes('idle'));
@@ -765,7 +776,7 @@ export function EditorProvider({
 
       if (modelRef.current) modelRef.current.release();
       modelRef.current = instance;
-      motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
+      motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(getPersistableManualOverrides());
       motionPlayerRef.current.unload();
       modelRef.current?.stopAllMotions();
       activeMotionRef.current = null;
@@ -809,7 +820,7 @@ export function EditorProvider({
     } catch (err: unknown) {
       setModelError(String(err));
     }
-  }, [clearExpressionPreviewState, getPersistableManualOverrides, startIdlePreview, stripExpressionParameterOverrides]);
+  }, [clearExpressionPreviewState, getPersistableManualOverrides, startIdlePreview, stripTransientExpressionParameterOverrides]);
 
   const openImportDialog = useCallback(async () => {
     const path = await pickAnyFile('选择 Live2D 模型文件 (.model3.json)');
@@ -877,6 +888,20 @@ export function EditorProvider({
       'system',
     );
     setParamValues(prev => ({ ...prev, [id]: nextValue }));
+  }, [paramRanges, restoreExpressionPreviewBaseline, writeCurrentSession]);
+
+  const resetAllParameters = useCallback(() => {
+    if (motionPlayerRef.current.hasMotion) return;
+    const restoredPreview = restoreExpressionPreviewBaseline();
+    manualOverridesRef.current = {};
+    writeCurrentSession({});
+    const defaults: Record<string, number> = {};
+    for (const [id, range] of Object.entries(paramRanges)) defaults[id] = range.default;
+    setParamValues((prev) => ({ ...prev, ...defaults }));
+    debugLogRef.current?.(
+      `[Live2D:param-reset-all] count=${Object.keys(defaults).length}${restoredPreview ? ' preview=cancelled' : ''}`,
+      'system',
+    );
   }, [paramRanges, restoreExpressionPreviewBaseline, writeCurrentSession]);
 
   const updateExpressionConfig = useCallback((
@@ -1275,6 +1300,7 @@ export function EditorProvider({
     openMotionImportDialog,
     playMotion,
     setParameter,
+    resetAllParameters,
     previewExpression,
     updateExpressionConfig,
     buildAdaptedPreset,
