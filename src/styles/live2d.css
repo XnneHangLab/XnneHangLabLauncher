@@ -893,7 +893,8 @@
 }
 
 .live2d-clip__play,
-.live2d-clip__remove {
+.live2d-clip__remove,
+.live2d-clip__trim {
   width: 18px;
   height: 18px;
   display: flex;
@@ -909,6 +910,36 @@
   line-height: 1;
 }
 .live2d-clip__play:hover, .live2d-clip__remove:hover { background: var(--nav-hover-bg); color: var(--accent); }
+
+.live2d-clip__trim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  opacity: 0;
+  cursor: ew-resize;
+  z-index: 4;
+}
+
+.live2d-clip:hover .live2d-clip__trim,
+.live2d-clip__trim:focus-visible,
+.live2d-clip__trim:active {
+  opacity: 1;
+}
+
+.live2d-clip__trim--left {
+  left: 0;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.live2d-clip__trim--right {
+  right: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 
 .live2d-clip__body {
   flex: 1;

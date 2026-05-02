@@ -11,7 +11,7 @@ import type { ModelInstance } from '../../live2d/engine/ModelLoader';
 import { MotionPlayer } from '../../live2d/engine/MotionPlayer';
 import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
 import { readLive2DModelData, pickAnyFile, readFileBase64 } from '../../services/config/bridge';
-import type { Live2DModelData } from '../../services/config/bridge';
+import type { Live2DModelData, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -66,19 +66,31 @@ export interface ExpressionPresetConfig {
 }
 
 export interface TimelineClip {
+  kind: 'motion';
   uid: string;
   group: string;
   index: number;
-  /** Display label (alias if set, else "group#index") */
   label: string;
-  /** Clip duration in seconds from motion3 meta / CubismMotion. */
+  sourceDuration: number;
+  sourceStart: number;
+  sourceEnd: number;
   duration: number;
-  /** Parameters in this motion that are absent from the loaded model */
   missingParams: string[];
 }
 
+export interface TimelineTransition {
+  kind: 'transition';
+  uid: string;
+  duration: number;
+}
+
+export type TimelineItem = TimelineClip | TimelineTransition;
+
 export interface TimelinePlaybackState {
   active: boolean;
+  itemUid: string | null;
+  itemIndex: number;
+  itemStartTime: number;
   clipUid: string | null;
   clipIndex: number;
   clipStartTime: number;
@@ -116,7 +128,7 @@ export interface Live2DAdaptedPreset {
   expressions: Array<ExpressionPresetConfig & { parameters: ExpressionParamOp[] }>;
   appearancePresets: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions: Array<{ name: string; label: string; file: string; reason: string }>;
-  timeline: { clipKeys: string[]; clips?: TimelineClipRef[] };
+  timeline: { clipKeys: string[]; clips?: TimelineClipRef[]; items?: PersistedTimelineItem[] };
   manualOverrides: Record<string, number>;
   importedMotions: ImportedMotionState[];
 }
@@ -132,6 +144,7 @@ interface Live2DSessionState {
   motionAliases: Record<string, string>;
   timelineClipKeys: string[];
   timelineClips?: TimelineClipRef[];
+  timelineItems?: PersistedTimelineItem[];
   importedMotions?: ImportedMotionState[];
   expressionConfigs?: Record<string, ExpressionPresetConfig>;
 }
@@ -159,6 +172,7 @@ export interface EditorContextValue {
   currentMotion: { group: string; index: number } | null;
   motionAliases: Record<string, string>;
   timelineClips: TimelineClip[];
+  timelineItems: TimelineItem[];
 
   loadModelByPath: (path: string) => Promise<void>;
   openImportDialog: () => Promise<void>;
@@ -176,6 +190,7 @@ export interface EditorContextValue {
   deleteMotion: (group: string, index: number) => void;
   addClipToTimeline: (group: string, index: number, beforeUid?: string | null) => void;
   moveClipInTimeline: (uid: string, beforeUid: string | null) => void;
+  trimClip: (uid: string, edge: 'start' | 'end', sourceTime: number) => void;
   playClip: (uid: string) => void;
   removeClipFromTimeline: (uid: string) => void;
   clearTimeline: () => void;
@@ -215,8 +230,22 @@ function clipKey(group: string, index: number): string {
   return `${group}_${index}`;
 }
 
-function timelineClipRefs(clips: TimelineClip[]): TimelineClipRef[] {
-  return clips.map((clip) => ({ group: clip.group, index: clip.index }));
+function timelineClipRefs(items: TimelineItem[]): TimelineClipRef[] {
+  return items.flatMap((item) => item.kind === 'motion' ? [{ group: item.group, index: item.index }] : []);
+}
+
+function timelinePersistenceItems(items: TimelineItem[]): PersistedTimelineItem[] {
+  return items.map((item) => item.kind === 'motion'
+    ? {
+      kind: 'motion',
+      uid: item.uid,
+      group: item.group,
+      index: item.index,
+      sourceDuration: item.sourceDuration,
+      sourceStart: item.sourceStart,
+      sourceEnd: item.sourceEnd,
+    }
+    : { kind: 'transition', uid: item.uid, duration: item.duration });
 }
 
 function clipKeysFromRefs(refs: TimelineClipRef[]): string[] {
@@ -233,71 +262,78 @@ function clipRefsFromKeys(keys?: string[] | null): TimelineClipRef[] {
   });
 }
 
-function insertClip(clips: TimelineClip[], clip: TimelineClip, beforeUid?: string | null): TimelineClip[] {
-  if (!beforeUid) return [...clips, clip];
-  const index = clips.findIndex((item) => item.uid === beforeUid);
-  if (index < 0) return [...clips, clip];
-  return [...clips.slice(0, index), clip, ...clips.slice(index)];
+function insertTimelineItem(items: TimelineItem[], item: TimelineItem, beforeUid?: string | null): TimelineItem[] {
+  if (!beforeUid) return [...items, item];
+  const index = items.findIndex((candidate) => candidate.uid === beforeUid);
+  if (index < 0) return [...items, item];
+  return [...items.slice(0, index), item, ...items.slice(index)];
 }
 
-function moveClip(clips: TimelineClip[], uid: string, beforeUid: string | null): TimelineClip[] {
-  if (uid === beforeUid) return clips;
-  const moving = clips.find((clip) => clip.uid === uid);
-  if (!moving) return clips;
-  const rest = clips.filter((clip) => clip.uid !== uid);
+function moveTimelineItem(items: TimelineItem[], uid: string, beforeUid: string | null): TimelineItem[] {
+  if (uid === beforeUid) return items;
+  const moving = items.find((item) => item.uid === uid);
+  if (!moving) return items;
+  const rest = items.filter((item) => item.uid !== uid);
   if (!beforeUid) return [...rest, moving];
-  const index = rest.findIndex((clip) => clip.uid === beforeUid);
+  const index = rest.findIndex((item) => item.uid === beforeUid);
   if (index < 0) return [...rest, moving];
   return [...rest.slice(0, index), moving, ...rest.slice(index)];
 }
 
-function timelineTotalDuration(clips: TimelineClip[]): number {
-  return clips.reduce((sum, clip) => sum + clip.duration, 0);
+function timelineTotalDuration(items: TimelineItem[]): number {
+  return items.reduce((sum, item) => sum + item.duration, 0);
 }
 
-function timelineTimeAtClip(clips: TimelineClip[], index: number, clipTime: number): number {
-  return clips.slice(0, Math.max(0, index)).reduce((sum, clip) => sum + clip.duration, 0) + clipTime;
+function timelineTimeAtItem(items: TimelineItem[], index: number, itemTime: number): number {
+  return items.slice(0, Math.max(0, index)).reduce((sum, item) => sum + item.duration, 0) + itemTime;
 }
 
 function makeTimelinePlaybackState(
-  clips: TimelineClip[],
+  items: TimelineItem[],
   index: number,
-  clipTime = 0,
+  itemTime = 0,
   active = true,
 ): TimelinePlaybackState {
-  const clip = clips[index];
+  const item = items[index];
+  const itemStartTime = items.slice(0, Math.max(0, index)).reduce((sum, candidate) => sum + candidate.duration, 0);
   return {
     active,
-    clipUid: clip?.uid ?? null,
-    clipIndex: clip ? index : -1,
-    clipStartTime: clips.slice(0, Math.max(0, index)).reduce((sum, item) => sum + item.duration, 0),
-    totalTime: clip ? timelineTimeAtClip(clips, index, clipTime) : 0,
-    totalDuration: timelineTotalDuration(clips),
+    itemUid: item?.uid ?? null,
+    itemIndex: item ? index : -1,
+    itemStartTime,
+    clipUid: item?.kind === 'motion' ? item.uid : null,
+    clipIndex: item?.kind === 'motion' ? index : -1,
+    clipStartTime: item?.kind === 'motion' ? itemStartTime : 0,
+    totalTime: item ? timelineTimeAtItem(items, index, itemTime) : 0,
+    totalDuration: timelineTotalDuration(items),
   };
 }
 
-function timelinePlaybackStateAtTime(clips: TimelineClip[], time: number, active = false): TimelinePlaybackState {
-  const totalDuration = timelineTotalDuration(clips);
+function timelinePlaybackStateAtTime(items: TimelineItem[], time: number, active = false): TimelinePlaybackState {
+  const totalDuration = timelineTotalDuration(items);
   const clamped = Math.max(0, Math.min(time, totalDuration));
   let cursor = 0;
-  for (let i = 0; i < clips.length; i++) {
-    const end = cursor + clips[i].duration;
-    if (clamped <= end || i === clips.length - 1) {
-      return makeTimelinePlaybackState(clips, i, Math.max(0, clamped - cursor), active);
+  for (let i = 0; i < items.length; i++) {
+    const end = cursor + items[i].duration;
+    if (clamped <= end || i === items.length - 1) {
+      return makeTimelinePlaybackState(items, i, Math.max(0, clamped - cursor), active);
     }
     cursor = end;
   }
-  return idleTimelinePlaybackState(clips);
+  return idleTimelinePlaybackState(items);
 }
 
-function idleTimelinePlaybackState(clips: TimelineClip[] = []): TimelinePlaybackState {
+function idleTimelinePlaybackState(items: TimelineItem[] = []): TimelinePlaybackState {
   return {
     active: false,
+    itemUid: null,
+    itemIndex: -1,
+    itemStartTime: 0,
     clipUid: null,
     clipIndex: -1,
     clipStartTime: 0,
     totalTime: 0,
-    totalDuration: timelineTotalDuration(clips),
+    totalDuration: timelineTotalDuration(items),
   };
 }
 
@@ -606,6 +642,7 @@ export function EditorProvider({
   const baseParameterValuesRef = useRef<Record<string, number>>({});
   const importedMotionsRef = useRef<ImportedMotionState[]>([]);
   const importingMotionRef = useRef(false);
+  const pendingSessionItemsRef = useRef<PersistedTimelineItem[] | null>(null);
   const pendingSessionClipRefsRef = useRef<TimelineClipRef[] | null>(null);
   const restoringTimelineRef = useRef(false);
   const restoredSessionRef = useRef(false);
@@ -618,19 +655,20 @@ export function EditorProvider({
   const activeMotionRef = useRef<{ group: string; index: number; loop: boolean; onFinish?: () => void } | null>(null);
   const motionTimeRef = useRef(0);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
-  const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [timelinePlayback, setTimelinePlayback] = useState<TimelinePlaybackState>(() => idleTimelinePlaybackState());
-  const timelineClipsRef = useRef<TimelineClip[]>([]);
+  const timelineItemsRef = useRef<TimelineItem[]>([]);
   const timelinePlaybackRef = useRef<{ active: boolean; nextIndex: number }>({ active: false, nextIndex: 0 });
+  const timelineClips = timelineItems.filter((item): item is TimelineClip => item.kind === 'motion');
 
   useEffect(() => {
-    timelineClipsRef.current = timelineClips;
+    timelineItemsRef.current = timelineItems;
     setTimelinePlayback((prev) => {
-      if (prev.active) return { ...prev, totalDuration: timelineTotalDuration(timelineClips) };
-      if (prev.totalTime > 0 || prev.clipUid) return timelinePlaybackStateAtTime(timelineClips, prev.totalTime, false);
-      return idleTimelinePlaybackState(timelineClips);
+      if (prev.active) return { ...prev, totalDuration: timelineTotalDuration(timelineItems) };
+      if (prev.totalTime > 0 || prev.itemUid || prev.clipUid) return timelinePlaybackStateAtTime(timelineItems, prev.totalTime, false);
+      return idleTimelinePlaybackState(timelineItems);
     });
-  }, [timelineClips]);
+  }, [timelineItems]);
 
   // ── Init Cubism on canvas mount ──────────────────────────────────────────
 
@@ -657,17 +695,18 @@ export function EditorProvider({
   }, []);
 
   const writeCurrentSession = useCallback((overrides: Record<string, number> = manualOverridesRef.current) => {
-    const refs = timelineClipRefs(timelineClips);
+    const refs = timelineClipRefs(timelineItems);
     writeLive2DSession({
       modelPath,
       manualOverrides: getPersistableManualOverrides(overrides),
       motionAliases,
       timelineClipKeys: clipKeysFromRefs(refs),
       timelineClips: refs,
+      timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
       expressionConfigs: expressionConfigsRef.current,
     });
-  }, [getPersistableManualOverrides, modelPath, motionAliases, timelineClips]);
+  }, [getPersistableManualOverrides, modelPath, motionAliases, timelineItems]);
 
   const restoreExpressionPreviewBaseline = useCallback((key?: string) => {
     const baselines = expressionPreviewBaselinesRef.current;
@@ -761,9 +800,11 @@ export function EditorProvider({
           if (motionPreviewActive) {
             setCurrentTime(player.currentTime);
             if (timelinePlaybackRef.current.active) {
-              const clips = timelineClipsRef.current;
+              const items = timelineItemsRef.current;
               const currentIndex = Math.max(0, timelinePlaybackRef.current.nextIndex - 1);
-              setTimelinePlayback(makeTimelinePlaybackState(clips, currentIndex, player.currentTime, true));
+              const item = items[currentIndex];
+              const localTime = item?.kind === 'motion' ? Math.max(0, player.currentTime - item.sourceStart) : player.currentTime;
+              setTimelinePlayback(makeTimelinePlaybackState(items, currentIndex, localTime, true));
             }
             if (player.hasMotion) setDuration(player.duration);
           }
@@ -805,7 +846,7 @@ export function EditorProvider({
         }
         setCurrentMotion(null);
         setCurrentTime(0);
-        setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+        setTimelinePlayback(idleTimelinePlaybackState(timelineItemsRef.current));
         if (!activeBeforeError) setDuration(0);
         setIsPlaying(false);
       }
@@ -876,7 +917,7 @@ export function EditorProvider({
         setCurrentMotion(null);
         if (!options?.keepTimelinePositionOnFinish) {
           setCurrentTime(0);
-          setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+          setTimelinePlayback(idleTimelinePlaybackState(timelineItemsRef.current));
           setDuration(0);
         }
         setIsPlaying(false);
@@ -907,7 +948,7 @@ export function EditorProvider({
     setCurrentMotion(null);
     if (!options?.keepTimelinePosition) {
       setCurrentTime(0);
-      setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+      setTimelinePlayback(idleTimelinePlaybackState(timelineItemsRef.current));
       setDuration(0);
     }
     setIsPlaying(false);
@@ -929,7 +970,7 @@ export function EditorProvider({
     setModelLoaded(false);
     setModelError(null);
     setModelPath(path);
-    setTimelinePlayback(idleTimelinePlaybackState(options?.keepTimeline ? timelineClipsRef.current : []));
+    setTimelinePlayback(idleTimelinePlaybackState(options?.keepTimeline ? timelineItemsRef.current : []));
     setParamRanges({});
     setParamValues({});
     setParamMetas([]);
@@ -939,7 +980,7 @@ export function EditorProvider({
     expressionConfigsRef.current = savedExpressionConfigs;
     if (!options?.keepManualOverrides) manualOverridesRef.current = {};
     if (!options?.keepManualOverrides) importedMotionsRef.current = [];
-    if (!options?.keepTimeline) setTimelineClips([]);
+    if (!options?.keepTimeline) setTimelineItems([]);
 
     try {
       const data: Live2DModelData = await readLive2DModelData(path);
@@ -1064,7 +1105,7 @@ export function EditorProvider({
 
   const playMotion = useCallback((group: string, index: number) => {
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
-    setTimelinePlayback(idleTimelinePlaybackState(timelineClipsRef.current));
+    setTimelinePlayback(idleTimelinePlaybackState(timelineItemsRef.current));
     if (currentMotion?.group === group && currentMotion.index === index) {
       returnToBasePose();
       return;
@@ -1291,39 +1332,44 @@ export function EditorProvider({
       appearancePresets,
       excludedExpressions,
       timeline: {
-        clipKeys: clipKeysFromRefs(timelineClipRefs(timelineClips)),
-        clips: timelineClipRefs(timelineClips),
+        clipKeys: clipKeysFromRefs(timelineClipRefs(timelineItems)),
+        clips: timelineClipRefs(timelineItems),
+        items: timelinePersistenceItems(timelineItems),
       },
       manualOverrides: getPersistableManualOverrides(),
       importedMotions: importedMotionsRef.current,
     };
-  }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineClips]);
+  }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineItems]);
 
   const playTimelineFromIndex = useCallback((index: number, startTime = 0) => {
-    const clips = timelineClipsRef.current;
-    const clip = clips[index];
-    if (!clip) {
+    const items = timelineItemsRef.current;
+    const item = items[index];
+    if (!item) {
       timelinePlaybackRef.current = { active: false, nextIndex: 0 };
-      setTimelinePlayback(idleTimelinePlaybackState(clips));
+      setTimelinePlayback(idleTimelinePlaybackState(items));
       returnToBasePose();
       return;
     }
+    if (item.kind !== 'motion') {
+      playTimelineFromIndex(index + 1);
+      return;
+    }
 
-    const entry = modelRef.current?.motionEntries.find((motion) => motion.group === clip.group && motion.index === clip.index);
+    const entry = modelRef.current?.motionEntries.find((motion) => motion.group === item.group && motion.index === item.index);
     if (!entry) return;
 
-    const clipStartTime = Math.max(0, Math.min(startTime, clip.duration || startTime));
+    const clipStartTime = Math.max(0, Math.min(startTime, item.duration || startTime));
     timelinePlaybackRef.current = { active: true, nextIndex: index + 1 };
-    setTimelinePlayback(makeTimelinePlaybackState(clips, index, clipStartTime, true));
-    setDuration(timelineTotalDuration(clips));
-    setCurrentTime(timelineTimeAtClip(clips, index, clipStartTime));
+    setTimelinePlayback(makeTimelinePlaybackState(items, index, clipStartTime, true));
+    setDuration(timelineTotalDuration(items));
+    setCurrentTime(timelineTimeAtItem(items, index, clipStartTime));
     if (loadMotionIntoPlayer(entry, false, () => {
       const nextIndex = timelinePlaybackRef.current.nextIndex;
-      if (!timelinePlaybackRef.current.active || nextIndex >= timelineClipsRef.current.length) {
+      if (!timelinePlaybackRef.current.active || nextIndex >= timelineItemsRef.current.length) {
         timelinePlaybackRef.current = { active: false, nextIndex: 0 };
-        const finishedClips = timelineClipsRef.current;
-        const finishedTime = timelineTotalDuration(finishedClips);
-        const finishedPlayback = timelinePlaybackStateAtTime(finishedClips, finishedTime, false);
+        const finishedItems = timelineItemsRef.current;
+        const finishedTime = timelineTotalDuration(finishedItems);
+        const finishedPlayback = timelinePlaybackStateAtTime(finishedItems, finishedTime, false);
         setTimelinePlayback(finishedPlayback);
         setCurrentTime(finishedPlayback.totalTime);
         setDuration(finishedPlayback.totalDuration);
@@ -1331,24 +1377,27 @@ export function EditorProvider({
         return;
       }
       playTimelineFromIndex(nextIndex);
-    }, clipStartTime, { keepTimelinePositionOnFinish: true })) {
-      setDuration(timelineTotalDuration(clips));
-      setCurrentMotion({ group: clip.group, index: clip.index });
+    }, item.sourceStart + clipStartTime, { keepTimelinePositionOnFinish: true })) {
+      setDuration(timelineTotalDuration(items));
+      setCurrentMotion({ group: item.group, index: item.index });
     }
   }, [loadMotionIntoPlayer, returnToBasePose]);
 
   const togglePlay = useCallback(() => {
     const active = activeMotionRef.current;
     if (active) {
-      const clips = timelineClipsRef.current;
-      const preserveTimeline = timelinePlaybackRef.current.active && clips.length > 0;
-      const playerTime = motionPlayerRef.current.currentTime;
+      const items = timelineItemsRef.current;
+      const preserveTimeline = timelinePlaybackRef.current.active && items.length > 0;
       const currentIndex = preserveTimeline
-        ? Math.max(0, Math.min(clips.length - 1, timelinePlaybackRef.current.nextIndex - 1))
+        ? Math.max(0, Math.min(items.length - 1, timelinePlaybackRef.current.nextIndex - 1))
         : -1;
+      const item = items[currentIndex];
+      const playerTime = item?.kind === 'motion'
+        ? Math.max(0, motionPlayerRef.current.currentTime - item.sourceStart)
+        : motionPlayerRef.current.currentTime;
       timelinePlaybackRef.current = { active: false, nextIndex: 0 };
       if (preserveTimeline && currentIndex >= 0) {
-        const nextPlayback = makeTimelinePlaybackState(clips, currentIndex, playerTime, false);
+        const nextPlayback = makeTimelinePlaybackState(items, currentIndex, playerTime, false);
         setTimelinePlayback(nextPlayback);
         setCurrentTime(nextPlayback.totalTime);
         setDuration(nextPlayback.totalDuration);
@@ -1360,15 +1409,15 @@ export function EditorProvider({
       return;
     }
 
-    if (timelineClipsRef.current.length > 0) {
+    if (timelineItemsRef.current.length > 0) {
       const playback = timelinePlayback;
-      const startIndex = playback.clipIndex >= 0
-        ? playback.clipIndex
+      const startIndex = playback.itemIndex >= 0
+        ? playback.itemIndex
         : currentMotion
-          ? Math.max(0, timelineClipsRef.current.findIndex((clip) => clip.group === currentMotion.group && clip.index === currentMotion.index))
+          ? Math.max(0, timelineItemsRef.current.findIndex((item) => item.kind === 'motion' && item.group === currentMotion.group && item.index === currentMotion.index))
           : 0;
-      const startClipTime = playback.clipIndex >= 0
-        ? Math.max(0, playback.totalTime - playback.clipStartTime)
+      const startClipTime = playback.itemIndex >= 0
+        ? Math.max(0, playback.totalTime - playback.itemStartTime)
         : 0;
       playTimelineFromIndex(startIndex < 0 ? 0 : startIndex, startClipTime);
       return;
@@ -1386,33 +1435,34 @@ export function EditorProvider({
   const scrub = useCallback((time: number) => {
     // SDK-driven preview is intentionally used for correctness (same as frontend).
     // Precise non-linear scrubbing will need a separate verified evaluator/export path.
-    const timelineSeeking = timelineClipsRef.current.length > 0 && !motionPlayerRef.current.hasMotion;
+    const timelineSeeking = timelineItemsRef.current.length > 0 && !motionPlayerRef.current.hasMotion;
     const total = timelinePlaybackRef.current.active || timelineSeeking
-      ? timelineTotalDuration(timelineClipsRef.current)
+      ? timelineTotalDuration(timelineItemsRef.current)
       : duration;
     motionTimeRef.current = Math.max(0, Math.min(time, total || time));
     setCurrentTime(motionTimeRef.current);
     if (timelinePlaybackRef.current.active || timelineSeeking) {
-      const clips = timelineClipsRef.current;
+      const clips = timelineItemsRef.current;
       setTimelinePlayback(timelinePlaybackStateAtTime(clips, motionTimeRef.current, timelinePlaybackRef.current.active));
     }
   }, [duration]);
 
   const seekTimeline = useCallback((time: number) => {
-    const clips = timelineClipsRef.current;
+    const clips = timelineItemsRef.current;
     if (clips.length === 0) return;
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
     motionPlayerRef.current.unload();
     modelRef.current?.stopAllMotions();
     activeMotionRef.current = null;
     const nextPlayback = timelinePlaybackStateAtTime(clips, time, false);
-    motionTimeRef.current = Math.max(0, nextPlayback.totalTime - nextPlayback.clipStartTime);
+    motionTimeRef.current = Math.max(0, nextPlayback.totalTime - nextPlayback.itemStartTime);
     setTimelinePlayback(nextPlayback);
     setCurrentTime(nextPlayback.totalTime);
     setDuration(nextPlayback.totalDuration);
+    const item = clips[nextPlayback.itemIndex];
     setCurrentMotion(
-      nextPlayback.clipIndex >= 0 && clips[nextPlayback.clipIndex]
-        ? { group: clips[nextPlayback.clipIndex].group, index: clips[nextPlayback.clipIndex].index }
+      item?.kind === 'motion'
+        ? { group: item.group, index: item.index }
         : null,
     );
     setIsPlaying(false);
@@ -1425,10 +1475,10 @@ export function EditorProvider({
       const group = sep > 0 ? key.slice(0, sep) : '';
       const index = sep > 0 ? Number(key.slice(sep + 1)) : Number.NaN;
       if (group && !Number.isNaN(index)) {
-        setTimelineClips((clips) => clips.map((clip) => (
-          clip.group === group && clip.index === index
-            ? { ...clip, label: name || `${group}#${index}` }
-            : clip
+        setTimelineItems((items) => items.map((item) => (
+          item.kind === 'motion' && item.group === group && item.index === index
+            ? { ...item, label: name || `${group}#${index}` }
+            : item
         )));
       }
       return next;
@@ -1453,8 +1503,8 @@ export function EditorProvider({
       delete next[key];
       return next;
     });
-    setTimelineClips((prev) => {
-      const next = prev.filter((clip) => !(clip.group === group && clip.index === index));
+    setTimelineItems((prev) => {
+      const next = prev.filter((item) => !(item.kind === 'motion' && item.group === group && item.index === index));
       setTimelinePlayback(idleTimelinePlaybackState(next));
       return next;
     });
@@ -1478,12 +1528,17 @@ export function EditorProvider({
       ? validateMotion(entry.file, paramSet, data.files)
       : [];
     const label = motionAliases[`${group}_${index}`] ?? `${group}#${index}`;
+    const sourceDuration = getMotionDurationSeconds(entry, instance, data?.files);
     return {
+      kind: 'motion',
       uid: `${group}_${index}_${uidSuffix}`,
       group,
       index,
       label,
-      duration: getMotionDurationSeconds(entry, instance, data?.files),
+      sourceDuration,
+      sourceStart: 0,
+      sourceEnd: sourceDuration,
+      duration: sourceDuration,
       missingParams,
     };
   }
@@ -1491,7 +1546,23 @@ export function EditorProvider({
   const addClipToTimeline = useCallback((group: string, index: number, beforeUid?: string | null) => {
     const clip = createTimelineClip(group, index);
     if (!clip) return;
-    setTimelineClips(prev => insertClip(prev, clip, beforeUid));
+    setTimelineItems(prev => insertTimelineItem(prev, clip, beforeUid));
+  }, [motionAliases]);
+
+  const restoreTimelineItems = useCallback((items: PersistedTimelineItem[]) => {
+    const restoredItems = items.flatMap((item, index): TimelineItem[] => {
+      if (item.kind === 'transition') {
+        return [{ kind: 'transition', uid: item.uid ?? `transition_restored_${index}_${Date.now()}`, duration: Math.max(0.05, item.duration) }];
+      }
+      const clip = createTimelineClip(item.group, item.index, item.uid ?? `restored_${index}_${Date.now()}`);
+      if (!clip) return [];
+      const sourceDuration = item.sourceDuration || clip.sourceDuration;
+      const sourceStart = Math.max(0, Math.min(item.sourceStart, sourceDuration));
+      const sourceEnd = Math.max(sourceStart, Math.min(item.sourceEnd, sourceDuration));
+      return [{ ...clip, sourceDuration, sourceStart, sourceEnd, duration: Math.max(0, sourceEnd - sourceStart) }];
+    });
+    setTimelineItems(restoredItems);
+    setTimelinePlayback(idleTimelinePlaybackState(restoredItems));
   }, [motionAliases]);
 
   const restoreTimelineClips = useCallback((refs: TimelineClipRef[]) => {
@@ -1499,24 +1570,37 @@ export function EditorProvider({
       const clip = createTimelineClip(ref.group, ref.index, `restored_${index}_${Date.now()}`);
       return clip ? [clip] : [];
     });
-    setTimelineClips(restoredClips);
+    setTimelineItems(restoredClips);
     setTimelinePlayback(idleTimelinePlaybackState(restoredClips));
   }, [motionAliases]);
 
   const moveClipInTimeline = useCallback((uid: string, beforeUid: string | null) => {
-    setTimelineClips(prev => moveClip(prev, uid, beforeUid));
+    setTimelineItems(prev => moveTimelineItem(prev, uid, beforeUid));
+  }, []);
+
+  const trimClip = useCallback((uid: string, edge: 'start' | 'end', sourceTime: number) => {
+    setTimelineItems((prev) => prev.map((item) => {
+      if (item.kind !== 'motion' || item.uid !== uid) return item;
+      const minDuration = Math.min(0.05, item.sourceDuration);
+      if (edge === 'start') {
+        const sourceStart = Math.max(0, Math.min(sourceTime, item.sourceEnd - minDuration));
+        return { ...item, sourceStart, duration: item.sourceEnd - sourceStart };
+      }
+      const sourceEnd = Math.min(item.sourceDuration, Math.max(sourceTime, item.sourceStart + minDuration));
+      return { ...item, sourceEnd, duration: sourceEnd - item.sourceStart };
+    }));
   }, []);
 
   const playClip = useCallback((uid: string) => {
-    const index = timelineClipsRef.current.findIndex((clip) => clip.uid === uid);
+    const index = timelineItemsRef.current.findIndex((clip) => clip.uid === uid);
     if (index < 0) return;
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
-    setTimelinePlayback(makeTimelinePlaybackState(timelineClipsRef.current, index, 0, true));
+    setTimelinePlayback(makeTimelinePlaybackState(timelineItemsRef.current, index, 0, true));
     playTimelineFromIndex(index);
   }, [playTimelineFromIndex]);
 
   const removeClipFromTimeline = useCallback((uid: string) => {
-    setTimelineClips((prev) => {
+    setTimelineItems((prev) => {
       const next = prev.filter(c => c.uid !== uid);
       setTimelinePlayback(idleTimelinePlaybackState(next));
       return next;
@@ -1526,7 +1610,7 @@ export function EditorProvider({
   const clearTimeline = useCallback(() => {
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
     setTimelinePlayback(idleTimelinePlaybackState());
-    setTimelineClips([]);
+    setTimelineItems([]);
   }, []);
 
   useEffect(() => {
@@ -1544,8 +1628,9 @@ export function EditorProvider({
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
     setMotionAliases(session.motionAliases ?? {});
-    pendingSessionClipRefsRef.current = session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
-    setTimelineClips([]);
+    pendingSessionItemsRef.current = session.timelineItems ?? null;
+    pendingSessionClipRefsRef.current = session.timelineItems ? null : session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
+    setTimelineItems([]);
     setTimelinePlayback(idleTimelinePlaybackState());
     loadModelByPath(session.modelPath, { keepManualOverrides: true })
       .catch(console.error)
@@ -1553,30 +1638,34 @@ export function EditorProvider({
   }, [canvasReady, clearExpressionPreviewState, loadModelByPath]);
 
   useEffect(() => {
-    if (!sessionReady || pendingSessionClipRefsRef.current || restoringTimelineRef.current || !modelLoaded) return;
-    const refs = timelineClipRefs(timelineClips);
+    if (!sessionReady || pendingSessionItemsRef.current || pendingSessionClipRefsRef.current || restoringTimelineRef.current || !modelLoaded) return;
+    const refs = timelineClipRefs(timelineItems);
     const nextSession = {
       modelPath,
       manualOverrides: getPersistableManualOverrides(),
       motionAliases,
       timelineClipKeys: clipKeysFromRefs(refs),
       timelineClips: refs,
+      timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
       expressionConfigs,
     };
     writeLive2DSession(nextSession);
-  }, [modelPath, motionAliases, sessionReady, modelLoaded, timelineClips, expressionConfigs, getPersistableManualOverrides]);
+  }, [modelPath, motionAliases, sessionReady, modelLoaded, timelineItems, expressionConfigs, getPersistableManualOverrides]);
 
   useEffect(() => {
-    if (!modelLoaded || !pendingSessionClipRefsRef.current) return;
+    if (!modelLoaded || (!pendingSessionItemsRef.current && !pendingSessionClipRefsRef.current)) return;
+    const items = pendingSessionItemsRef.current;
     const refs = pendingSessionClipRefsRef.current;
+    pendingSessionItemsRef.current = null;
     pendingSessionClipRefsRef.current = null;
     restoringTimelineRef.current = true;
-    restoreTimelineClips(refs);
+    if (items) restoreTimelineItems(items);
+    else restoreTimelineClips(refs ?? []);
     window.setTimeout(() => {
       restoringTimelineRef.current = false;
     }, 0);
-  }, [modelLoaded, restoreTimelineClips]);
+  }, [modelLoaded, restoreTimelineClips, restoreTimelineItems]);
 
   // ── Context value ────────────────────────────────────────────────────────
 
@@ -1601,6 +1690,7 @@ export function EditorProvider({
     currentMotion,
     motionAliases,
     timelineClips,
+    timelineItems,
     loadModelByPath,
     openImportDialog,
     openMotionImportDialog,
@@ -1617,6 +1707,7 @@ export function EditorProvider({
     deleteMotion,
     addClipToTimeline,
     moveClipInTimeline,
+    trimClip,
     playClip,
     removeClipFromTimeline,
     clearTimeline,

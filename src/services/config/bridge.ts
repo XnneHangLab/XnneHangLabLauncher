@@ -28,6 +28,28 @@ export interface Live2DTimelineClipRef {
   index: number;
 }
 
+export interface Live2DTimelineMotionItem extends Live2DTimelineClipRef {
+  kind: 'motion';
+  uid?: string;
+  sourceDuration: number;
+  sourceStart: number;
+  sourceEnd: number;
+}
+
+export interface Live2DTimelineTransitionItem {
+  kind: 'transition';
+  uid?: string;
+  duration: number;
+}
+
+export type Live2DTimelineItem = Live2DTimelineMotionItem | Live2DTimelineTransitionItem;
+
+export interface Live2DTimelinePreset {
+  clipKeys: string[];
+  clips?: Live2DTimelineClipRef[];
+  items?: Live2DTimelineItem[];
+}
+
 export interface Live2DPreset {
   name: string;
   modelPath: string;
@@ -47,7 +69,7 @@ export interface Live2DPreset {
   expressions?: Live2DExpressionPreset[];
   appearancePresets?: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions?: Array<{ name: string; label: string; file: string; reason: string }>;
-  timeline?: { clipKeys: string[]; clips?: Live2DTimelineClipRef[] };
+  timeline?: Live2DTimelinePreset;
   manualOverrides?: Record<string, number>;
   importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;
 }

@@ -11,6 +11,17 @@ const MIN_CLIP_WIDTH = 72;
 const MAX_CLIP_WIDTH = 360;
 const TRACK_PADDING_X = 16;
 
+type TrimmingState = {
+  uid: string;
+  edge: 'start' | 'end';
+  sourceStart: number;
+  sourceEnd: number;
+  sourceDuration: number;
+  startClientX: number;
+  width: number;
+  previewSourceTime: number;
+};
+
 function clipWidth(duration: number): number {
   return Math.max(MIN_CLIP_WIDTH, Math.min(MAX_CLIP_WIDTH, Math.round((duration || 1) * PX_PER_SECOND)));
 }
@@ -82,6 +93,7 @@ export function Timeline() {
     seekTimeline,
     addClipToTimeline,
     moveClipInTimeline,
+    trimClip,
     playClip,
     removeClipFromTimeline,
     clearTimeline,
@@ -89,6 +101,7 @@ export function Timeline() {
   const [draggingUid, setDraggingUid] = useState<string | null>(null);
   const [insertBeforeUid, setInsertBeforeUid] = useState<string | null>(null);
   const [seeking, setSeeking] = useState(false);
+  const [trimming, setTrimming] = useState<TrimmingState | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -198,10 +211,50 @@ export function Timeline() {
   function handleClipPointerDown(event: ReactPointerEvent<HTMLDivElement>, uid: string) {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
-    if (target.closest('button')) return;
+    if (target.closest('button') || target.closest('.live2d-clip__trim')) return;
     setDraggingUid(uid);
     event.currentTarget.setPointerCapture(event.pointerId);
     updateDragInsertFromClientX(event.clientX);
+  }
+
+  function handleTrimPointerDown(event: ReactPointerEvent<HTMLButtonElement>, clip: typeof timelineClips[number], edge: 'start' | 'end') {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingUid(null);
+    setInsertBeforeUid(null);
+    setTrimming({
+      uid: clip.uid,
+      edge,
+      sourceStart: clip.sourceStart,
+      sourceEnd: clip.sourceEnd,
+      sourceDuration: clip.sourceDuration,
+      startClientX: event.clientX,
+      width: clipWidth(clip.duration),
+      previewSourceTime: edge === 'start' ? clip.sourceStart : clip.sourceEnd,
+    });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleTrimPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!trimming) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const secondsPerPixel = (trimming.sourceEnd - trimming.sourceStart) / Math.max(1, trimming.width);
+    const deltaSeconds = (event.clientX - trimming.startClientX) * secondsPerPixel;
+    const nextSourceTime = trimming.edge === 'start'
+      ? Math.max(0, Math.min(trimming.sourceEnd, trimming.sourceStart + deltaSeconds))
+      : Math.max(trimming.sourceStart, Math.min(trimming.sourceDuration, trimming.sourceEnd + deltaSeconds));
+    setTrimming((prev) => prev ? { ...prev, previewSourceTime: nextSourceTime } : prev);
+    trimClip(trimming.uid, trimming.edge, nextSourceTime);
+  }
+
+  function handleTrimPointerEnd(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!trimming) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setTrimming(null);
   }
 
   function handleClipPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -304,8 +357,16 @@ export function Timeline() {
               ? timelinePlayback.clipUid === clip.uid
               : currentMotion?.group === clip.group && currentMotion?.index === clip.index;
             const showMarker = insertBeforeUid === clip.uid;
+            const leftTrimPreview = trimming?.uid === clip.uid && trimming.edge === 'start'
+              ? Math.round(Math.max(0, trimming.previewSourceTime - trimming.sourceStart) * PX_PER_SECOND)
+              : 0;
             return (
-              <div key={clip.uid} className="live2d-clip-slot" data-clip-uid={clip.uid}>
+              <div
+                key={clip.uid}
+                className="live2d-clip-slot"
+                data-clip-uid={clip.uid}
+                style={leftTrimPreview > 0 ? { paddingLeft: leftTrimPreview } : undefined}
+              >
                 {showMarker && <div className="live2d-drop-marker" />}
                 <div
                   className={`live2d-clip${active ? ' live2d-clip--active' : ''}${clip.missingParams.length > 0 ? ' live2d-clip--warn' : ''}${draggingUid === clip.uid ? ' live2d-clip--dragging' : ''}`}
@@ -313,7 +374,7 @@ export function Timeline() {
                   title={
                     clip.missingParams.length > 0
                       ? `警告：以下参数不在模型中\n${clip.missingParams.join('\n')}`
-                      : `${clip.label}\n${clip.duration.toFixed(2)}s`
+                      : `${clip.label}\n${clip.sourceStart.toFixed(2)}s–${clip.sourceEnd.toFixed(2)}s / ${clip.sourceDuration.toFixed(2)}s`
                   }
                   onMouseDown={handleClipMouseDown}
                   onPointerDown={(event) => handleClipPointerDown(event, clip.uid)}
@@ -324,6 +385,16 @@ export function Timeline() {
                 >
                   <button
                     type="button"
+                    className="live2d-clip__trim live2d-clip__trim--left"
+                    title="拖拽左端缩减/扩张片段"
+                    onPointerDown={(event) => handleTrimPointerDown(event, clip, 'start')}
+                    onPointerMove={handleTrimPointerMove}
+                    onPointerUp={handleTrimPointerEnd}
+                    onPointerCancel={handleTrimPointerEnd}
+                    draggable={false}
+                  />
+                  <button
+                    type="button"
                     className="live2d-clip__play"
                     onClick={() => playClip(clip.uid)}
                     draggable={false}
@@ -332,7 +403,9 @@ export function Timeline() {
                   </button>
                   <span className="live2d-clip__body">
                     <span className="live2d-clip__label">{clip.label}</span>
-                    <span className="live2d-clip__duration">{clip.duration.toFixed(1)}s</span>
+                    <span className="live2d-clip__duration">
+                      {clip.sourceStart.toFixed(1)}–{clip.sourceEnd.toFixed(1)}s
+                    </span>
                   </span>
                   {clip.missingParams.length > 0 && (
                     <span className="live2d-clip__warn" title={`缺失参数：${clip.missingParams.join(', ')}`}>
@@ -347,6 +420,16 @@ export function Timeline() {
                   >
                     ×
                   </button>
+                  <button
+                    type="button"
+                    className="live2d-clip__trim live2d-clip__trim--right"
+                    title="拖拽右端缩减/扩张片段"
+                    onPointerDown={(event) => handleTrimPointerDown(event, clip, 'end')}
+                    onPointerMove={handleTrimPointerMove}
+                    onPointerUp={handleTrimPointerEnd}
+                    onPointerCancel={handleTrimPointerEnd}
+                    draggable={false}
+                  />
                 </div>
               </div>
             );
