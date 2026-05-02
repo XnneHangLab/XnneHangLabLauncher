@@ -5,8 +5,9 @@ import type { Live2DPreset } from '../../services/config/bridge';
 
 export function ResourcePanel() {
   const {
-    modelLoaded, modelPath, motionEntries, motionAliases,
+    modelLoaded, modelPath, motionEntries, motionAliases, currentMotion,
     addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
+    renameMotion, deleteMotion, playMotion,
     buildAdaptedPreset,
   } = useEditor();
 
@@ -90,10 +91,51 @@ export function ResourcePanel() {
           ) : (
             motionEntries.map((m) => {
               const key = `${m.group}_${m.index}`;
-              const label = motionAliases[key] ?? `${m.group}#${m.index}`;
+              const defaultLabel = m.name || `${m.group}#${m.index}`;
+              const label = motionAliases[key] ?? defaultLabel;
+              const isImported = m.group === 'imported';
+              const isPreviewing = currentMotion?.group === m.group && currentMotion.index === m.index;
               return (
-                <div key={key} className="live2d-resource-item">
-                  <span className="live2d-resource-item__name" title={m.file}>{label}</span>
+                <div key={key} className="live2d-resource-item live2d-resource-item--motion">
+                  <button
+                    type="button"
+                    className={`live2d-resource-motion-name${isPreviewing ? ' live2d-resource-motion-name--active' : ''}`}
+                    title={`预览动作：${m.file}`}
+                    onMouseDownCapture={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      playMotion(m.group, m.index);
+                    }}
+                    onPointerDownCapture={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      playMotion(m.group, m.index);
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                  >
+                    <span className="live2d-resource-motion-icon">{isPreviewing ? '■' : '▶'}</span>
+                    <span className="live2d-resource-motion-label">{label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="live2d-resource-rename"
+                    title={`编辑别名，不会修改源文件：${m.file}`}
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="text"
+                      className="live2d-resource-alias"
+                      value={label}
+                      title={`别名，不会修改源文件：${m.file}`}
+                      onChange={(event) => renameMotion(key, event.target.value)}
+                      onBlur={(event) => {
+                        if (!event.target.value.trim()) renameMotion(key, defaultLabel);
+                      }}
+                    />
+                  </button>
                   <button
                     type="button"
                     className="live2d-resource-add"
@@ -102,6 +144,16 @@ export function ResourcePanel() {
                   >
                     +
                   </button>
+                  {isImported && (
+                    <button
+                      type="button"
+                      className="live2d-resource-del"
+                      title="删除导入动作（不删除源文件）"
+                      onClick={() => deleteMotion(m.group, m.index)}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               );
             })

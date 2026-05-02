@@ -72,7 +72,7 @@ export function Timeline() {
                 >
                   {active ? '■' : '▶'}
                 </button>
-                <span className="live2d-clip__label">{clip.label}</span>
+                <span className="live2d-clip__label">{clip.label} · {clip.duration.toFixed(1)}s</span>
                 {clip.missingParams.length > 0 && (
                   <span className="live2d-clip__warn" title={`缺失参数：${clip.missingParams.join(', ')}`}>
                     ⚠

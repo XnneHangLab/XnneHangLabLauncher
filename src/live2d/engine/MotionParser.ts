@@ -11,30 +11,46 @@
 
 import type { MotionData, MotionCurve, ParsedMotion, ParsedCurve, ParsedSegment, KeyPoint } from '../types';
 
-const SEGMENT_STRIDE: Record<number, number> = {
-  0: 4,  // linear:       [type, t0, v0, t1, v1]
-  1: 8,  // bezier:       [type, t0, v0, cx1, cy1, cx2, cy2, t1, v1]
-  2: 4,  // stepped:      [type, t0, v0, t1, v1]
-  3: 4,  // inv-stepped:  [type, t0, v0, t1, v1]
+const SEGMENT_POINT_COUNTS: Record<number, number> = {
+  0: 1,  // linear:       first=[type,p0,p1], next=[type,p1]
+  1: 3,  // bezier:       first=[type,p0,c1,c2,p1], next=[type,c1,c2,p1]
+  2: 1,  // stepped:      first=[type,p0,p1], next=[type,p1]
+  3: 1,  // inv-stepped:  first=[type,p0,p1], next=[type,p1]
 };
 
 /** Parse a flat segment array into structured segments. */
 export function parseSegments(flat: number[]): ParsedSegment[] {
   const segments: ParsedSegment[] = [];
+  if (flat.length < 5) return segments;
+
+  let previousPoint: KeyPoint | null = null;
   let i = 0;
   while (i < flat.length) {
     const type = flat[i];
-    const stride = SEGMENT_STRIDE[type] ?? 4;
-    const slice = flat.slice(i, i + stride);
-
+    const nextPointCount = SEGMENT_POINT_COUNTS[type] ?? 1;
     const points: KeyPoint[] = [];
-    // Points start at offset 1 (after type)
-    for (let p = 1; p < slice.length; p += 2) {
-      points.push({ time: slice[p], value: slice[p + 1] });
-    }
-    segments.push({ type, points });
 
-    i += stride;
+    if (previousPoint) {
+      points.push({ ...previousPoint });
+      for (let p = 0; p < nextPointCount; p++) {
+        const offset = i + 1 + p * 2;
+        if (offset + 1 >= flat.length) break;
+        points.push({ time: flat[offset], value: flat[offset + 1] });
+      }
+      i += 1 + nextPointCount * 2;
+    } else {
+      const totalPointCount = nextPointCount + 1;
+      for (let p = 0; p < totalPointCount; p++) {
+        const offset = i + 1 + p * 2;
+        if (offset + 1 >= flat.length) break;
+        points.push({ time: flat[offset], value: flat[offset + 1] });
+      }
+      i += 1 + totalPointCount * 2;
+    }
+
+    if (points.length < 2) break;
+    segments.push({ type, points });
+    previousPoint = points[points.length - 1];
   }
   return segments;
 }
@@ -42,9 +58,11 @@ export function parseSegments(flat: number[]): ParsedSegment[] {
 /** Serialize parsed segments back into a flat array. */
 export function serializeSegments(segments: ParsedSegment[]): number[] {
   const flat: number[] = [];
-  for (const seg of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
     flat.push(seg.type);
-    for (const pt of seg.points) {
+    const points = i === 0 ? seg.points : seg.points.slice(1);
+    for (const pt of points) {
       flat.push(pt.time, pt.value);
     }
   }
@@ -152,6 +170,7 @@ function lerp(t0: number, v0: number, t1: number, v1: number, t: number): number
 }
 
 function cubicBezier(p0x: number, p0y: number, p1x: number, p1y: number, p2x: number, p2y: number, p3x: number, p3y: number, x: number): number {
+  if (Math.abs(p3x - p0x) < 1e-6) return p0y;
   // Newton-Raphson to find t for given x, then evaluate y
   let t = (x - p0x) / (p3x - p0x);
   for (let i = 0; i < 8; i++) {

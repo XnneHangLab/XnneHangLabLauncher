@@ -60,6 +60,8 @@ export class ModelInstance {
   private _motionGroupNames: string[] = [];
   private _userTimeSeconds = 0;
   private _animating = false;
+  private _eyeBlinkIds: csmVector<CubismIdHandle> = new csmVector();
+  private _lipSyncIds: csmVector<CubismIdHandle> = new csmVector();
 
   // Standard parameter ID handles
   private _idParamAngleX: CubismIdHandle | null = null;
@@ -99,6 +101,44 @@ export class ModelInstance {
 
     // Collect parameter IDs
     this.refreshParameterIds();
+    this.initializeMotionEffectIds();
+  }
+
+  private initializeMotionEffectIds(): void {
+    this._eyeBlinkIds = new csmVector<CubismIdHandle>();
+    this._lipSyncIds = new csmVector<CubismIdHandle>();
+
+    for (let i = 0; i < this._modelSetting.getEyeBlinkParameterCount(); i++) {
+      this._eyeBlinkIds.pushBack(this._modelSetting.getEyeBlinkParameterId(i));
+    }
+
+    for (let i = 0; i < this._modelSetting.getLipSyncParameterCount(); i++) {
+      this._lipSyncIds.pushBack(this._modelSetting.getLipSyncParameterId(i));
+    }
+
+    if (this._lipSyncIds.getSize() === 0) {
+      const idManager = CubismFramework.getIdManager();
+      const fallbackId = idManager?.getId(CubismDefaultParameterId.ParamMouthOpenY);
+      if (fallbackId && this.model.getParameterIndex(fallbackId) !== -1) {
+        this._lipSyncIds.pushBack(fallbackId);
+      }
+    }
+
+    this.applyEffectIdsToLoadedMotions();
+  }
+
+  private applyEffectIdsToMotion(motion: CubismMotion): void {
+    motion.setEffectIds(this._eyeBlinkIds, this._lipSyncIds);
+  }
+
+  private applyEffectIdsToLoadedMotions(): void {
+    let ite = this._loadedMotions.begin();
+    const end = this._loadedMotions.end();
+    while (ite.notEqual(end)) {
+      const motion = ite.ptr().second as CubismMotion | null;
+      if (motion) this.applyEffectIdsToMotion(motion);
+      ite.preIncrement();
+    }
   }
 
   get model(): CubismModel {
@@ -151,6 +191,17 @@ export class ModelInstance {
     return this.model.getParameterValueByIndex(index);
   }
 
+  getBaseParameterValues(): Record<string, number> {
+    const core = this._core;
+    const values: Record<string, number> = {};
+    for (let i = 0; i < this.parameterIds.length; i++) {
+      values[this.parameterIds[i]] = core
+        ? (core.parameters.defaultValues as Float32Array)[i]
+        : this.model.getParameterDefaultValue(i);
+    }
+    return values;
+  }
+
   private clampParameterValue(index: number, value: number): number {
     const core = this._core;
     const min = core ? (core.parameters.minimumValues as Float32Array)[index] : this.model.getParameterMinimumValue(index);
@@ -177,6 +228,10 @@ export class ModelInstance {
       this.setParameterValue(id, value, false);
     }
     if (save) this.model.saveParameters();
+  }
+
+  commitParameterValues(): void {
+    this.model.update();
   }
 
   getDebugSnapshot(paramId: string): { id: string; index: number; value: number; coreValue: number; changedDrawables: number; vertexSample: number } {
@@ -235,8 +290,33 @@ export class ModelInstance {
   addLoadedMotion(key: string, buf: ArrayBuffer): boolean {
     const motion = CubismMotion.create(buf, buf.byteLength) as CubismMotion;
     if (!motion) return false;
+    this.applyEffectIdsToMotion(motion);
     this._loadedMotions.setValue(key, motion);
     return true;
+  }
+
+  getLoadedMotion(group: string, index: number): CubismMotion | null {
+    const key = `${group}_${index}`;
+    return this._loadedMotions.isExist(key)
+      ? this._loadedMotions.getValue(key) as CubismMotion
+      : null;
+  }
+
+  getMotionDuration(group: string, index: number): number {
+    const motion = this.getLoadedMotion(group, index);
+    return motion?.getLoopDuration?.() ?? 0;
+  }
+
+  removeLoadedMotion(key: string): void {
+    let ite = this._loadedMotions.begin();
+    const end = this._loadedMotions.end();
+    while (ite.notEqual(end)) {
+      if (ite.ptr().first === key) {
+        this._loadedMotions.erase(ite);
+        return;
+      }
+      ite.preIncrement();
+    }
   }
 
   // ── Standard param accessors (for drag etc.) ─────────────────────────────
@@ -251,49 +331,60 @@ export class ModelInstance {
 
   // ── Update / Draw ──────────────────────────────────────────────────────────
 
-  update(deltaTimeSeconds: number, parameterOverrides?: Record<string, number>): void {
+  update(
+    deltaTimeSeconds: number,
+    parameterOverrides?: Record<string, number>,
+    options?: { skipCubismMotions?: boolean; skipExpressions?: boolean; skipEffects?: boolean },
+  ): void {
     const m = this.model;
     if (!m) return;
 
     this._userTimeSeconds += deltaTimeSeconds;
 
-    // Motion update
+    // Match the frontend runtime order: always restore the last saved baseline,
+    // let CubismMotionManager apply the active motion, then save that result for
+    // secondary effects. This avoids stacking relative motion/expression values
+    // frame after frame.
+    let motionUpdated = false;
     const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
-    if (motionMgr) {
-      m.loadParameters();
+    m.loadParameters();
+    if (motionMgr && !options?.skipCubismMotions) {
       if (!motionMgr.isFinished()) {
-        motionMgr.updateMotion(m, deltaTimeSeconds);
+        motionUpdated = motionMgr.updateMotion(m, deltaTimeSeconds);
       }
-      m.saveParameters();
     }
+    m.saveParameters();
 
-    // Eye blink (only when no motion is driving it)
+    // Eye blink (only when no motion is driving it), same as frontend runtime.
     const eyeBlink = this._userModel['_eyeBlink'] as CubismEyeBlink | null;
-    if (eyeBlink) {
+    if (!options?.skipEffects && !motionUpdated && eyeBlink) {
       eyeBlink.updateParameters(m, deltaTimeSeconds);
     }
 
-    // Expression
+    // Expression. EXP preview in the launcher is handled as explicit manual
+    // overrides, not by CubismExpressionMotionManager. During motion-only
+    // preview/timeline playback we skip the SDK expression manager so queued
+    // model3 expressions cannot repeatedly re-apply themselves over the motion.
     const exprMgr = this._userModel['_expressionManager'] as CubismExpressionMotionManager | null;
-    if (exprMgr) {
+    if (exprMgr && !options?.skipExpressions) {
       exprMgr.updateMotion(m, deltaTimeSeconds);
     }
 
     // Breath
     const breath = this._userModel['_breath'] as CubismBreath | null;
-    if (breath) {
+    if (!options?.skipEffects && breath) {
       breath.updateParameters(m, deltaTimeSeconds);
     }
 
     // Physics
     const physics = this._userModel['_physics'] as CubismPhysics | null;
-    if (physics) {
+    if (!options?.skipEffects && physics) {
       physics.evaluate(m, deltaTimeSeconds);
     }
 
     // Pose
     const pose = this._userModel['_pose'] as CubismPose | null;
-    if (pose) {
+    if (!options?.skipEffects && pose) {
       pose.updateParameters(m, deltaTimeSeconds);
     }
 
@@ -340,13 +431,18 @@ export class ModelInstance {
 
   // ── Motion control ─────────────────────────────────────────────────────────
 
-  startMotion(group: string, index: number): void {
-    const name = `${group}_${index}`;
-    const motion = this._loadedMotions.getValue(name) as CubismMotion | null;
-    if (motion) {
-      const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
-      motionMgr.startMotionPriority(motion, false, 3);
-    }
+  startMotion(group: string, index: number, loop?: boolean): boolean {
+    const motion = this.getLoadedMotion(group, index);
+    if (!motion) return false;
+
+    motion.setIsLoop(Boolean(loop));
+    motion.setFinishedMotionHandler(() => undefined);
+
+    const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
+    motionMgr.stopAllMotions();
+    motionMgr.setReservePriority(3);
+    motionMgr.startMotionPriority(motion, false, 3);
+    return true;
   }
 
   startRandomMotion(group: string): void {
@@ -540,6 +636,7 @@ export async function loadModelFromData(
 
   const instance = new ModelInstance(userModel, setting, textureInfos, motionEntries);
   (instance as any)['_loadedMotions'] = loadedMotions;
+  (instance as any).applyEffectIdsToLoadedMotions();
 
   return { instance, setting };
 }

@@ -10,7 +10,6 @@ import { loadModelFromData, base64ToArrayBuffer } from '../../live2d/engine/Mode
 import type { ModelInstance } from '../../live2d/engine/ModelLoader';
 import { MotionPlayer } from '../../live2d/engine/MotionPlayer';
 import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
-import { parseMotion } from '../../live2d/engine/MotionParser';
 import { readLive2DModelData, pickAnyFile, readFileBase64 } from '../../services/config/bridge';
 import type { Live2DModelData } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
@@ -72,6 +71,8 @@ export interface TimelineClip {
   index: number;
   /** Display label (alias if set, else "group#index") */
   label: string;
+  /** Clip duration in seconds from motion3 meta / CubismMotion. */
+  duration: number;
   /** Parameters in this motion that are absent from the loaded model */
   missingParams: string[];
 }
@@ -81,6 +82,8 @@ interface ImportedMotionState {
   fileName: string;
   name: string;
   base64: string;
+  group?: string;
+  index?: number;
 }
 
 export interface Live2DAdaptedPreset {
@@ -123,7 +126,6 @@ const live2dSessionKey = 'live2d.previewSession';
 export interface EditorContextValue {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   modelInstance: ModelInstance | null;
-  motionPlayer: MotionPlayer;
   keyframeOverlay: KeyframeOverlay;
   motionEntries: MotionEntry[];
   modelLoaded: boolean;
@@ -153,6 +155,7 @@ export interface EditorContextValue {
   togglePlay: () => void;
   scrub: (time: number) => void;
   renameMotion: (key: string, name: string) => void;
+  deleteMotion: (group: string, index: number) => void;
   addClipToTimeline: (group: string, index: number) => void;
   removeClipFromTimeline: (uid: string) => void;
   clearTimeline: () => void;
@@ -457,7 +460,10 @@ export function EditorProvider({
   const [activeExpressionPreviews, setActiveExpressionPreviews] = useState<string[]>([]);
   const manualOverridesRef = useRef<Record<string, number>>({});
   const expressionConfigsRef = useRef<Record<string, ExpressionPresetConfig>>({});
+  const expressionMetasRef = useRef<ExpressionMeta[]>([]);
   const expressionPreviewBaselinesRef = useRef<Record<string, Record<string, ExpressionPreviewBaselineEntry>>>({});
+  const motionSafeOverridesRef = useRef<Record<string, number>>({});
+  const baseParameterValuesRef = useRef<Record<string, number>>({});
   const importedMotionsRef = useRef<ImportedMotionState[]>([]);
   const pendingSessionClipKeysRef = useRef<string[] | null>(null);
   const restoredSessionRef = useRef(false);
@@ -467,6 +473,8 @@ export function EditorProvider({
   const debugFrameRef = useRef(0);
   const debugLogRef = useRef(onDebugLog);
   const [currentMotion, setCurrentMotion] = useState<{ group: string; index: number } | null>(null);
+  const activeMotionRef = useRef<{ group: string; index: number; loop: boolean; onFinish?: () => void } | null>(null);
+  const motionTimeRef = useRef(0);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
 
@@ -479,6 +487,10 @@ export function EditorProvider({
   useEffect(() => {
     expressionConfigsRef.current = expressionConfigs;
   }, [expressionConfigs]);
+
+  useEffect(() => {
+    expressionMetasRef.current = expressionMetas;
+  }, [expressionMetas]);
 
   const getPersistableManualOverrides = useCallback((overrides: Record<string, number> = manualOverridesRef.current) => {
     const cleanOverrides = { ...overrides };
@@ -527,6 +539,16 @@ export function EditorProvider({
     setActiveExpressionPreviews([]);
   }, []);
 
+  const stripExpressionParameterOverrides = useCallback((overrides: Record<string, number>) => {
+    const next = { ...overrides };
+    const expressionParamIds = new Set<string>();
+    for (const meta of expressionMetasRef.current) {
+      for (const operation of meta.parameters) expressionParamIds.add(operation.id);
+    }
+    for (const id of expressionParamIds) delete next[id];
+    return next;
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || cubismReadyRef.current) return;
@@ -543,34 +565,74 @@ export function EditorProvider({
       const dt = lastTimeRef.current ? Math.min((now - lastTimeRef.current) / 1000, 0.05) : 0.016;
       lastTimeRef.current = now;
 
-      const model = modelRef.current;
-      if (model) {
-        const player = motionPlayerRef.current;
-        player.tick(dt);
-        overlayRef.current.apply(model, player.currentTime);
-        model.update(dt, manualOverridesRef.current);
-        if (debugParamRef.current && debugFrameRef.current < 60) {
-          debugFrameRef.current++;
-          const snapshot = model.getDebugSnapshot(debugParamRef.current);
-          const message = `[Live2D:param-preview] frame=${debugFrameRef.current} ${JSON.stringify(snapshot)}`;
-          console.log(message);
-          if (debugFrameRef.current === 1 || debugFrameRef.current % 10 === 0) {
-            debugLogRef.current?.(message, 'system');
+      try {
+        const model = modelRef.current;
+        if (model) {
+          const player = motionPlayerRef.current;
+          const motionPreviewActive = player.hasMotion;
+          if (motionPreviewActive) {
+            model.update(dt, motionSafeOverridesRef.current, {
+              skipExpressions: true,
+            });
+            player.tick(dt);
+            overlayRef.current.apply(model, player.currentTime);
+          } else {
+            model.update(dt, manualOverridesRef.current);
+          }
+          motionTimeRef.current = player.currentTime;
+          if (debugParamRef.current && debugFrameRef.current < 60) {
+            debugFrameRef.current++;
+            const snapshot = model.getDebugSnapshot(debugParamRef.current);
+            const message = `[Live2D:param-preview] frame=${debugFrameRef.current} ${JSON.stringify(snapshot)}`;
+            console.log(message);
+            if (debugFrameRef.current === 1 || debugFrameRef.current % 10 === 0) {
+              debugLogRef.current?.(message, 'system');
+            }
+          }
+          CubismInit.resize();
+          model.draw();
+          setCurrentTime(player.currentTime);
+          if (player.hasMotion) setDuration(player.duration);
+          setIsPlaying(player.isPlaying);
+
+          const ids = model.parameterIds;
+          if (ids.length > 0) {
+            const vals: Record<string, number> = {};
+            for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValueAt(i);
+            for (const [id, value] of Object.entries(manualOverridesRef.current)) vals[id] = value;
+            setParamValues(vals);
           }
         }
-        CubismInit.resize();
-        model.draw();
-        setCurrentTime(player.currentTime);
-        setDuration(player.duration);
-        setIsPlaying(player.isPlaying);
-
-        const ids = model.parameterIds;
-        if (ids.length > 0) {
-          const vals: Record<string, number> = {};
-          for (let i = 0; i < ids.length; i++) vals[ids[i]] = model.getParameterValueAt(i);
-          for (const [id, value] of Object.entries(manualOverridesRef.current)) vals[id] = value;
-          setParamValues(vals);
+      } catch (error) {
+        console.error('[Live2D] Preview loop error:', error);
+        debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}`, 'stderr');
+        const activeBeforeError = activeMotionRef.current;
+        motionPlayerRef.current.unload();
+        modelRef.current?.stopAllMotions();
+        activeMotionRef.current = null;
+        motionTimeRef.current = 0;
+        motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
+        const model = modelRef.current;
+        if (model) {
+          const recoveredDuration = activeBeforeError
+            ? getMotionDurationSeconds(
+              model.motionEntries.find(e => e.group === activeBeforeError.group && e.index === activeBeforeError.index) ?? {
+                group: activeBeforeError.group,
+                index: activeBeforeError.index,
+                name: `${activeBeforeError.group}_${activeBeforeError.index}`,
+                file: '',
+              },
+              model,
+              modelDataRef.current?.files,
+            )
+            : 0;
+          model.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverridesRef.current }, true);
+          if (recoveredDuration > 0) setDuration(recoveredDuration);
         }
+        setCurrentMotion(null);
+        setCurrentTime(0);
+        if (!activeBeforeError) setDuration(0);
+        setIsPlaying(false);
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -596,6 +658,83 @@ export function EditorProvider({
       return [];
     }
   }
+
+  function getMotionDurationSeconds(entry: MotionEntry, instance: ModelInstance, files?: Record<string, string>): number {
+    const sdkDuration = instance.getMotionDuration(entry.group, entry.index);
+    if (sdkDuration > 0) return sdkDuration;
+
+    const b64 = files?.[entry.file];
+    if (!b64) return 0;
+    try {
+      const motionJson = parseBase64Json(b64) as MotionData;
+      const meta = motionJson.Meta as MotionData['Meta'] & { duration?: number };
+      return Number(meta?.Duration) || Number(meta?.duration) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  const loadMotionIntoPlayer = useCallback((entry: MotionEntry, loop: boolean, onFinish?: () => void) => {
+    const instance = modelRef.current;
+    const data = modelDataRef.current;
+    if (!instance || !data) return false;
+    const b64 = data.files[entry.file];
+    if (!b64) return false;
+    try {
+      const durationSeconds = getMotionDurationSeconds(entry, instance, data.files);
+      const motionSafeOverrides = stripExpressionParameterOverrides(getPersistableManualOverrides());
+      restoreExpressionPreviewBaseline();
+      motionSafeOverridesRef.current = motionSafeOverrides;
+      instance.stopAllMotions();
+      instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverrides }, true);
+      motionTimeRef.current = 0;
+      motionPlayerRef.current.load(entry.group, entry.index, instance, durationSeconds, loop);
+      motionPlayerRef.current.setOnFinish(() => {
+        motionPlayerRef.current.unload();
+        activeMotionRef.current = null;
+        motionTimeRef.current = 0;
+        setCurrentMotion(null);
+        setCurrentTime(0);
+        setDuration(0);
+        setIsPlaying(false);
+        onFinish?.();
+      });
+      motionPlayerRef.current.play();
+      activeMotionRef.current = { group: entry.group, index: entry.index, loop, onFinish };
+      setDuration(durationSeconds);
+      setCurrentTime(0);
+      setIsPlaying(true);
+      return true;
+    } catch (error) {
+      console.error('[Live2D] Motion preview parse error:', error);
+      return false;
+    }
+  }, [getPersistableManualOverrides, restoreExpressionPreviewBaseline, stripExpressionParameterOverrides]);
+
+  const returnToBasePose = useCallback(() => {
+    const instance = modelRef.current;
+    motionPlayerRef.current.unload();
+    instance?.stopAllMotions();
+    activeMotionRef.current = null;
+    motionTimeRef.current = 0;
+    motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
+    if (instance) {
+      instance.applyParameterValues({ ...baseParameterValuesRef.current, ...motionSafeOverridesRef.current }, true);
+    }
+    setCurrentMotion(null);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+  }, [getPersistableManualOverrides, stripExpressionParameterOverrides]);
+
+  const startIdlePreview = useCallback(() => {
+    const idle = modelRef.current?.motionEntries.find((e) => e.group.toLowerCase().includes('idle'));
+    if (!idle) {
+      returnToBasePose();
+      return;
+    }
+    if (loadMotionIntoPlayer(idle, true)) setCurrentMotion(null);
+  }, [loadMotionIntoPlayer, returnToBasePose]);
 
   // ── Model loading ────────────────────────────────────────────────────────
 
@@ -626,14 +765,23 @@ export function EditorProvider({
 
       if (modelRef.current) modelRef.current.release();
       modelRef.current = instance;
+      motionSafeOverridesRef.current = stripExpressionParameterOverrides(getPersistableManualOverrides());
       motionPlayerRef.current.unload();
+      modelRef.current?.stopAllMotions();
+      activeMotionRef.current = null;
+      motionTimeRef.current = 0;
       for (const imported of importedMotionsRef.current) {
-        const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
+        const usedIndices = instance.motionEntries
+          .filter(e => e.group === 'imported')
+          .map(e => e.index);
+        const nextIndex = imported.index ?? (usedIndices.length > 0 ? Math.max(...usedIndices) + 1 : 0);
         const key = `imported_${nextIndex}`;
         const buf = base64ToArrayBuffer(imported.base64);
         if (!instance.addLoadedMotion(key, buf)) continue;
         if (modelDataRef.current) modelDataRef.current.files[imported.fileName] = imported.base64;
         instance.motionEntries.push({ group: 'imported', index: nextIndex, name: imported.name, file: imported.fileName });
+        imported.index = nextIndex;
+        imported.group = 'imported';
       }
       setMotionEntries(instance.motionEntries);
 
@@ -644,6 +792,7 @@ export function EditorProvider({
         values[id] = instance.getParameterValueAt(i);
         ranges[id] = instance.getParameterRangeAt(i);
       }
+      baseParameterValuesRef.current = values;
       setParamValues(values);
       setParamRanges(ranges);
       setParamMetas(collectParamMetas(instance.parameterIds, data.modelJson as Record<string, unknown>, data.files));
@@ -656,27 +805,11 @@ export function EditorProvider({
       setModelLoaded(true);
 
       // Auto-start Idle motion
-      const idle = instance.motionEntries.find((e) => e.group.toLowerCase().includes('idle'));
-      if (idle) {
-        instance.startMotion(idle.group, idle.index);
-        const fr = (data.modelJson as Record<string, unknown>).FileReferences as Record<string, unknown>;
-        const motions = fr.Motions as Record<string, Array<Record<string, unknown>>>;
-        const groupArr = motions?.[idle.group];
-        if (groupArr?.[idle.index]) {
-          const file = groupArr[idle.index].File as string;
-          const b64 = data.files[file];
-          if (b64) {
-            const motionJson = parseBase64Json(b64) as MotionData;
-            const parsed = parseMotion(motionJson);
-            motionPlayerRef.current.load(parsed, instance, true);
-            motionPlayerRef.current.play();
-          }
-        }
-      }
+      startIdlePreview();
     } catch (err: unknown) {
       setModelError(String(err));
     }
-  }, [clearExpressionPreviewState]);
+  }, [clearExpressionPreviewState, getPersistableManualOverrides, startIdlePreview, stripExpressionParameterOverrides]);
 
   const openImportDialog = useCallback(async () => {
     const path = await pickAnyFile('选择 Live2D 模型文件 (.model3.json)');
@@ -692,7 +825,10 @@ export function EditorProvider({
       const b64 = await readFileBase64(path);
       const fileName = path.split(/[/\\]/).pop() ?? path;
       const group = 'imported';
-      const nextIndex = instance.motionEntries.filter(e => e.group === 'imported').length;
+      const usedIndices = instance.motionEntries
+        .filter(e => e.group === group)
+        .map(e => e.index);
+      const nextIndex = usedIndices.length > 0 ? Math.max(...usedIndices) + 1 : 0;
       const key = `${group}_${nextIndex}`;
       const buf = base64ToArrayBuffer(b64);
       const ok = instance.addLoadedMotion(key, buf);
@@ -704,7 +840,7 @@ export function EditorProvider({
       const motionName = fileName.replace(/\.motion3\.json$/i, '');
       importedMotionsRef.current = [
         ...importedMotionsRef.current,
-        { path, fileName, name: motionName, base64: b64 },
+        { path, fileName, name: motionName, base64: b64, group, index: nextIndex },
       ];
       const entry = { group, index: nextIndex, name: motionName, file: fileName };
       instance.motionEntries.push(entry);
@@ -716,9 +852,16 @@ export function EditorProvider({
   }, []);
 
   const playMotion = useCallback((group: string, index: number) => {
-    modelRef.current?.startMotion(group, index);
-    setCurrentMotion({ group, index });
-  }, []);
+    if (currentMotion?.group === group && currentMotion.index === index) {
+      returnToBasePose();
+      return;
+    }
+    const entry = modelRef.current?.motionEntries.find((motion) => motion.group === group && motion.index === index);
+    if (!entry) return;
+    if (loadMotionIntoPlayer(entry, false, returnToBasePose)) {
+      setCurrentMotion({ group, index });
+    }
+  }, [currentMotion, loadMotionIntoPlayer, returnToBasePose]);
 
   const setParameter = useCallback((id: string, value: number) => {
     const restoredPreview = restoreExpressionPreviewBaseline();
@@ -927,18 +1070,71 @@ export function EditorProvider({
   }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineClips]);
 
   const togglePlay = useCallback(() => {
-    const p = motionPlayerRef.current;
-    if (p.isPlaying) p.pause();
-    else p.play();
-  }, []);
+    const active = activeMotionRef.current;
+    if (active) {
+      motionPlayerRef.current.unload();
+      modelRef.current?.stopAllMotions();
+      activeMotionRef.current = null;
+      setIsPlaying(false);
+      return;
+    }
+
+    if (!currentMotion) {
+      startIdlePreview();
+      return;
+    }
+
+    const entry = modelRef.current?.motionEntries.find(e => e.group === currentMotion.group && e.index === currentMotion.index);
+    if (entry) loadMotionIntoPlayer(entry, false, returnToBasePose);
+  }, [currentMotion, loadMotionIntoPlayer, returnToBasePose, startIdlePreview]);
 
   const scrub = useCallback((time: number) => {
-    motionPlayerRef.current.scrub(time);
-  }, []);
+    // SDK-driven preview is intentionally used for correctness (same as frontend).
+    // Precise non-linear scrubbing will need a separate verified evaluator/export path.
+    motionTimeRef.current = Math.max(0, Math.min(time, duration || time));
+    setCurrentTime(motionTimeRef.current);
+  }, [duration]);
 
   const renameMotion = useCallback((key: string, name: string) => {
-    setMotionAliases((prev) => ({ ...prev, [key]: name }));
+    setMotionAliases((prev) => {
+      const next = { ...prev, [key]: name };
+      const sep = key.lastIndexOf('_');
+      const group = sep > 0 ? key.slice(0, sep) : '';
+      const index = sep > 0 ? Number(key.slice(sep + 1)) : Number.NaN;
+      if (group && !Number.isNaN(index)) {
+        setTimelineClips((clips) => clips.map((clip) => (
+          clip.group === group && clip.index === index
+            ? { ...clip, label: name || `${group}#${index}` }
+            : clip
+        )));
+      }
+      return next;
+    });
   }, []);
+
+  const deleteMotion = useCallback((group: string, index: number) => {
+    if (group !== 'imported') return;
+    const key = clipKey(group, index);
+    const isCurrentMotion = currentMotion?.group === group && currentMotion.index === index;
+    if (isCurrentMotion) returnToBasePose();
+    modelRef.current?.removeLoadedMotion(key);
+    if (modelRef.current) {
+      modelRef.current.motionEntries = modelRef.current.motionEntries.filter((entry) => !(entry.group === group && entry.index === index));
+    }
+    importedMotionsRef.current = importedMotionsRef.current.filter((motion) => !(
+      (motion.group ?? 'imported') === group && motion.index === index
+    ));
+    setMotionEntries((prev) => prev.filter((entry) => !(entry.group === group && entry.index === index)));
+    setMotionAliases((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setTimelineClips((prev) => prev.filter((clip) => !(clip.group === group && clip.index === index)));
+    setCurrentMotion((current) => (
+      current?.group === group && current.index === index ? null : current
+    ));
+  }, [currentMotion, returnToBasePose]);
 
   // ── Timeline clip management ─────────────────────────────────────────────
 
@@ -960,7 +1156,7 @@ export function EditorProvider({
       const uid = `${group}_${index}_${Date.now()}`;
       setTimelineClips(prev => [
         ...prev,
-        { uid, group, index, label, missingParams },
+        { uid, group, index, label, duration: getMotionDurationSeconds(entry, instance, data?.files), missingParams },
       ]);
       return aliases;
     });
@@ -1024,7 +1220,6 @@ export function EditorProvider({
   const ctx: EditorContextValue = {
     canvasRef,
     modelInstance: modelRef.current,
-    motionPlayer: motionPlayerRef.current,
     keyframeOverlay: overlayRef.current,
     motionEntries,
     modelLoaded,
@@ -1053,6 +1248,7 @@ export function EditorProvider({
     togglePlay,
     scrub,
     renameMotion,
+    deleteMotion,
     addClipToTimeline,
     removeClipFromTimeline,
     clearTimeline,
