@@ -507,7 +507,7 @@ export function EditorProvider({
       modelPath,
       manualOverrides: getPersistableManualOverrides(overrides),
       motionAliases,
-      timelineClipKeys: timelineClips.map((clip) => clipKey(clip.group, clip.index)),
+      timelineClipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))),
       importedMotions: importedMotionsRef.current,
       expressionConfigs: expressionConfigsRef.current,
     });
@@ -1063,7 +1063,7 @@ export function EditorProvider({
       expressions,
       appearancePresets,
       excludedExpressions,
-      timeline: { clipKeys: timelineClips.map((clip) => clipKey(clip.group, clip.index)) },
+      timeline: { clipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))) },
       manualOverrides: getPersistableManualOverrides(),
       importedMotions: importedMotionsRef.current,
     };
@@ -1162,6 +1162,39 @@ export function EditorProvider({
     });
   }, []);
 
+  const restoreClipToTimeline = useCallback((group: string, index: number) => {
+    const instance = modelRef.current;
+    const data = modelDataRef.current;
+    if (!instance) return;
+
+    const entry = instance.motionEntries.find(e => e.group === group && e.index === index);
+    if (!entry) return;
+
+    const paramSet = new Set(instance.parameterIds);
+    const missingParams = data
+      ? validateMotion(entry.file, paramSet, data.files)
+      : [];
+
+    setMotionAliases(aliases => {
+      const label = aliases[`${group}_${index}`] ?? `${group}#${index}`;
+      setTimelineClips(prev => {
+        if (prev.some((clip) => clip.group === group && clip.index === index)) return prev;
+        return [
+          ...prev,
+          {
+            uid: `${group}_${index}_restored`,
+            group,
+            index,
+            label,
+            duration: getMotionDurationSeconds(entry, instance, data?.files),
+            missingParams,
+          },
+        ];
+      });
+      return aliases;
+    });
+  }, []);
+
   const removeClipFromTimeline = useCallback((uid: string) => {
     setTimelineClips(prev => prev.filter(c => c.uid !== uid));
   }, []);
@@ -1195,7 +1228,7 @@ export function EditorProvider({
       modelPath,
       manualOverrides: getPersistableManualOverrides(),
       motionAliases,
-      timelineClipKeys: timelineClips.map((clip) => clipKey(clip.group, clip.index)),
+      timelineClipKeys: Array.from(new Set(timelineClips.map((clip) => clipKey(clip.group, clip.index)))),
       importedMotions: importedMotionsRef.current,
       expressionConfigs,
     };
@@ -1204,16 +1237,16 @@ export function EditorProvider({
 
   useEffect(() => {
     if (!modelLoaded || !pendingSessionClipKeysRef.current) return;
-    const keys = pendingSessionClipKeysRef.current;
+    const keys = Array.from(new Set(pendingSessionClipKeysRef.current));
     pendingSessionClipKeysRef.current = null;
     for (const key of keys) {
       const sep = key.lastIndexOf('_');
       if (sep < 1) continue;
       const group = key.slice(0, sep);
       const index = Number(key.slice(sep + 1));
-      if (!Number.isNaN(index)) addClipToTimeline(group, index);
+      if (!Number.isNaN(index)) restoreClipToTimeline(group, index);
     }
-  }, [modelLoaded, addClipToTimeline]);
+  }, [modelLoaded, restoreClipToTimeline]);
 
   // ── Context value ────────────────────────────────────────────────────────
 

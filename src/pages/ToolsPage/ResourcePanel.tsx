@@ -36,7 +36,7 @@ export function ResourcePanel() {
   async function handleSavePreset() {
     const name = presetName.trim();
     if (!modelPath || !name) return;
-    const clipKeys = timelineClips.map(c => `${c.group}_${c.index}`);
+    const clipKeys = Array.from(new Set(timelineClips.map(c => `${c.group}_${c.index}`)));
     const adaptedPreset = buildAdaptedPreset(name);
     const nextPreset: Live2DPreset = adaptedPreset
       ? {
