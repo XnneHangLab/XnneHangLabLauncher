@@ -27,6 +27,7 @@ export function ExpressionPanel() {
     timelinePlayback,
     expressionSegmentMarkers,
     segmentExpressionKeyAtTime,
+    segmentExpressionKeysAtTime,
     assignExpressionToSegmentAtTime,
   } = useEditor();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -85,8 +86,7 @@ export function ExpressionPanel() {
             const isExpanded = expanded === meta.name;
             const expressionPreviewKey = meta.name || meta.file;
             const isPreviewing = activeExpressionPreviews.includes(expressionPreviewKey);
-            const currentSegmentKey = segmentExpressionKeyAtTime(timelinePlayback.totalTime);
-            const isSegmentAssigned = currentSegmentKey === expressionPreviewKey;
+            const isSegmentAssigned = segmentExpressionKeysAtTime(timelinePlayback.totalTime).includes(expressionPreviewKey);
             return (
               <div key={`${meta.name}:${meta.file}`} className="live2d-expression-card">
                 <div className="live2d-expression-head">
@@ -107,13 +107,9 @@ export function ExpressionPanel() {
                       type="button"
                       className={`live2d-btn live2d-btn--xs${isSegmentAssigned ? ' live2d-expression-preview--active' : ''}`}
                       onClick={() => {
-                        if (isSegmentAssigned) {
-                          assignExpressionToSegmentAtTime(timelinePlayback.totalTime, null);
-                        } else {
-                          assignExpressionToSegmentAtTime(timelinePlayback.totalTime, expressionPreviewKey);
-                        }
+                        assignExpressionToSegmentAtTime(timelinePlayback.totalTime, expressionPreviewKey);
                       }}
-                      title={isSegmentAssigned ? '取消当前片段的表情' : '分配给当前时间线片段'}
+                      title={isSegmentAssigned ? '从当前片段移除表情' : '分配给当前时间线片段'}
                     >
                       ◆
                     </button>

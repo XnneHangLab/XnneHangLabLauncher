@@ -174,7 +174,7 @@ export function Timeline() {
     removeExpressionSegmentMarker,
     updateExpressionSegmentMarker,
     moveExpressionSegmentMarker,
-    endExpressionKey,
+    endExpressionKeys,
   } = useEditor();
   const [draggingUid, setDraggingUid] = useState<string | null>(null);
   const [insertBeforeUid, setInsertBeforeUid] = useState<string | null>(null);
@@ -629,20 +629,21 @@ export function Timeline() {
 
           {/* ── Expression segments (background bands) ──────── */}
           {timelineItems.length > 0 && (() => {
-            const segments = deriveExpressionSegments(expressionSegmentMarkers, totalDuration, endExpressionKey);
+            const segments = deriveExpressionSegments(expressionSegmentMarkers, totalDuration, endExpressionKeys);
             return segments.map((seg, i) => {
-              if (!seg.expressionKey) return null;
+              if (seg.expressionKeys.length === 0) return null;
               const left = timeToPixel(seg.startTime, timelineItems);
               const right = timeToPixel(seg.endTime, timelineItems);
               const width = Math.max(4, right - left);
+              const label = seg.expressionKeys.join(', ');
               return (
                 <div
                   key={i}
                   className="live2d-expression-segment-band"
                   style={{ left, width }}
-                  title={seg.expressionKey}
+                  title={label}
                 >
-                  <span className="live2d-expression-segment-band__label">{seg.expressionKey}</span>
+                  <span className="live2d-expression-segment-band__label">{label}</span>
                 </div>
               );
             });
@@ -656,7 +657,7 @@ export function Timeline() {
                 key={marker.uid}
                 className="live2d-expression-diamond"
                 style={{ left: Math.max(0, left - 6) }}
-                title={`表情关键帧${marker.expressionKey ? `: ${marker.expressionKey}` : '（无表情）'}`}
+                title={`表情关键帧${marker.expressionKeys.length > 0 ? `: ${marker.expressionKeys.join(', ')}` : '（无表情）'}`}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   setDraggingMarkerUid(marker.uid);
@@ -686,8 +687,8 @@ export function Timeline() {
                 >
                   ×
                 </button>
-                {marker.expressionKey && (
-                  <span className="live2d-expression-diamond__label">{marker.expressionKey}</span>
+                {marker.expressionKeys.length > 0 && (
+                  <span className="live2d-expression-diamond__label">{marker.expressionKeys.join(', ')}</span>
                 )}
               </div>
             );
