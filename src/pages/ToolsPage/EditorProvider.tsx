@@ -143,14 +143,16 @@ interface ExpressionPreviewBaselineEntry {
 interface TransitionPlaybackFrame {
   index: number;
   elapsed: number;
-  fromValues: Record<string, number>;
-  mode: 'sdk-fade' | 'parameter-blend';
+  smoothedValues: Record<string, number>;
+  targetValues: Record<string, number>;
+  smoothingSeconds: number;
 }
 
-interface FirstMotionFrameHold {
+interface PendingMotionHandoff {
   motionKey: string;
+  sourceStart: number;
+  playbackStartTime: number;
   values: Record<string, number>;
-  framesRemaining: number;
 }
 
 interface Live2DSessionState {
@@ -165,7 +167,6 @@ interface Live2DSessionState {
 }
 
 const live2dSessionKey = 'live2d.previewSession';
-const TRANSITION_EXIT_HOLD_FRAMES = 2;
 
 export interface EditorContextValue {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -298,6 +299,17 @@ function blendParameterValues(fromValues: Record<string, number>, toValues: Reco
     if (typeof from === 'number' && typeof to === 'number') values[id] = from + (to - from) * boundedAlpha;
   }
   return values;
+}
+
+function exponentialSmoothingAlpha(deltaSeconds: number, timeConstantSeconds: number): number {
+  if (timeConstantSeconds <= 0) return 1;
+  const safeDelta = Math.max(1 / 240, Math.min(deltaSeconds, 0.2));
+  return 1 - Math.exp(-safeDelta / timeConstantSeconds);
+}
+
+function transitionSmoothingTimeConstant(durationSeconds: number): number {
+  if (durationSeconds <= 0) return 0;
+  return Math.max(0.001, durationSeconds / 4.6);
 }
 
 function parameterDistance(left: Record<string, number>, right: Record<string, number>): { count: number; max: number; mean: number } {
@@ -716,14 +728,10 @@ export function EditorProvider({
   const timelinePlaybackRef = useRef<{ active: boolean; nextIndex: number }>({ active: false, nextIndex: 0 });
   const transitionPlaybackRef = useRef<TransitionPlaybackFrame | null>(null);
   const transitionDebugRef = useRef<{ uid: string | null; frame: number }>({ uid: null, frame: 0 });
-  const firstMotionFrameHoldRef = useRef<FirstMotionFrameHold | null>(null);
+  const pendingMotionHandoffRef = useRef<PendingMotionHandoff | null>(null);
   const timelineClipEndTimerRef = useRef<number | null>(null);
   const parsedMotionCacheRef = useRef<Map<string, ParsedMotion>>(new Map());
   const timelineClips = timelineItems.filter((item): item is TimelineClip => item.kind === 'motion');
-
-  function clearFirstMotionFrameHold(): void {
-    firstMotionFrameHoldRef.current = null;
-  }
 
   function clearTimelineClipEndTimer(): void {
     if (timelineClipEndTimerRef.current !== null) {
@@ -843,54 +851,49 @@ export function EditorProvider({
         if (model) {
           const player = motionPlayerRef.current;
           const transitionPlayback = transitionPlaybackRef.current;
-          const motionPreviewActive = player.hasMotion;
+          const motionPreviewActive = player.hasMotion && !transitionPlayback;
           if (transitionPlayback) {
             const items = timelineItemsRef.current;
             const item = items[transitionPlayback.index];
             if (timelinePlaybackRef.current.active && item?.kind === 'transition') {
-              if (transitionPlayback.mode === 'sdk-fade') {
-                model.update(dt, manualOverridesRef.current, { skipExpressions: true });
-                player.tick(dt);
-                overlayRef.current.apply(model, player.currentTime);
-              } else {
-                model.update(dt, manualOverridesRef.current, { skipCubismMotions: true, skipExpressions: true, skipEffects: true });
-              }
+              model.update(dt, manualOverridesRef.current, { skipCubismMotions: true, skipExpressions: true, skipEffects: true });
               const elapsed = Math.min(item.duration, transitionPlayback.elapsed + dt);
-              transitionPlaybackRef.current = { ...transitionPlayback, elapsed };
-              const transitionValues = transitionPlayback.mode === 'sdk-fade'
-                ? getCurrentModelParameterValues()
-                : interpolateTransitionParameters(items, transitionPlayback.index, elapsed, transitionPlayback.fromValues);
-              logTransitionDebug(item, transitionPlayback.index, elapsed, transitionValues);
-              if (transitionPlayback.mode !== 'sdk-fade' && Object.keys(transitionValues).length > 0) model.applyParameterValues(transitionValues, true);
+              const smoothingSeconds = transitionPlayback.smoothingSeconds || transitionSmoothingTimeConstant(item.duration);
+              const alpha = exponentialSmoothingAlpha(dt, smoothingSeconds);
+              let transitionValues = blendParameterValues(
+                transitionPlayback.smoothedValues,
+                transitionPlayback.targetValues,
+                alpha,
+              );
+              if (elapsed >= item.duration) transitionValues = { ...transitionPlayback.targetValues };
+              transitionPlaybackRef.current = { ...transitionPlayback, elapsed, smoothedValues: transitionValues, smoothingSeconds };
+              logTransitionDebug(item, transitionPlayback.index, elapsed, transitionValues, transitionPlayback.targetValues);
+              if (Object.keys(transitionValues).length > 0) {
+                model.applyParameterValues(transitionValues, true);
+                model.commitParameterValues();
+              }
               setTimelinePlayback(makeTimelinePlaybackState(items, transitionPlayback.index, elapsed, true));
               setCurrentTime(timelineTimeAtItem(items, transitionPlayback.index, elapsed));
               setDuration(timelineTotalDuration(items));
               if (elapsed >= item.duration) {
+                transitionDebugRef.current = { uid: null, frame: 0 };
+                transitionPlaybackRef.current = null;
                 const nextItem = items[transitionPlayback.index + 1];
-                if (transitionPlayback.mode === 'sdk-fade') {
-                  transitionDebugRef.current = { uid: null, frame: 0 };
-                  transitionPlaybackRef.current = null;
-                  if (nextItem?.kind === 'motion') {
-                    timelinePlaybackRef.current = { active: true, nextIndex: transitionPlayback.index + 2 };
-                    setTimelinePlayback(makeTimelinePlaybackState(items, transitionPlayback.index + 1, 0, true));
-                    setCurrentTime(timelineTimeAtItem(items, transitionPlayback.index + 1, 0));
-                  }
-                } else {
-                  firstMotionFrameHoldRef.current = nextItem?.kind === 'motion'
-                    ? {
-                      motionKey: clipKey(nextItem.group, nextItem.index),
-                      values: transitionValues,
-                      framesRemaining: TRANSITION_EXIT_HOLD_FRAMES,
-                    }
-                    : null;
-                  if (nextItem?.kind === 'motion') {
-                    debugLogRef.current?.(
-                      `[Live2D:transition-exit-hold-ready] motion=${nextItem.group}_${nextItem.index} frames=${TRANSITION_EXIT_HOLD_FRAMES} values=${Object.keys(transitionValues).length}`,
-                      'system',
-                    );
-                  }
-                  transitionDebugRef.current = { uid: null, frame: 0 };
-                  playTimelineFromIndex(transitionPlayback.index + 1);
+                if (nextItem?.kind === 'motion') {
+                  const handoffSourceTime = nextItem.sourceStart;
+                  const handoffValues = sampleTimelineClipParameters(nextItem, handoffSourceTime);
+                  const targetMismatch = parameterDistance(transitionValues, handoffValues);
+                  pendingMotionHandoffRef.current = {
+                    motionKey: clipKey(nextItem.group, nextItem.index),
+                    sourceStart: nextItem.sourceStart,
+                    playbackStartTime: handoffSourceTime,
+                    values: transitionValues,
+                  };
+                  debugLogRef.current?.(
+                    `[Live2D:transition-finish] motion=${nextItem.group}_${nextItem.index} nextStart=${nextItem.sourceStart.toFixed(3)} handoff=${handoffSourceTime.toFixed(3)} targetMismatch=max:${targetMismatch.max.toFixed(3)} mean:${targetMismatch.mean.toFixed(3)} n:${targetMismatch.count} values=${Object.keys(transitionValues).length} mode=frontend-exp-smoothing`,
+                    'system',
+                  );
+                  playTimelineFromIndex(transitionPlayback.index + 1, 0);
                 }
               }
             } else {
@@ -905,7 +908,6 @@ export function EditorProvider({
               // replaying model3 startup expressions over the same parameters.
               skipExpressions: true,
             });
-            applyFirstMotionFrameHold();
             player.tick(dt);
             overlayRef.current.apply(model, player.currentTime);
           } else {
@@ -950,7 +952,6 @@ export function EditorProvider({
         debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}`, 'stderr');
         const activeBeforeError = activeMotionRef.current;
         motionPlayerRef.current.unload();
-        clearFirstMotionFrameHold();
         modelRef.current?.stopAllMotions();
         activeMotionRef.current = null;
         motionTimeRef.current = 0;
@@ -1064,6 +1065,7 @@ export function EditorProvider({
     index: number,
     elapsed: number,
     values: Record<string, number>,
+    sdkValues?: Record<string, number>,
   ): void {
     const debug = transitionDebugRef.current;
     if (debug.uid !== item.uid) {
@@ -1078,8 +1080,8 @@ export function EditorProvider({
     const manualTransientHits = Object.keys(manualOverridesRef.current).filter((id) => transientIds.has(id));
     const previous = timelineItemsRef.current[index - 1];
     const next = timelineItemsRef.current[index + 1];
-    const rawTargetValues = interpolateTransitionParameters(timelineItemsRef.current, index, elapsed);
-    const distanceToRaw = parameterDistance(values, rawTargetValues);
+    const targetValues = sdkValues ?? interpolateTransitionParameters(timelineItemsRef.current, index, elapsed);
+    const distanceToRaw = parameterDistance(values, targetValues);
     const distanceFromCurrent = parameterDistance(getCurrentModelParameterValues(), values);
     const message = [
       `[Live2D:transition-debug] uid=${item.uid}`,
@@ -1123,33 +1125,17 @@ export function EditorProvider({
   function createTransitionPlaybackFrame(
     index: number,
     elapsed: number,
-    fromValues?: Record<string, number>,
-    mode: TransitionPlaybackFrame['mode'] = 'parameter-blend',
+    smoothedValues?: Record<string, number>,
+    targetValues?: Record<string, number>,
+    smoothingSeconds?: number,
   ): TransitionPlaybackFrame {
-    return { index, elapsed, fromValues: fromValues ?? getCurrentModelParameterValues(), mode };
-  }
-
-  function applyFirstMotionFrameHold(): void {
-    const hold = firstMotionFrameHoldRef.current;
-    const model = modelRef.current;
-    const active = activeMotionRef.current;
-    if (!hold || !model || !active || clipKey(active.group, active.index) !== hold.motionKey) {
-      if (hold) clearFirstMotionFrameHold();
-      return;
-    }
-
-    const beforeHold = getCurrentModelParameterValues();
-    const distance = parameterDistance(beforeHold, hold.values);
-    model.applyParameterValues(hold.values, true);
-    const nextFramesRemaining = hold.framesRemaining - 1;
-    firstMotionFrameHoldRef.current = nextFramesRemaining > 0
-      ? { ...hold, framesRemaining: nextFramesRemaining }
-      : null;
-
-    debugLogRef.current?.(
-      `[Live2D:transition-exit-hold] motion=${hold.motionKey} framesLeft=${nextFramesRemaining} heldValues=${Object.keys(hold.values).length} blockedDelta=max:${distance.max.toFixed(3)} mean:${distance.mean.toFixed(3)} n:${distance.count}`,
-      'system',
-    );
+    return {
+      index,
+      elapsed,
+      smoothedValues: smoothedValues ?? getCurrentModelParameterValues(),
+      targetValues: targetValues ?? {},
+      smoothingSeconds: smoothingSeconds ?? 0,
+    };
   }
 
   const loadMotionIntoPlayer = useCallback((
@@ -1174,21 +1160,13 @@ export function EditorProvider({
       motionPlayerRef.current.load(entry.group, entry.index, instance, durationSeconds, loop);
       motionPlayerRef.current.scrub(clampedStartTime);
       const entryKey = clipKey(entry.group, entry.index);
-      const hold = firstMotionFrameHoldRef.current;
-      if (hold && hold.motionKey !== entryKey) {
-        debugLogRef.current?.(
-          `[Live2D:transition-exit-hold-clear] expected=${hold.motionKey} actual=${entryKey}`,
-          'system',
-        );
-        clearFirstMotionFrameHold();
-      }
       debugLogRef.current?.(
-        `[Live2D:timeline-motion-load] motion=${entryKey} start=${clampedStartTime.toFixed(3)} hold=${hold?.motionKey === entryKey ? `${hold.framesRemaining}f` : 'none'} fadeIn=${options?.fadeInSeconds ?? 'default'}`,
+        `[Live2D:timeline-motion-load] motion=${entryKey} start=${clampedStartTime.toFixed(3)} fadeIn=${options?.fadeInSeconds ?? 'default'}`,
         'system',
       );
       motionPlayerRef.current.setOnFinish(() => {
         motionPlayerRef.current.unload();
-        clearFirstMotionFrameHold();
+        pendingMotionHandoffRef.current = null;
         activeMotionRef.current = null;
         transitionPlaybackRef.current = null;
         transitionDebugRef.current = { uid: null, frame: 0 };
@@ -1218,7 +1196,7 @@ export function EditorProvider({
   const returnToBasePose = useCallback((options?: { keepTimelinePosition?: boolean }) => {
     const instance = modelRef.current;
     motionPlayerRef.current.unload();
-    clearFirstMotionFrameHold();
+    pendingMotionHandoffRef.current = null;
     clearTimelineClipEndTimer();
     transitionPlaybackRef.current = null;
     transitionDebugRef.current = { uid: null, frame: 0 };
@@ -1280,7 +1258,7 @@ export function EditorProvider({
       modelRef.current = instance;
       motionSafeOverridesRef.current = stripTransientExpressionParameterOverrides(getPersistableManualOverrides());
       motionPlayerRef.current.unload();
-      clearFirstMotionFrameHold();
+      pendingMotionHandoffRef.current = null;
       clearTimelineClipEndTimer();
       modelRef.current?.stopAllMotions();
       activeMotionRef.current = null;
@@ -1392,7 +1370,7 @@ export function EditorProvider({
 
   const playMotion = useCallback((group: string, index: number) => {
     transitionPlaybackRef.current = null;
-    clearFirstMotionFrameHold();
+    pendingMotionHandoffRef.current = null;
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
     setTimelinePlayback(idleTimelinePlaybackState(timelineItemsRef.current));
     if (currentMotion?.group === group && currentMotion.index === index) {
@@ -1644,7 +1622,7 @@ export function EditorProvider({
       return;
     }
     if (item.kind === 'transition') {
-      clearFirstMotionFrameHold();
+      pendingMotionHandoffRef.current = null;
       clearTimelineClipEndTimer();
       const nextItem = items[index + 1];
       const entry = nextItem?.kind === 'motion'
@@ -1655,23 +1633,29 @@ export function EditorProvider({
         return;
       }
       const elapsed = Math.max(0, Math.min(startTime, item.duration));
-      const fromValues = getCurrentModelParameterValues();
-      transitionPlaybackRef.current = createTransitionPlaybackFrame(index, elapsed, fromValues, 'sdk-fade');
+      const initialValues = getCurrentModelParameterValues();
+      const targetSourceTime = nextItem.sourceStart;
+      const targetValues = sampleTimelineClipParameters(nextItem, targetSourceTime);
+      const smoothingSeconds = transitionSmoothingTimeConstant(item.duration);
+      transitionPlaybackRef.current = createTransitionPlaybackFrame(index, elapsed, initialValues, targetValues, smoothingSeconds);
       timelinePlaybackRef.current = { active: true, nextIndex: index + 1 };
       setTimelinePlayback(makeTimelinePlaybackState(items, index, elapsed, true));
       setDuration(timelineTotalDuration(items));
       setCurrentTime(timelineTimeAtItem(items, index, elapsed));
       setCurrentMotion(null);
       setIsPlaying(true);
-      loadMotionIntoPlayer(entry, false, () => {
-        clearTimelineClipEndTimer();
-        if (!timelinePlaybackRef.current.active) return;
-        playTimelineFromIndex(index + 2);
-      }, nextItem.sourceStart, { keepTimelinePositionOnFinish: true, fadeInSeconds: item.duration });
-      const firstValues = getCurrentModelParameterValues();
-      logTransitionDebug(item, index, elapsed, firstValues);
+      motionPlayerRef.current.unload();
+      modelRef.current?.stopAllMotions();
+      const transitionValues = elapsed >= item.duration
+        ? { ...targetValues }
+        : blendParameterValues(initialValues, targetValues, exponentialSmoothingAlpha(0.016, smoothingSeconds));
+      logTransitionDebug(item, index, elapsed, transitionValues, targetValues);
+      if (Object.keys(transitionValues).length > 0) {
+        modelRef.current?.applyParameterValues(transitionValues, true);
+        modelRef.current?.commitParameterValues();
+      }
       debugLogRef.current?.(
-        `[Live2D:transition-start] uid=${item.uid} duration=${item.duration.toFixed(3)} elapsed=${elapsed.toFixed(3)} values=${Object.keys(firstValues).length} source=sdk-fade`,
+        `[Live2D:transition-start] uid=${item.uid} duration=${item.duration.toFixed(3)} elapsed=${elapsed.toFixed(3)} values=${Object.keys(transitionValues).length} target=${nextItem.group}_${nextItem.index}@${targetSourceTime.toFixed(3)} sourceStart=${nextItem.sourceStart.toFixed(3)} smoothing=${smoothingSeconds.toFixed(3)} source=frontend-exp-smoothing`,
         'system',
       );
       return;
@@ -1681,10 +1665,36 @@ export function EditorProvider({
     if (!entry) return;
 
     const clipStartTime = Math.max(0, Math.min(startTime, item.duration || startTime));
+    const entryKey = clipKey(item.group, item.index);
+    const pendingHandoff = pendingMotionHandoffRef.current?.motionKey === entryKey
+      && Math.abs(pendingMotionHandoffRef.current.sourceStart - item.sourceStart) < 0.001
+      && clipStartTime < 0.001
+      ? pendingMotionHandoffRef.current
+      : null;
+    if (pendingMotionHandoffRef.current && !pendingHandoff) {
+      debugLogRef.current?.(
+        `[Live2D:transition-handoff-clear] expected=${pendingMotionHandoffRef.current.motionKey}@${pendingMotionHandoffRef.current.sourceStart.toFixed(3)} actual=${entryKey}@${item.sourceStart.toFixed(3)} local=${clipStartTime.toFixed(3)}`,
+        'system',
+      );
+      pendingMotionHandoffRef.current = null;
+    }
+    if (pendingHandoff) {
+      modelRef.current?.applyParameterValues(pendingHandoff.values, true);
+      modelRef.current?.commitParameterValues();
+    } else {
+      pendingMotionHandoffRef.current = null;
+    }
+    /** Advance SDK motion start past the exact sourceStart to avoid
+     *  the SDK's first frame producing identical values as the handoff
+     *  (which causes a visually repeated frame at transition exit). */
+    const handoffFrameEpsilon = pendingHandoff ? 0.016 : 0;
+    const playbackClipStartTime = pendingHandoff
+      ? Math.max(0, Math.min(pendingHandoff.playbackStartTime - item.sourceStart + handoffFrameEpsilon, item.duration || 999))
+      : clipStartTime;
     timelinePlaybackRef.current = { active: true, nextIndex: index + 1 };
-    setTimelinePlayback(makeTimelinePlaybackState(items, index, clipStartTime, true));
+    setTimelinePlayback(makeTimelinePlaybackState(items, index, playbackClipStartTime, true));
     setDuration(timelineTotalDuration(items));
-    setCurrentTime(timelineTimeAtItem(items, index, clipStartTime));
+    setCurrentTime(timelineTimeAtItem(items, index, playbackClipStartTime));
     transitionPlaybackRef.current = null;
     transitionDebugRef.current = { uid: null, frame: 0 };
     clearTimelineClipEndTimer();
@@ -1703,20 +1713,24 @@ export function EditorProvider({
         return;
       }
       playTimelineFromIndex(nextIndex);
-    }, item.sourceStart + clipStartTime, { keepTimelinePositionOnFinish: true })) {
-      const remainingClipMs = Math.max(0, (item.duration - clipStartTime) * 1000);
+    }, item.sourceStart + playbackClipStartTime, { keepTimelinePositionOnFinish: true, fadeInSeconds: pendingHandoff ? 0 : undefined })) {
+      if (pendingHandoff) {
+        modelRef.current?.applyParameterValues(pendingHandoff.values, true);
+        modelRef.current?.commitParameterValues();
+        const firstMotionValues = getCurrentModelParameterValues();
+        const handoffDistance = parameterDistance(pendingHandoff.values, firstMotionValues);
+        debugLogRef.current?.(
+          `[Live2D:transition-handoff] motion=${entryKey} sourceStart=${item.sourceStart.toFixed(3)} playbackStart=${(item.sourceStart + playbackClipStartTime).toFixed(3)} forcedFadeIn=0 delta=max:${handoffDistance.max.toFixed(3)} mean:${handoffDistance.mean.toFixed(3)} n:${handoffDistance.count}`,
+          handoffDistance.max > 1 ? 'stderr' : 'system',
+        );
+        pendingMotionHandoffRef.current = null;
+      }
+      const remainingClipMs = Math.max(0, (item.duration - playbackClipStartTime) * 1000);
       if (remainingClipMs > 0 && item.sourceEnd < item.sourceDuration) {
         timelineClipEndTimerRef.current = window.setTimeout(() => {
           if (!timelinePlaybackRef.current.active || timelinePlaybackRef.current.nextIndex !== index + 1) return;
           motionPlayerRef.current.unload();
-          const hold = firstMotionFrameHoldRef.current;
-          if (hold) {
-            debugLogRef.current?.(
-              `[Live2D:transition-exit-hold-clear] reason=clip-end-timer motion=${hold.motionKey}`,
-              'system',
-            );
-          }
-          clearFirstMotionFrameHold();
+          pendingMotionHandoffRef.current = null;
           clearTimelineClipEndTimer();
           playTimelineFromIndex(index + 1);
         }, remainingClipMs);
@@ -1744,8 +1758,8 @@ export function EditorProvider({
           ? Math.max(0, motionPlayerRef.current.currentTime - item.sourceStart)
           : motionPlayerRef.current.currentTime;
       transitionPlaybackRef.current = null;
+      pendingMotionHandoffRef.current = null;
       transitionDebugRef.current = { uid: null, frame: 0 };
-      clearFirstMotionFrameHold();
       timelinePlaybackRef.current = { active: false, nextIndex: 0 };
       if (preserveTimeline && currentIndex >= 0) {
         const nextPlayback = makeTimelinePlaybackState(items, currentIndex, playerTime, false);
@@ -1754,7 +1768,6 @@ export function EditorProvider({
         setDuration(nextPlayback.totalDuration);
       }
       motionPlayerRef.current.unload();
-      clearFirstMotionFrameHold();
       clearTimelineClipEndTimer();
       modelRef.current?.stopAllMotions();
       activeMotionRef.current = null;
@@ -1804,8 +1817,8 @@ export function EditorProvider({
     const clips = timelineItemsRef.current;
     if (clips.length === 0) return;
     transitionPlaybackRef.current = null;
+    pendingMotionHandoffRef.current = null;
     transitionDebugRef.current = { uid: null, frame: 0 };
-    clearFirstMotionFrameHold();
     clearTimelineClipEndTimer();
     timelinePlaybackRef.current = { active: false, nextIndex: 0 };
     motionPlayerRef.current.unload();
