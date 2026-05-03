@@ -12,7 +12,7 @@ import { MotionPlayer } from '../../live2d/engine/MotionPlayer';
 import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
 import { spliceMotions, extractMotionSubrange, createTransitionMotion } from '../../live2d/engine/MotionSplicer';
 import { parseMotion, evaluateMotion } from '../../live2d/engine/MotionParser';
-import type { ParsedMotion } from '../../live2d/types';
+import type { ParsedMotion, ParsedCurve, ParsedSegment, KeyPoint } from '../../live2d/types';
 import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile } from '../../services/config/bridge';
 import type { Live2DModelData, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
@@ -1706,6 +1706,12 @@ export function EditorProvider({
       const clips = timelineItemsRef.current;
       setTimelinePlayback(timelinePlaybackStateAtTime(clips, motionTimeRef.current, timelinePlaybackRef.current.active));
     }
+    // Stop playback when scrubbing with timeline active so the animation loop
+    // does not immediately overwrite the seek position.
+    if (timelinePlaybackRef.current.active) {
+      timelinePlaybackRef.current = { active: false, nextIndex: 0 };
+      setIsPlaying(false);
+    }
   }, [duration]);
 
   const seekTimeline = useCallback((time: number) => {
@@ -1995,6 +2001,268 @@ export function EditorProvider({
     }
   }, []);
 
+  /** Evaluate a single ParsedCurve at a given time. Supports linear/bezier/stepped. */
+  function evaluateCurveAt(curve: ParsedCurve, time: number): number {
+    for (const seg of curve.segments) {
+      const first = seg.points[0];
+      const last = seg.points[seg.points.length - 1];
+      if (time < first.time || time > last.time) continue;
+      switch (seg.type) {
+        case 0: { // linear
+          const r = last.time > first.time ? (time - first.time) / (last.time - first.time) : 0;
+          return first.value + (last.value - first.value) * Math.max(0, Math.min(1, r));
+        }
+        case 1: // bezier — needs all 4 control points
+          if (seg.points.length >= 4) {
+            return cubicBezier(
+              first.time, first.value,
+              seg.points[1].time, seg.points[1].value,
+              seg.points[2].time, seg.points[2].value,
+              last.time, last.value,
+              time,
+            );
+          }
+          return first.value;
+        case 2: return time >= last.time ? last.value : first.value; // stepped
+        case 3: return time <= last.time ? first.value : last.value; // inverse-stepped
+        default: return last.value;
+      }
+    }
+    // Before/after range → nearest endpoint
+    if (curve.segments.length > 0) {
+      const firstSeg = curve.segments[0];
+      const lastSeg = curve.segments[curve.segments.length - 1];
+      if (time < firstSeg.points[0].time) return firstSeg.points[0].value;
+      if (time > lastSeg.points[lastSeg.points.length - 1].time) return lastSeg.points[lastSeg.points.length - 1].value;
+    }
+    return 0;
+  }
+
+  /** Evaluate a cubic bezier curve at a given x position using Newton-Raphson. */
+  function cubicBezier(
+    p0x: number, p0y: number,
+    p1x: number, p1y: number,
+    p2x: number, p2y: number,
+    p3x: number, p3y: number,
+    x: number,
+  ): number {
+    if (Math.abs(p3x - p0x) < 1e-6) return p0y;
+    let t = (x - p0x) / (p3x - p0x);
+    for (let i = 0; i < 8; i++) {
+      const tx = cubicN(p0x, p1x, p2x, p3x, t);
+      const dx = cubicND(p0x, p1x, p2x, p3x, t);
+      if (Math.abs(dx) < 1e-6) break;
+      t -= (tx - x) / dx;
+      t = Math.max(0, Math.min(1, t));
+    }
+    return cubicN(p0y, p1y, p2y, p3y, t);
+  }
+  function cubicN(p0: number, p1: number, p2: number, p3: number, t: number): number {
+    const mt = 1 - t;
+    return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+  }
+  function cubicND(p0: number, p1: number, p2: number, p3: number, t: number): number {
+    const mt = 1 - t;
+    return 3 * mt * mt * (p1 - p0) + 6 * mt * t * (p2 - p1) + 3 * t * t * (p3 - p2);
+  }
+
+  /**
+   * Bake expression segment values into a parsed motion chunk before export.
+   *
+   * Uses oversampling at the chunk's fps rate: for each parameter affected by
+   * an expression, the original curve is evaluated frame-by-frame within each
+   * expression segment range, expression operations are applied, and the
+   * resulting samples form new linear segments. This correctly handles
+   * Add/Multiply blends where the expression modifies frame values rather
+   * than replacing them.
+   *
+   * Parameters without existing curves get flat hold segments at the
+   * expression value. Parameters and curve ranges not covered by any
+   * expression segment are left untouched.
+   */
+  function bakeExpressionsIntoChunk(
+    chunk: ParsedMotion,
+    chunkStartTime: number,
+    segments: ExpressionSegment[],
+    metaMap: Map<string, ExpressionMeta>,
+  ): void {
+    if (chunk.duration <= 0) return;
+    const chunkEndTime = chunkStartTime + chunk.duration;
+
+    // Find overlapping expression segments
+    const overlapping = segments.filter(
+      (seg) => seg.expressionKeys.length > 0
+        && seg.startTime < chunkEndTime
+        && seg.endTime > chunkStartTime,
+    );
+    if (overlapping.length === 0) return;
+
+    // Collect per-param per-segment ops (localStart/localEnd relative to chunk)
+    const paramOpsBySegment = new Map<string, Array<{ localStart: number; localEnd: number; ops: ExpressionParamOp[] }>>();
+
+    for (const seg of overlapping) {
+      const localStart = Math.max(0, seg.startTime - chunkStartTime);
+      const localEnd = Math.min(chunk.duration, seg.endTime - chunkStartTime);
+      if (localEnd <= localStart) continue;
+
+      const segmentOps = new Map<string, ExpressionParamOp[]>();
+      for (const expKey of seg.expressionKeys) {
+        const meta = metaMap.get(expKey);
+        if (!meta) continue;
+        for (const op of meta.parameters) {
+          const list = segmentOps.get(op.id);
+          if (list) list.push(op);
+          else segmentOps.set(op.id, [op]);
+        }
+      }
+
+      for (const [paramId, ops] of segmentOps) {
+        const entries = paramOpsBySegment.get(paramId) ?? [];
+        entries.push({ localStart, localEnd, ops });
+        paramOpsBySegment.set(paramId, entries);
+      }
+    }
+
+    // Determine sampling rate (use chunk fps, default to 30)
+    const fps = chunk.fps > 0 ? chunk.fps : 30;
+    const sampleInterval = 1 / fps;
+
+    for (const [paramId, segOps] of paramOpsBySegment) {
+      const curve = chunk.curves.find((c) => c.id === paramId && c.target === 'Parameter');
+
+      if (curve) {
+        // For each expression segment range, oversample the curve,
+        // apply expressions, and rebuild that portion as linear segments.
+        // We'll rebuild curve.segments from scratch, replacing ranges
+        // covered by expression segments with sampled linear segments.
+
+        const newSegments: ParsedSegment[] = [];
+
+        // Process existing segments, inserting sampled runs where
+        // expression segments overlap.
+        let cursor = 0; // time cursor through the curve
+
+        for (const seg of curve.segments) {
+          const segStart = seg.points[0].time;
+          const segEnd = seg.points[seg.points.length - 1].time;
+
+          // Find which (if any) expression segment overlaps this curve segment
+          const matching = matchingExprSeg(segOps, segStart, segEnd);
+
+          if (!matching) {
+            // No expression: keep original segment as-is
+            newSegments.push(seg);
+          } else {
+            // This curve segment falls within an expression segment.
+            // Clip the segment to the expression range.
+            const exprStart = Math.max(segStart, matching.localStart);
+            const exprEnd = Math.min(segEnd, matching.localEnd);
+
+            // If there's a gap before the expression range, keep it as original
+            if (exprStart - segStart > 1e-6) {
+              // Find the value at exprStart and create a lead-in segment
+              const valAtExprStart = evaluateCurveAt(curve, exprStart);
+              newSegments.push({
+                type: seg.type === 1 ? 0 : seg.type,
+                points: [seg.points[0], { time: exprStart, value: valAtExprStart }],
+              });
+            }
+
+            // Oversample the expression range
+            const samplePoints: KeyPoint[] = [];
+            let t = exprStart;
+            while (t < exprEnd + 1e-6) {
+              const ct = Math.min(t, exprEnd);
+              const origValue = evaluateCurveAt(curve, ct);
+              let value = origValue;
+              for (const op of matching.ops) {
+                value = applyExpressionOperation(value, op);
+              }
+              samplePoints.push({ time: ct, value });
+              t += sampleInterval;
+            }
+
+            // Deduplicate consecutive equal-valued samples to reduce output size
+            const deduped: KeyPoint[] = [samplePoints[0]];
+            for (let i = 1; i < samplePoints.length; i++) {
+              const prev = deduped[deduped.length - 1];
+              if (Math.abs(samplePoints[i].value - prev.value) > 1e-6
+                || Math.abs(samplePoints[i].time - prev.time) > sampleInterval * 1.5) {
+                deduped.push(samplePoints[i]);
+              }
+            }
+            // Ensure last point is included
+            const lastSP = samplePoints[samplePoints.length - 1];
+            if (lastSP && Math.abs(lastSP.time - deduped[deduped.length - 1].time) > 1e-6) {
+              deduped.push(lastSP);
+            }
+
+            // Split into individual 2-point Linear segments (Cubism SDK format:
+            // each segment has exactly one "next" point; the start is implicit).
+            if (deduped.length >= 2) {
+              for (let i = 1; i < deduped.length; i++) {
+                newSegments.push({ type: 0, points: [deduped[i - 1], deduped[i]] });
+              }
+            }
+
+            // If there's a gap after the expression range, keep the tail
+            if (segEnd - exprEnd > 1e-6) {
+              const valAtExprEnd = evaluateCurveAt(curve, exprEnd);
+              newSegments.push({
+                type: seg.type === 1 ? 0 : seg.type,
+                points: [{ time: exprEnd, value: valAtExprEnd }, seg.points[seg.points.length - 1]],
+              });
+            }
+          }
+        }
+
+        curve.segments = newSegments;
+      } else {
+        // No existing curve: create a single curve with hold segments
+        // for each expression segment range.
+        const newSegments: ParsedSegment[] = [];
+        for (const { localStart, localEnd, ops } of segOps) {
+          if (localEnd <= localStart) continue;
+          let heldValue = 0;
+          for (const op of ops) {
+            heldValue = applyExpressionOperation(heldValue, op);
+          }
+          newSegments.push({
+            type: 0,
+            points: [
+              { time: localStart, value: heldValue },
+              { time: localEnd, value: heldValue },
+            ],
+          });
+        }
+        if (newSegments.length > 0) {
+          chunk.curves.push({
+            target: 'Parameter' as const,
+            id: paramId,
+            fadeInTime: 0,
+            fadeOutTime: 0,
+            segments: newSegments,
+          });
+        }
+      }
+    }
+  }
+
+  /** Find which expression segment (if any) overlaps a curve segment span. */
+  function matchingExprSeg(
+    segOps: Array<{ localStart: number; localEnd: number; ops: ExpressionParamOp[] }>,
+    segStart: number,
+    segEnd: number,
+  ): { localStart: number; localEnd: number; ops: ExpressionParamOp[] } | null {
+    for (const es of segOps) {
+      // An expression segment overlaps this curve segment if the
+      // curve segment's midpoint falls within the expression range.
+      const mid = (segStart + segEnd) / 2;
+      if (mid >= es.localStart && mid < es.localEnd) return es;
+    }
+    return null;
+  }
+
   const exportTimelineAsMotion = useCallback(async () => {
     const items = timelineItemsRef.current;
     if (items.length === 0) {
@@ -2010,9 +2278,22 @@ export function EditorProvider({
 
     const chunks: ParsedMotion[] = [];
     const gaps: number[] = [];
+    const totalDur = timelineTotalDuration(items);
+    let cumulativeTime = 0;
+
+    // Pre-compute expression segments and meta map for O(1) lookups
+    const exprMetas = expressionMetasRef.current;
+    const markers = expressionSegmentMarkersRef.current;
+    const endKeys = endExpressionKeysRef.current;
+    const expressionSegments = deriveExpressionSegments(markers, totalDur, endKeys);
+    const metaMap = new Map<string, ExpressionMeta>();
+    for (const meta of exprMetas) {
+      metaMap.set(expressionKey(meta.name, meta.file), meta);
+    }
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      const itemDone = () => { cumulativeTime += item.duration; };
 
       if (item.kind === 'motion') {
         const entry = instance.motionEntries.find(
@@ -2023,6 +2304,7 @@ export function EditorProvider({
             `[Live2D:export] 跳过剪片段: 未找到 ${item.group}_${item.index}`,
             'stderr',
           );
+          itemDone();
           continue;
         }
 
@@ -2032,6 +2314,7 @@ export function EditorProvider({
             `[Live2D:export] 跳过剪片段: 文件缺失 ${entry.file}`,
             'stderr',
           );
+          itemDone();
           continue;
         }
 
@@ -2043,6 +2326,9 @@ export function EditorProvider({
             item.sourceStart,
             item.sourceEnd,
           );
+
+          bakeExpressionsIntoChunk(subrange, cumulativeTime, expressionSegments, metaMap);
+
           chunks.push(subrange);
           gaps.push(0);
         } catch (error) {
@@ -2050,6 +2336,7 @@ export function EditorProvider({
             `[Live2D:export] 解析动作失败 ${item.group}_${item.index}: ${String(error)}`,
             'stderr',
           );
+          itemDone();
           continue;
         }
       } else if (item.kind === 'transition') {
@@ -2066,6 +2353,7 @@ export function EditorProvider({
             `[Live2D:export] 跳过过渡段 ${item.uid}: 缺少相邻剪片段`,
             'stderr',
           );
+          itemDone();
           continue;
         }
 
@@ -2082,6 +2370,7 @@ export function EditorProvider({
             `[Live2D:export] 跳过过渡段: 未找到动作入口`,
             'stderr',
           );
+          itemDone();
           continue;
         }
 
@@ -2089,6 +2378,7 @@ export function EditorProvider({
         const nextB64 = data.files[nextEntry.file];
         if (!prevB64 || !nextB64) {
           debugLogRef.current?.('[Live2D:export] 跳过过渡段: 文件缺失', 'stderr');
+          itemDone();
           continue;
         }
 
@@ -2106,6 +2396,9 @@ export function EditorProvider({
             item.duration,
             fps,
           );
+
+          bakeExpressionsIntoChunk(transitionMotion, cumulativeTime, expressionSegments, metaMap);
+
           chunks.push(transitionMotion);
           gaps.push(0);
         } catch (error) {
@@ -2113,9 +2406,12 @@ export function EditorProvider({
             `[Live2D:export] 创建过渡曲线失败: ${String(error)}`,
             'stderr',
           );
+          itemDone();
           continue;
         }
       }
+
+      itemDone();
     }
 
     if (chunks.length === 0) {
@@ -2145,8 +2441,15 @@ export function EditorProvider({
       }
 
       await writeFile(savePath, jsonContent);
+      const totalCurves = motionData.Curves?.length ?? 0;
+      const totalMetaSegs = motionData.Meta?.TotalSegmentCount ?? 0;
+      const totalMetaPts = motionData.Meta?.TotalPointCount ?? 0;
+      const approxSize = jsonContent.length;
       debugLogRef.current?.(
-        `[Live2D:export] 成功导出到 ${savePath} (${chunks.length} 个片段, ${motionData.Meta.Duration.toFixed(3)}s)`,
+        `[Live2D:export] 成功导出到 ${savePath} (${chunks.length} 个片段, ` +
+        `${motionData.Meta.Duration.toFixed(3)}s, ` +
+        `${totalCurves} 曲线, ${totalMetaSegs} 段, ${totalMetaPts} 点, ` +
+        `${(approxSize / 1024).toFixed(0)} KB)`,
         'system',
       );
     } catch (error) {
