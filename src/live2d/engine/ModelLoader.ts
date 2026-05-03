@@ -56,6 +56,7 @@ export class ModelInstance {
   private _modelSetting: ICubismModelSetting;
   private _textureInfos: TextureInfo[] = [];
   private _loadedMotions: csmMap<string, ACubismMotion> = new csmMap();
+  private _motionOriginalFadeInTimes = new Map<string, number>();
   private _motionCount = 0;
   private _motionGroupNames: string[] = [];
   private _userTimeSeconds = 0;
@@ -292,6 +293,7 @@ export class ModelInstance {
     if (!motion) return false;
     this.applyEffectIdsToMotion(motion);
     this._loadedMotions.setValue(key, motion);
+    this._motionOriginalFadeInTimes.set(key, motion.getFadeInTime());
     return true;
   }
 
@@ -313,6 +315,7 @@ export class ModelInstance {
     while (ite.notEqual(end)) {
       if (ite.ptr().first === key) {
         this._loadedMotions.erase(ite);
+        this._motionOriginalFadeInTimes.delete(key);
         return;
       }
       ite.preIncrement();
@@ -432,11 +435,56 @@ export class ModelInstance {
 
   // ── Motion control ─────────────────────────────────────────────────────────
 
-  startMotion(group: string, index: number, loop?: boolean): boolean {
+  previewMotionParameters(group: string, index: number, timeSeconds: number, parameterOverrides?: Record<string, number>): Record<string, number> | null {
+    const motion = this.getLoadedMotion(group, index);
+    const m = this.model;
+    if (!motion || !m) return null;
+
+    const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
+    const clampedTime = Math.max(0, timeSeconds);
+    const originalLoop = motion.isLoop();
+    const originalFadeIn = motion.getFadeInTime();
+    const originalFadeOut = motion.getFadeOutTime();
+    motionMgr.stopAllMotions();
+    motion.setIsLoop(false);
+    motion.setFadeInTime(0);
+    motion.setFadeOutTime(0);
+    motion.setOffsetTime(clampedTime);
+    motionMgr.setReservePriority(3);
+    motionMgr.startMotionPriority(motion, false, 3);
+
+    m.loadParameters();
+    if (!motionMgr.isFinished()) motionMgr.updateMotion(m, 0);
+    if (parameterOverrides) this.applyParameterValues(parameterOverrides);
+
+    const values: Record<string, number> = {};
+    for (let i = 0; i < this.parameterIds.length; i++) {
+      values[this.parameterIds[i]] = this.getParameterValueAt(i);
+    }
+
+    motionMgr.stopAllMotions();
+    motion.setIsLoop(originalLoop);
+    motion.setFadeInTime(originalFadeIn);
+    motion.setFadeOutTime(originalFadeOut);
+    m.loadParameters();
+    if (parameterOverrides) this.applyParameterValues(parameterOverrides, true);
+    m.update();
+    return values;
+  }
+
+  startMotion(group: string, index: number, loop?: boolean, offsetSeconds = 0, fadeInSeconds?: number): boolean {
     const motion = this.getLoadedMotion(group, index);
     if (!motion) return false;
 
+    const key = `${group}_${index}`;
+    if (!this._motionOriginalFadeInTimes.has(key)) {
+      this._motionOriginalFadeInTimes.set(key, motion.getFadeInTime());
+    }
+    const originalFadeIn = this._motionOriginalFadeInTimes.get(key) ?? motion.getFadeInTime();
+
     motion.setIsLoop(Boolean(loop));
+    motion.setOffsetTime(Math.max(0, offsetSeconds));
+    motion.setFadeInTime(fadeInSeconds !== undefined ? Math.max(0, fadeInSeconds) : originalFadeIn);
     motion.setFinishedMotionHandler(() => undefined);
 
     const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
@@ -590,6 +638,7 @@ export async function loadModelFromData(
   // ── Collect motion entries & load motions ────────────────────────────
   const motionEntries: Array<{ group: string; index: number; name: string; file: string }> = [];
   const loadedMotions = new csmMap<string, ACubismMotion>();
+  const loadedMotionOriginalFadeInTimes = new Map<string, number>();
   const groupCount = setting.getMotionGroupCount();
   for (let g = 0; g < groupCount; g++) {
     const group = setting.getMotionGroupName(g);
@@ -608,7 +657,9 @@ export async function loadModelFromData(
           if (fadeIn >= 0) motion.setFadeInTime(fadeIn);
           const fadeOut = setting.getMotionFadeOutTimeValue(group, i);
           if (fadeOut >= 0) motion.setFadeOutTime(fadeOut);
-          loadedMotions.setValue(`${group}_${i}`, motion);
+          const key = `${group}_${i}`;
+          loadedMotions.setValue(key, motion);
+          loadedMotionOriginalFadeInTimes.set(key, motion.getFadeInTime());
         }
       }
     }
@@ -638,6 +689,7 @@ export async function loadModelFromData(
 
   const instance = new ModelInstance(userModel, setting, textureInfos, motionEntries);
   (instance as any)['_loadedMotions'] = loadedMotions;
+  (instance as any)['_motionOriginalFadeInTimes'] = loadedMotionOriginalFadeInTimes;
   (instance as any).applyEffectIdsToLoadedMotions();
 
   return { instance, setting };

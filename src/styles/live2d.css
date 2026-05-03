@@ -849,6 +849,105 @@
   flex-shrink: 0;
 }
 
+.live2d-item-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.live2d-transition-add {
+  height: 24px;
+  margin: 0 4px;
+  padding: 0 6px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.live2d-transition-add:hover {
+  background: var(--nav-hover-bg);
+}
+
+.live2d-transition {
+  height: 34px;
+  min-width: 128px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--elevated-card-border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--panel) 70%, transparent));
+  color: var(--text);
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.live2d-transition__label,
+.live2d-transition__duration {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live2d-transition__label {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.live2d-transition__duration {
+  font-size: 9px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.live2d-transition__remove,
+.live2d-transition__resize {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.live2d-transition__remove {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.live2d-transition__remove:hover {
+  background: var(--nav-hover-bg);
+  color: var(--accent);
+}
+
+.live2d-transition__resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  padding: 0;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.live2d-transition:hover .live2d-transition__resize,
+.live2d-transition__resize:focus-visible,
+.live2d-transition__resize:active {
+  opacity: 1;
+}
+
 .live2d-drop-marker {
   width: 3px;
   height: 44px;

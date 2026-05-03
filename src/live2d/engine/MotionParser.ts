@@ -21,33 +21,22 @@ const SEGMENT_POINT_COUNTS: Record<number, number> = {
 /** Parse a flat segment array into structured segments. */
 export function parseSegments(flat: number[]): ParsedSegment[] {
   const segments: ParsedSegment[] = [];
-  if (flat.length < 5) return segments;
+  if (flat.length < 6) return segments;
 
-  let previousPoint: KeyPoint | null = null;
-  let i = 0;
+  let previousPoint: KeyPoint = { time: flat[0], value: flat[1] };
+  let i = 2;
   while (i < flat.length) {
     const type = flat[i];
     const nextPointCount = SEGMENT_POINT_COUNTS[type] ?? 1;
-    const points: KeyPoint[] = [];
+    const points: KeyPoint[] = [{ ...previousPoint }];
 
-    if (previousPoint) {
-      points.push({ ...previousPoint });
-      for (let p = 0; p < nextPointCount; p++) {
-        const offset = i + 1 + p * 2;
-        if (offset + 1 >= flat.length) break;
-        points.push({ time: flat[offset], value: flat[offset + 1] });
-      }
-      i += 1 + nextPointCount * 2;
-    } else {
-      const totalPointCount = nextPointCount + 1;
-      for (let p = 0; p < totalPointCount; p++) {
-        const offset = i + 1 + p * 2;
-        if (offset + 1 >= flat.length) break;
-        points.push({ time: flat[offset], value: flat[offset + 1] });
-      }
-      i += 1 + totalPointCount * 2;
+    for (let p = 0; p < nextPointCount; p++) {
+      const offset = i + 1 + p * 2;
+      if (offset + 1 >= flat.length) break;
+      points.push({ time: flat[offset], value: flat[offset + 1] });
     }
 
+    i += 1 + nextPointCount * 2;
     if (points.length < 2) break;
     segments.push({ type, points });
     previousPoint = points[points.length - 1];
@@ -57,12 +46,14 @@ export function parseSegments(flat: number[]): ParsedSegment[] {
 
 /** Serialize parsed segments back into a flat array. */
 export function serializeSegments(segments: ParsedSegment[]): number[] {
+  if (segments.length === 0) return [];
+
   const flat: number[] = [];
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
+  const firstPoint = segments[0].points[0];
+  flat.push(firstPoint.time, firstPoint.value);
+  for (const seg of segments) {
     flat.push(seg.type);
-    const points = i === 0 ? seg.points : seg.points.slice(1);
-    for (const pt of points) {
+    for (const pt of seg.points.slice(1)) {
       flat.push(pt.time, pt.value);
     }
   }
