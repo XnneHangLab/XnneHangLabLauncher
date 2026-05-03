@@ -63,6 +63,7 @@ export class ModelInstance {
   private _animating = false;
   private _eyeBlinkIds: csmVector<CubismIdHandle> = new csmVector();
   private _lipSyncIds: csmVector<CubismIdHandle> = new csmVector();
+  private _curveFadeBackup: Array<{ key: string; curveIndex: number; fadeIn: number; fadeOut: number }> | null = null;
 
   // Standard parameter ID handles
   private _idParamAngleX: CubismIdHandle | null = null;
@@ -304,6 +305,12 @@ export class ModelInstance {
       : null;
   }
 
+  getLoadedMotionFromKey(key: string): CubismMotion | null {
+    return this._loadedMotions.isExist(key)
+      ? this._loadedMotions.getValue(key) as CubismMotion
+      : null;
+  }
+
   getMotionDuration(group: string, index: number): number {
     const motion = this.getLoadedMotion(group, index);
     return motion?.getLoopDuration?.() ?? 0;
@@ -355,6 +362,9 @@ export class ModelInstance {
       if (!motionMgr.isFinished()) {
         motionUpdated = motionMgr.updateMotion(m, deltaTimeSeconds);
       }
+    }
+    if (this._curveFadeBackup) {
+      this.restoreCurveFades();
     }
     m.saveParameters();
 
@@ -472,7 +482,7 @@ export class ModelInstance {
     return values;
   }
 
-  startMotion(group: string, index: number, loop?: boolean, offsetSeconds = 0, fadeInSeconds?: number): boolean {
+  startMotion(group: string, index: number, loop?: boolean, offsetSeconds = 0, fadeInSeconds?: number, zeroCurveFades?: boolean, preserveCurrentMotion?: boolean): boolean {
     const motion = this.getLoadedMotion(group, index);
     if (!motion) return false;
 
@@ -482,13 +492,27 @@ export class ModelInstance {
     }
     const originalFadeIn = this._motionOriginalFadeInTimes.get(key) ?? motion.getFadeInTime();
 
+    if (zeroCurveFades && (motion as any)._motionData) {
+      const cubismMotion = motion as any;
+      const data = cubismMotion._motionData;
+      this._curveFadeBackup = [];
+      for (let c = 0; c < data.curveCount; c++) {
+        const curve = data.curves.at(c);
+        this._curveFadeBackup.push({ key, curveIndex: c, fadeIn: curve.fadeInTime, fadeOut: curve.fadeOutTime });
+        curve.fadeInTime = 0;
+        curve.fadeOutTime = 0;
+      }
+    }
+
     motion.setIsLoop(Boolean(loop));
     motion.setOffsetTime(Math.max(0, offsetSeconds));
     motion.setFadeInTime(fadeInSeconds !== undefined ? Math.max(0, fadeInSeconds) : originalFadeIn);
     motion.setFinishedMotionHandler(() => undefined);
 
     const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
-    motionMgr.stopAllMotions();
+    if (!preserveCurrentMotion) {
+      motionMgr.stopAllMotions();
+    }
     motionMgr.setReservePriority(3);
     motionMgr.startMotionPriority(motion, false, 3);
     return true;
@@ -505,6 +529,22 @@ export class ModelInstance {
     const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
     motionMgr.stopAllMotions();
     this.model.saveParameters();
+  }
+
+  /** Restore per-curve fade times after the first updateMotion frame. */
+  restoreCurveFades(): void {
+    const backup = this._curveFadeBackup;
+    if (!backup) return;
+    this._curveFadeBackup = null;
+    for (const entry of backup) {
+      const motion = this.getLoadedMotionFromKey(entry.key) as CubismMotion | null;
+      if (!motion || !motion._motionData || entry.curveIndex >= motion._motionData.curveCount) {
+        continue;
+      }
+      const curve = motion._motionData.curves.at(entry.curveIndex);
+      curve.fadeInTime = entry.fadeIn;
+      curve.fadeOutTime = entry.fadeOut;
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
