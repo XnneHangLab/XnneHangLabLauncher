@@ -703,6 +703,13 @@
 }
 .live2d-timeline-btn:hover { opacity: 0.8; }
 
+.live2d-timeline-export-btn {
+  background: #2a6d3a;
+}
+.live2d-timeline-export-btn:hover {
+  background: #35854a;
+}
+
 .live2d-timeline-time {
   font-size: 11px;
   color: var(--muted);

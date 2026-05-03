@@ -118,3 +118,11 @@ export function readFileBase64(path: string) {
 export function writeLive2DMotion(model3Path: string, group: string, index: number, motionJson: unknown) {
   return invoke<void>('write_live2d_motion', { model3Path, group, index, motionJson });
 }
+
+export function pickSaveFile(title: string, defaultName: string) {
+  return invoke<string | null>('pick_save_file', { title, defaultName });
+}
+
+export function writeFile(path: string, content: string) {
+  return invoke<void>('write_file', { path, content });
+}

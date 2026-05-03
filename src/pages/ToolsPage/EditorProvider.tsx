@@ -10,7 +10,10 @@ import { loadModelFromData, base64ToArrayBuffer } from '../../live2d/engine/Mode
 import type { ModelInstance } from '../../live2d/engine/ModelLoader';
 import { MotionPlayer } from '../../live2d/engine/MotionPlayer';
 import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
-import { readLive2DModelData, pickAnyFile, readFileBase64 } from '../../services/config/bridge';
+import { spliceMotions, extractMotionSubrange, createTransitionMotion } from '../../live2d/engine/MotionSplicer';
+import { parseMotion, evaluateMotion } from '../../live2d/engine/MotionParser';
+import type { ParsedMotion } from '../../live2d/types';
+import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile } from '../../services/config/bridge';
 import type { Live2DModelData, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
 
@@ -197,6 +200,7 @@ export interface EditorContextValue {
   playClip: (uid: string) => void;
   removeClipFromTimeline: (uid: string) => void;
   clearTimeline: () => void;
+  exportTimelineAsMotion: () => Promise<void>;
 }
 
 const EditorCtx = createContext<EditorContextValue | null>(null);
@@ -1770,6 +1774,168 @@ export function EditorProvider({
     setTimelineItems([]);
   }, []);
 
+  const exportTimelineAsMotion = useCallback(async () => {
+    const items = timelineItemsRef.current;
+    if (items.length === 0) {
+      debugLogRef.current?.('[Live2D:export] 时间线为空，跳过导出', 'stderr');
+      return;
+    }
+    const instance = modelRef.current;
+    const data = modelDataRef.current;
+    if (!instance || !data) {
+      debugLogRef.current?.('[Live2D:export] 模型未加载', 'stderr');
+      return;
+    }
+
+    const chunks: ParsedMotion[] = [];
+    const gaps: number[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      if (item.kind === 'motion') {
+        const entry = instance.motionEntries.find(
+          (e) => e.group === item.group && e.index === item.index,
+        );
+        if (!entry) {
+          debugLogRef.current?.(
+            `[Live2D:export] 跳过剪片段: 未找到 ${item.group}_${item.index}`,
+            'stderr',
+          );
+          continue;
+        }
+
+        const b64 = data.files[entry.file];
+        if (!b64) {
+          debugLogRef.current?.(
+            `[Live2D:export] 跳过剪片段: 文件缺失 ${entry.file}`,
+            'stderr',
+          );
+          continue;
+        }
+
+        try {
+          const motionData = parseBase64Json(b64) as MotionData;
+          const parsed = parseMotion(motionData);
+          const subrange = extractMotionSubrange(
+            parsed,
+            item.sourceStart,
+            item.sourceEnd,
+          );
+          chunks.push(subrange);
+          gaps.push(0);
+        } catch (error) {
+          debugLogRef.current?.(
+            `[Live2D:export] 解析动作失败 ${item.group}_${item.index}: ${String(error)}`,
+            'stderr',
+          );
+          continue;
+        }
+      } else if (item.kind === 'transition') {
+        // Find the surrounding motion clips
+        const prevClip = i > 0 && items[i - 1].kind === 'motion'
+          ? items[i - 1] as TimelineClip
+          : null;
+        const nextClip = i < items.length - 1 && items[i + 1].kind === 'motion'
+          ? items[i + 1] as TimelineClip
+          : null;
+
+        if (!prevClip || !nextClip) {
+          debugLogRef.current?.(
+            `[Live2D:export] 跳过过渡段 ${item.uid}: 缺少相邻剪片段`,
+            'stderr',
+          );
+          continue;
+        }
+
+        // Evaluate parameter values at the boundary points
+        const prevEntry = instance.motionEntries.find(
+          (e) => e.group === prevClip.group && e.index === prevClip.index,
+        );
+        const nextEntry = instance.motionEntries.find(
+          (e) => e.group === nextClip.group && e.index === nextClip.index,
+        );
+
+        if (!prevEntry || !nextEntry) {
+          debugLogRef.current?.(
+            `[Live2D:export] 跳过过渡段: 未找到动作入口`,
+            'stderr',
+          );
+          continue;
+        }
+
+        const prevB64 = data.files[prevEntry.file];
+        const nextB64 = data.files[nextEntry.file];
+        if (!prevB64 || !nextB64) {
+          debugLogRef.current?.('[Live2D:export] 跳过过渡段: 文件缺失', 'stderr');
+          continue;
+        }
+
+        try {
+          const prevParsed = parseMotion(parseBase64Json(prevB64) as MotionData);
+          const nextParsed = parseMotion(parseBase64Json(nextB64) as MotionData);
+
+          const prevValues = evaluateMotion(prevParsed, prevClip.sourceEnd);
+          const nextValues = evaluateMotion(nextParsed, nextClip.sourceStart);
+
+          const fps = prevParsed.fps || nextParsed.fps || 30;
+          const transitionMotion = createTransitionMotion(
+            prevValues,
+            nextValues,
+            item.duration,
+            fps,
+          );
+          chunks.push(transitionMotion);
+          gaps.push(0);
+        } catch (error) {
+          debugLogRef.current?.(
+            `[Live2D:export] 创建过渡曲线失败: ${String(error)}`,
+            'stderr',
+          );
+          continue;
+        }
+      }
+    }
+
+    if (chunks.length === 0) {
+      debugLogRef.current?.('[Live2D:export] 没有可导出的内容', 'stderr');
+      return;
+    }
+
+    try {
+      // Add cumulative gaps so spliceMotions places them correctly
+      const cumulativeGaps: number[] = [];
+      let runningGap = 0;
+      for (let g = 0; g < chunks.length - 1; g++) {
+        runningGap += gaps[g] ?? 0;
+        cumulativeGaps.push(runningGap);
+      }
+
+      const motionData = spliceMotions(chunks, cumulativeGaps);
+      const jsonContent = JSON.stringify(motionData, null, 2);
+
+      const savePath = await pickSaveFile(
+        '导出时间线动作',
+        `timeline_export_${Date.now()}.motion3.json`,
+      );
+      if (!savePath) {
+        debugLogRef.current?.('[Live2D:export] 用户取消了保存', 'system');
+        return;
+      }
+
+      await writeFile(savePath, jsonContent);
+      debugLogRef.current?.(
+        `[Live2D:export] 成功导出到 ${savePath} (${chunks.length} 个片段, ${motionData.Meta.Duration.toFixed(3)}s)`,
+        'system',
+      );
+    } catch (error) {
+      debugLogRef.current?.(
+        `[Live2D:export] 导出失败: ${String(error)}`,
+        'stderr',
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (!canvasReady || restoredSessionRef.current) return;
     restoredSessionRef.current = true;
@@ -1871,6 +2037,7 @@ export function EditorProvider({
     playClip,
     removeClipFromTimeline,
     clearTimeline,
+    exportTimelineAsMotion,
   };
 
   return (

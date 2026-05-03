@@ -241,3 +241,63 @@ pub async fn write_live2d_motion(
 
     Ok(())
 }
+
+/// Open a save-file dialog and return the chosen path, or None if cancelled.
+#[tauri::command]
+pub async fn pick_save_file(title: String, default_name: String) -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "Add-Type -AssemblyName System.Windows.Forms; \
+             $d = New-Object System.Windows.Forms.SaveFileDialog; \
+             $d.Title = '{title}'; \
+             $d.FileName = '{default_name}'; \
+             $d.Filter = 'Live2D 动作文件 (*.motion3.json)|*.motion3.json|所有文件 (*.*)|*.*'; \
+             if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) \
+             {{ [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $d.FileName }}"
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output()
+            .map_err(|e| format!("无法启动保存对话框: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(stdout) });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "set f to choose file name with prompt \"{title}\" default name \"{default_name}\"; \
+             POSIX path of f"
+        );
+        let output = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|e| format!("无法启动保存对话框: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
+        return Ok(if stdout.is_empty() { None } else { Some(stdout) });
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for (program, args) in [
+            ("zenity", vec!["--file-selection", "--save", "--confirm-overwrite",
+                &format!("--title={title}"), &format!("--filename={default_name}")]),
+            ("kdialog", vec!["--getsavefilename", ".", &format!("--title={title}")]),
+        ] {
+            let Ok(output) = std::process::Command::new(program).args(&args).output() else { continue };
+            if !output.status.success() { continue; }
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                return Ok(Some(stdout));
+            }
+        }
+        return Err("未找到可用的保存对话框（需要 zenity 或 kdialog）".to_string());
+    }
+}
+
+/// Write a string to a file (UTF-8).
+#[tauri::command]
+pub fn write_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content).map_err(|e| format!("写入文件失败: {e}"))
+}

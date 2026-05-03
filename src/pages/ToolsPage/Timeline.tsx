@@ -145,6 +145,7 @@ export function Timeline() {
     playClip,
     removeClipFromTimeline,
     clearTimeline,
+    exportTimelineAsMotion,
   } = useEditor();
   const [draggingUid, setDraggingUid] = useState<string | null>(null);
   const [insertBeforeUid, setInsertBeforeUid] = useState<string | null>(null);
@@ -414,6 +415,11 @@ export function Timeline() {
         {timelineItems.length > 0 && (
           <button type="button" className="live2d-timeline-btn" onClick={clearTimeline} title="清空时间线">
             ✕
+          </button>
+        )}
+        {timelineItems.length > 0 && (
+          <button type="button" className="live2d-timeline-btn live2d-timeline-export-btn" onClick={exportTimelineAsMotion} title="导出时间线为 motion3.json">
+            ⬇
           </button>
         )}
       </div>
