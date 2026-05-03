@@ -101,6 +101,24 @@ export interface TimelinePlaybackState {
   totalDuration: number;
 }
 
+export interface TimelineExpressionSegmentMarker {
+  uid: string;
+  /** Position on the total timeline in seconds (0 .. totalDuration). */
+  time: number;
+  /**
+   * Key into expressionMetas (via expressionKey(name, file)).
+   * null = no expression. Applies to the segment LEFT of this marker
+   * (from previous boundary up to this marker's time).
+   */
+  expressionKey: string | null;
+}
+
+interface ExpressionSegment {
+  startTime: number;
+  endTime: number;
+  expressionKey: string | null;
+}
+
 interface TimelineClipRef {
   group: string;
   index: number;
@@ -134,6 +152,8 @@ export interface Live2DAdaptedPreset {
   timeline: { clipKeys: string[]; clips?: TimelineClipRef[]; items?: PersistedTimelineItem[] };
   manualOverrides: Record<string, number>;
   importedMotions: ImportedMotionState[];
+  expressionSegmentMarkers?: TimelineExpressionSegmentMarker[];
+  endExpressionKey?: string | null;
 }
 
 interface ExpressionPreviewBaselineEntry {
@@ -150,6 +170,8 @@ interface Live2DSessionState {
   timelineItems?: PersistedTimelineItem[];
   importedMotions?: ImportedMotionState[];
   expressionConfigs?: Record<string, ExpressionPresetConfig>;
+  expressionSegmentMarkers?: TimelineExpressionSegmentMarker[];
+  endExpressionKey?: string | null;
 }
 
 const live2dSessionKey = 'live2d.previewSession';
@@ -176,6 +198,8 @@ export interface EditorContextValue {
   motionAliases: Record<string, string>;
   timelineClips: TimelineClip[];
   timelineItems: TimelineItem[];
+  expressionSegmentMarkers: TimelineExpressionSegmentMarker[];
+  endExpressionKey: string | null;
 
   loadModelByPath: (path: string) => Promise<void>;
   openImportDialog: () => Promise<void>;
@@ -201,6 +225,13 @@ export interface EditorContextValue {
   removeClipFromTimeline: (uid: string) => void;
   clearTimeline: () => void;
   exportTimelineAsMotion: () => Promise<void>;
+  addExpressionSegmentMarker: (time: number) => void;
+  removeExpressionSegmentMarker: (uid: string) => void;
+  updateExpressionSegmentMarker: (uid: string, expressionKey: string | null) => void;
+  moveExpressionSegmentMarker: (uid: string, time: number) => void;
+  segmentExpressionKeyAtTime: (time: number) => string | null;
+  assignExpressionToSegmentAtTime: (time: number, expressionKey: string | null) => void;
+  setEndExpressionKey: (expressionKey: string | null) => void;
 }
 
 const EditorCtx = createContext<EditorContextValue | null>(null);
@@ -346,6 +377,44 @@ function idleTimelinePlaybackState(items: TimelineItem[] = []): TimelinePlayback
   };
 }
 
+export function deriveExpressionSegments(
+  markers: TimelineExpressionSegmentMarker[],
+  totalDuration: number,
+  endExpressionKey?: string | null,
+): ExpressionSegment[] {
+  if (totalDuration <= 0) return [];
+  const sorted = [...markers].sort((a, b) => a.time - b.time);
+  const segments: ExpressionSegment[] = [];
+  let prevTime = 0;
+
+  // Each marker's expressionKey controls the segment to its LEFT:
+  // [prevTime, marker.time). The marker is the RIGHT boundary of its segment.
+  for (let i = 0; i < sorted.length; i++) {
+    const endTime = Math.max(prevTime, Math.min(sorted[i].time, totalDuration));
+    if (endTime > prevTime) {
+      segments.push({ startTime: prevTime, endTime, expressionKey: sorted[i].expressionKey });
+      prevTime = endTime;
+    }
+  }
+
+  // Last segment (after the last marker) is controlled by endExpressionKey.
+  if (totalDuration > prevTime) {
+    segments.push({ startTime: prevTime, endTime: totalDuration, expressionKey: endExpressionKey ?? null });
+  }
+
+  return segments;
+}
+
+function findExpressionSegment(
+  markers: TimelineExpressionSegmentMarker[],
+  totalTime: number,
+  totalDuration: number,
+  endExpressionKey?: string | null,
+): ExpressionSegment | null {
+  const segments = deriveExpressionSegments(markers, totalDuration, endExpressionKey);
+  return segments.find((s) => totalTime >= s.startTime && totalTime < s.endTime) ?? null;
+}
+
 function importKey(group: string, index: number): string {
   return `${group}_${index}`;
 }
@@ -384,7 +453,7 @@ function normalizeBlend(blend: unknown): ExpressionBlend {
   return blend === 'Add' || blend === 'Multiply' || blend === 'Overwrite' ? blend : 'Overwrite';
 }
 
-function expressionKey(name: string, file: string): string {
+export function expressionKey(name: string, file: string): string {
   return name || file;
 }
 
@@ -509,6 +578,34 @@ function applyExpressionOperation(currentValue: number, operation: ExpressionPar
     case 'Overwrite':
     default:
       return operation.value;
+  }
+}
+
+function applySegmentExpressionToModel(
+  model: ModelInstance,
+  totalTime: number,
+  markers: TimelineExpressionSegmentMarker[],
+  expressionMetas: ExpressionMeta[],
+  totalDuration: number,
+  endExpressionKey?: string | null,
+): void {
+  if (!model) return;
+  const segment = findExpressionSegment(markers, totalTime, totalDuration, endExpressionKey);
+  if (!segment || !segment.expressionKey) return;
+
+  const meta = expressionMetas.find(
+    (m) => expressionKey(m.name, m.file) === segment.expressionKey,
+  );
+  if (!meta) return;
+
+  // Apply expression with save=false so the values are used for the current frame's
+  // draw but do NOT persist into the model's save/load snapshot. This prevents
+  // accumulation across frames: each frame starts from a clean baseline (motion values)
+  // and the expression is re-applied fresh.
+  for (const op of meta.parameters) {
+    const currentValue = model.getParameterValue(op.id);
+    const nextValue = applyExpressionOperation(currentValue, op);
+    model.setParameterValue(op.id, nextValue, false);
   }
 }
 
@@ -666,8 +763,13 @@ export function EditorProvider({
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [timelinePlayback, setTimelinePlayback] = useState<TimelinePlaybackState>(() => idleTimelinePlaybackState());
+  const [expressionSegmentMarkers, setExpressionSegmentMarkers] = useState<TimelineExpressionSegmentMarker[]>([]);
+  const [endExpressionKey, setEndExpressionKey] = useState<string | null>(null);
   const timelineItemsRef = useRef<TimelineItem[]>([]);
   const timelinePlaybackRef = useRef<{ active: boolean; nextIndex: number }>({ active: false, nextIndex: 0 });
+  const expressionSegmentMarkersRef = useRef<TimelineExpressionSegmentMarker[]>([]);
+  const endExpressionKeyRef = useRef<string | null>(null);
+  const lastTimelineTimeRef = useRef(0);
   const transitionElapsedRef = useRef<{ active: boolean; index: number; elapsed: number }>({ active: false, index: -1, elapsed: 0 });
   const timelineClipEndTimerRef = useRef<number | null>(null);
   const timelineClips = timelineItems.filter((item): item is TimelineClip => item.kind === 'motion');
@@ -687,6 +789,14 @@ export function EditorProvider({
       return idleTimelinePlaybackState(timelineItems);
     });
   }, [timelineItems]);
+
+  useEffect(() => {
+    expressionSegmentMarkersRef.current = expressionSegmentMarkers;
+  }, [expressionSegmentMarkers]);
+
+  useEffect(() => {
+    endExpressionKeyRef.current = endExpressionKey;
+  }, [endExpressionKey]);
 
   // ── Init Cubism on canvas mount ──────────────────────────────────────────
 
@@ -723,6 +833,8 @@ export function EditorProvider({
       timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
       expressionConfigs: expressionConfigsRef.current,
+      expressionSegmentMarkers: expressionSegmentMarkersRef.current,
+      endExpressionKey: endExpressionKeyRef.current,
     });
   }, [getPersistableManualOverrides, modelPath, motionAliases, timelineItems]);
 
@@ -824,6 +936,39 @@ export function EditorProvider({
           } else {
             model.update(dt, manualOverridesRef.current);
           }
+
+          // Apply expression segment values for the current timeline position
+          {
+            const items = timelineItemsRef.current;
+
+            // Track the correct timeline total time for use in idle-path expression evaluation
+            let exprTimelineTime = lastTimelineTimeRef.current;
+            if (transitionElapsed.active) {
+              exprTimelineTime = timelineTimeAtItem(items, transitionElapsed.index, transitionElapsed.elapsed);
+              lastTimelineTimeRef.current = exprTimelineTime;
+            } else if (timelinePlaybackRef.current.active) {
+              const idx = Math.max(0, timelinePlaybackRef.current.nextIndex - 1);
+              const item = items[idx];
+              const lt = item?.kind === 'motion' ? Math.max(0, player.currentTime - item.sourceStart) : player.currentTime;
+              exprTimelineTime = timelineTimeAtItem(items, idx, lt);
+              lastTimelineTimeRef.current = exprTimelineTime;
+            }
+            applySegmentExpressionToModel(
+              model,
+              exprTimelineTime,
+              expressionSegmentMarkersRef.current,
+              expressionMetasRef.current,
+              timelineTotalDuration(items),
+              endExpressionKeyRef.current,
+            );
+            // Recompute drawable vertices, opacities, and colors so expression
+            // parameter changes (setParameterValue with save=false above) are
+            // reflected in the render.  The Cubism SDK bakes drawable state
+            // during model.update() — any parameter changes made after that
+            // call are invisible until the next update().
+            model.commitParameterValues();
+          }
+
           motionTimeRef.current = player.currentTime;
           if (debugParamRef.current && debugFrameRef.current < 60) {
             debugFrameRef.current++;
@@ -1387,6 +1532,8 @@ export function EditorProvider({
       },
       manualOverrides: getPersistableManualOverrides(),
       importedMotions: importedMotionsRef.current,
+      expressionSegmentMarkers: expressionSegmentMarkersRef.current,
+      endExpressionKey: endExpressionKeyRef.current,
     };
   }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineItems]);
 
@@ -1566,6 +1713,7 @@ export function EditorProvider({
     modelRef.current?.stopAllMotions();
     activeMotionRef.current = null;
     const nextPlayback = timelinePlaybackStateAtTime(clips, time, false);
+    lastTimelineTimeRef.current = nextPlayback.totalTime;
     motionTimeRef.current = Math.max(0, nextPlayback.totalTime - nextPlayback.itemStartTime);
     setTimelinePlayback(nextPlayback);
     setCurrentTime(nextPlayback.totalTime);
@@ -1774,6 +1922,56 @@ export function EditorProvider({
     setTimelineItems([]);
   }, []);
 
+  const addExpressionSegmentMarker = useCallback((time: number) => {
+    const totalDur = timelineTotalDuration(timelineItemsRef.current);
+    const clamped = Math.max(0, Math.min(time, totalDur));
+    setExpressionSegmentMarkers((prev) => [
+      ...prev,
+      { uid: `expmarker_${Date.now()}`, time: clamped, expressionKey: null },
+    ]);
+  }, []);
+
+  const removeExpressionSegmentMarker = useCallback((uid: string) => {
+    setExpressionSegmentMarkers((prev) => prev.filter((m) => m.uid !== uid));
+  }, []);
+
+  const updateExpressionSegmentMarker = useCallback((uid: string, expressionKey: string | null) => {
+    setExpressionSegmentMarkers((prev) =>
+      prev.map((m) => (m.uid === uid ? { ...m, expressionKey } : m)),
+    );
+  }, []);
+
+  const moveExpressionSegmentMarker = useCallback((uid: string, time: number) => {
+    const totalDur = timelineTotalDuration(timelineItemsRef.current);
+    setExpressionSegmentMarkers((prev) =>
+      prev.map((m) => (m.uid === uid ? { ...m, time: Math.max(0, Math.min(time, totalDur)) } : m)),
+    );
+  }, []);
+
+  const segmentExpressionKeyAtTime = useCallback((time: number): string | null => {
+    const totalDur = timelineTotalDuration(timelineItemsRef.current);
+    const segment = findExpressionSegment(expressionSegmentMarkersRef.current, time, totalDur, endExpressionKeyRef.current);
+    return segment?.expressionKey ?? null;
+  }, []);
+
+  const assignExpressionToSegmentAtTime = useCallback((time: number, expressionKey: string | null) => {
+    const totalDur = timelineTotalDuration(timelineItemsRef.current);
+    const markers = expressionSegmentMarkersRef.current;
+    // Find the right boundary marker: the first marker whose time is > current time.
+    // That marker's expressionKey controls the segment containing `time`.
+    const sorted = [...markers].sort((a, b) => a.time - b.time);
+    const boundaryMarker = sorted.find((m) => m.time > time) ?? null;
+    if (boundaryMarker) {
+      // Assign expression to the segment LEFT of this marker
+      setExpressionSegmentMarkers((prev) =>
+        prev.map((m) => (m.uid === boundaryMarker.uid ? { ...m, expressionKey } : m)),
+      );
+    } else {
+      // No marker ahead → we're in the last segment (or there are no markers)
+      setEndExpressionKey(expressionKey);
+    }
+  }, []);
+
   const exportTimelineAsMotion = useCallback(async () => {
     const items = timelineItemsRef.current;
     if (items.length === 0) {
@@ -1950,6 +2148,8 @@ export function EditorProvider({
     expressionConfigsRef.current = session.expressionConfigs ?? {};
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
+    setExpressionSegmentMarkers(session.expressionSegmentMarkers ?? []);
+    setEndExpressionKey(session.endExpressionKey ?? null);
     setMotionAliases(session.motionAliases ?? {});
     pendingSessionItemsRef.current = session.timelineItems ?? null;
     pendingSessionClipRefsRef.current = session.timelineItems ? null : session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
@@ -1972,6 +2172,8 @@ export function EditorProvider({
       timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
       expressionConfigs,
+      expressionSegmentMarkers: expressionSegmentMarkersRef.current,
+      endExpressionKey: endExpressionKeyRef.current,
     };
     writeLive2DSession(nextSession);
   }, [modelPath, motionAliases, sessionReady, modelLoaded, timelineItems, expressionConfigs, getPersistableManualOverrides]);
@@ -2014,6 +2216,8 @@ export function EditorProvider({
     motionAliases,
     timelineClips,
     timelineItems,
+    expressionSegmentMarkers,
+    endExpressionKey,
     loadModelByPath,
     openImportDialog,
     openMotionImportDialog,
@@ -2038,6 +2242,13 @@ export function EditorProvider({
     removeClipFromTimeline,
     clearTimeline,
     exportTimelineAsMotion,
+    addExpressionSegmentMarker,
+    removeExpressionSegmentMarker,
+    updateExpressionSegmentMarker,
+    moveExpressionSegmentMarker,
+    segmentExpressionKeyAtTime,
+    assignExpressionToSegmentAtTime,
+    setEndExpressionKey,
   };
 
   return (

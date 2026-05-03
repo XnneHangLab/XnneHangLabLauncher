@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useEditor } from './EditorProvider';
 import type { TimelineItem, TimelineClip, TimelineTransition } from './EditorProvider';
+import { deriveExpressionSegments } from './EditorProvider';
 
 const MOTION_DRAG_TYPE = 'application/x-live2d-motion';
 const PX_PER_SECOND = 28;
@@ -123,6 +124,28 @@ function readMotionPayload(data: string): { group: string; index: number } | nul
   }
 }
 
+function timeToPixel(
+  time: number,
+  items: Array<{ duration: number; kind?: string }>,
+): number {
+  let cursorTime = 0;
+  let cursorX = 0;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const width = itemWidth(item);
+    if (time <= cursorTime + item.duration || i === items.length - 1) {
+      const ratio = item.duration > 0 ? Math.max(0, (time - cursorTime) / item.duration) : 0;
+      return cursorX + width * ratio;
+    }
+    cursorTime += item.duration;
+    cursorX += width;
+    if (item.kind === 'motion' && items[i + 1]?.kind === 'motion') {
+      cursorX += TRANSITION_ADD_WIDTH;
+    }
+  }
+  return cursorX;
+}
+
 export function Timeline() {
   const {
     modelLoaded,
@@ -133,6 +156,7 @@ export function Timeline() {
     currentMotion,
     timelineClips,
     timelineItems,
+    expressionSegmentMarkers,
     togglePlay,
     scrub,
     seekTimeline,
@@ -146,6 +170,11 @@ export function Timeline() {
     removeClipFromTimeline,
     clearTimeline,
     exportTimelineAsMotion,
+    addExpressionSegmentMarker,
+    removeExpressionSegmentMarker,
+    updateExpressionSegmentMarker,
+    moveExpressionSegmentMarker,
+    endExpressionKey,
   } = useEditor();
   const [draggingUid, setDraggingUid] = useState<string | null>(null);
   const [insertBeforeUid, setInsertBeforeUid] = useState<string | null>(null);
@@ -153,6 +182,7 @@ export function Timeline() {
   const [trimming, setTrimming] = useState<TrimmingState | null>(null);
   const [resizingTransition, setResizingTransition] = useState<ResizingTransitionState | null>(null);
   const [transitionResizePreview, setTransitionResizePreview] = useState<Record<string, number>>({});
+  const [draggingMarkerUid, setDraggingMarkerUid] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -422,6 +452,16 @@ export function Timeline() {
             ⬇
           </button>
         )}
+        {timelineItems.length > 0 && (
+          <button
+            type="button"
+            className="live2d-timeline-btn"
+            onClick={() => addExpressionSegmentMarker(timelinePlayback.totalTime)}
+            title="在播放头位置添加表情关键帧"
+          >
+            ◆
+          </button>
+        )}
       </div>
 
       {/* ── Single visual clip track ──────────────────────────────── */}
@@ -586,6 +626,72 @@ export function Timeline() {
             );
           })}
           {timelineItems.length > 0 && insertBeforeUid === null && draggingUid && <div className="live2d-drop-marker" />}
+
+          {/* ── Expression segments (background bands) ──────── */}
+          {timelineItems.length > 0 && (() => {
+            const segments = deriveExpressionSegments(expressionSegmentMarkers, totalDuration, endExpressionKey);
+            return segments.map((seg, i) => {
+              if (!seg.expressionKey) return null;
+              const left = timeToPixel(seg.startTime, timelineItems);
+              const right = timeToPixel(seg.endTime, timelineItems);
+              const width = Math.max(4, right - left);
+              return (
+                <div
+                  key={i}
+                  className="live2d-expression-segment-band"
+                  style={{ left, width }}
+                  title={seg.expressionKey}
+                >
+                  <span className="live2d-expression-segment-band__label">{seg.expressionKey}</span>
+                </div>
+              );
+            });
+          })()}
+
+          {/* ── Expression keyframe diamonds ──────────────────── */}
+          {timelineItems.length > 0 && expressionSegmentMarkers.map((marker) => {
+            const left = timeToPixel(marker.time, timelineItems);
+            return (
+              <div
+                key={marker.uid}
+                className="live2d-expression-diamond"
+                style={{ left: Math.max(0, left - 6) }}
+                title={`表情关键帧${marker.expressionKey ? `: ${marker.expressionKey}` : '（无表情）'}`}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  setDraggingMarkerUid(marker.uid);
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (draggingMarkerUid !== marker.uid) return;
+                  const rect = e.currentTarget.parentElement!.getBoundingClientRect();
+                  moveExpressionSegmentMarker(marker.uid, timeFromTrackX(timelineItems, e.clientX - rect.left));
+                }}
+                onPointerUp={(e) => {
+                  if (draggingMarkerUid !== marker.uid) return;
+                  setDraggingMarkerUid(null);
+                  (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+                }}
+                onPointerCancel={(e) => {
+                  if (draggingMarkerUid !== marker.uid) return;
+                  setDraggingMarkerUid(null);
+                  (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+                }}
+              >
+                <button
+                  type="button"
+                  className="live2d-expression-diamond__remove"
+                  onClick={() => removeExpressionSegmentMarker(marker.uid)}
+                  title="删除关键帧"
+                >
+                  ×
+                </button>
+                {marker.expressionKey && (
+                  <span className="live2d-expression-diamond__label">{marker.expressionKey}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

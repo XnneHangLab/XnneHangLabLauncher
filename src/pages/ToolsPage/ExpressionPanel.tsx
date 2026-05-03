@@ -24,6 +24,10 @@ export function ExpressionPanel() {
     activeExpressionPreviews,
     previewExpression,
     updateExpressionConfig,
+    timelinePlayback,
+    expressionSegmentMarkers,
+    segmentExpressionKeyAtTime,
+    assignExpressionToSegmentAtTime,
   } = useEditor();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<ExpressionRole | 'all'>('all');
@@ -81,6 +85,8 @@ export function ExpressionPanel() {
             const isExpanded = expanded === meta.name;
             const expressionPreviewKey = meta.name || meta.file;
             const isPreviewing = activeExpressionPreviews.includes(expressionPreviewKey);
+            const currentSegmentKey = segmentExpressionKeyAtTime(timelinePlayback.totalTime);
+            const isSegmentAssigned = currentSegmentKey === expressionPreviewKey;
             return (
               <div key={`${meta.name}:${meta.file}`} className="live2d-expression-card">
                 <div className="live2d-expression-head">
@@ -96,6 +102,22 @@ export function ExpressionPanel() {
                     <span className="live2d-expression-name" title={meta.name}>{config?.label || meta.name}</span>
                     <span className="live2d-expression-file" title={meta.file}>{meta.file}</span>
                   </div>
+                  {timelinePlayback.totalDuration > 0 && (
+                    <button
+                      type="button"
+                      className={`live2d-btn live2d-btn--xs${isSegmentAssigned ? ' live2d-expression-preview--active' : ''}`}
+                      onClick={() => {
+                        if (isSegmentAssigned) {
+                          assignExpressionToSegmentAtTime(timelinePlayback.totalTime, null);
+                        } else {
+                          assignExpressionToSegmentAtTime(timelinePlayback.totalTime, expressionPreviewKey);
+                        }
+                      }}
+                      title={isSegmentAssigned ? '取消当前片段的表情' : '分配给当前时间线片段'}
+                    >
+                      ◆
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`live2d-btn live2d-btn--xs${isPreviewing ? ' live2d-expression-preview--active' : ''}`}
