@@ -765,6 +765,7 @@ export function EditorProvider({
   const [currentMotion, setCurrentMotion] = useState<{ group: string; index: number } | null>(null);
   const activeMotionRef = useRef<{ group: string; index: number; loop: boolean; onFinish?: () => void } | null>(null);
   const motionTimeRef = useRef(0);
+  const lastPreviewErrorTimeRef = useRef(0);
   const [motionAliases, setMotionAliases] = useState<Record<string, string>>({});
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [timelinePlayback, setTimelinePlayback] = useState<TimelinePlaybackState>(() => idleTimelinePlaybackState());
@@ -1009,8 +1010,13 @@ export function EditorProvider({
           }
         }
       } catch (error) {
-        console.error('[Live2D] Preview loop error:', error);
-        debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}`, 'stderr');
+        // Throttle repeated errors to prevent log spam (likely SDK-internal state issue).
+        const now = Date.now();
+        if (now - (lastPreviewErrorTimeRef.current ?? 0) > 5000) {
+          lastPreviewErrorTimeRef.current = now;
+          console.error('[Live2D] Preview loop error:', error);
+          debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}`, 'stderr');
+        }
         const activeBeforeError = activeMotionRef.current;
         motionPlayerRef.current.unload();
         modelRef.current?.stopAllMotions();
