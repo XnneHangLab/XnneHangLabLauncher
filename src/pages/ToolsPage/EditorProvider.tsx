@@ -890,10 +890,31 @@ export function EditorProvider({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || cubismReadyRef.current) return;
-    CubismInit.initialize(canvas);
-    CubismInit.resize();
-    cubismReadyRef.current = true;
-    setCanvasReady(true);
+
+    // Wait until the canvas has a real layout size before initialising
+    // Cubism / WebGL. Cold-start on Tauri can mount the canvas before the
+    // first layout pass, so clientWidth/Height are still 0 — initialising
+    // WebGL then leaves getParameter() returning null for some queries
+    // (notably COLOR_WRITEMASK), which poisons RendererProfile_WebGL.save()
+    // and crashes every subsequent draw with `Cannot read properties of
+    // null (reading '0')`. ResizeObserver in CubismFrameworkInit picks up
+    // the real size later.
+    let cancelled = false;
+    const tryInit = () => {
+      if (cancelled || cubismReadyRef.current) return;
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        requestAnimationFrame(tryInit);
+        return;
+      }
+      CubismInit.initialize(canvas);
+      CubismInit.resize();
+      cubismReadyRef.current = true;
+      setCanvasReady(true);
+    };
+    tryInit();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── Animation loop ───────────────────────────────────────────────────────
@@ -1014,8 +1035,9 @@ export function EditorProvider({
         const now = Date.now();
         if (now - (lastPreviewErrorTimeRef.current ?? 0) > 5000) {
           lastPreviewErrorTimeRef.current = now;
-          console.error('[Live2D] Preview loop error:', error);
-          debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}`, 'stderr');
+          const stack = error instanceof Error && error.stack ? error.stack : String(error);
+          console.error('[Live2D] Preview loop error:', error, '\n', stack);
+          debugLogRef.current?.(`[Live2D] Preview loop error: ${String(error)}\n${stack}`, 'stderr');
         }
         const activeBeforeError = activeMotionRef.current;
         motionPlayerRef.current.unload();
