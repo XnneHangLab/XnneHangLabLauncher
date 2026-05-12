@@ -476,7 +476,16 @@ export class CubismRendererProfile_WebGL {
 
     this._lastFrontFace = this.gl.getParameter(this.gl.FRONT_FACE);
 
-    this._lastColorMask = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
+    // NOTE: getParameter(COLOR_WRITEMASK) can return null when the WebGL
+    // context is not yet fully ready (e.g. cold start with canvas of size 0,
+    // or after a context loss). Falling through with `null` here would
+    // overwrite the constructor-initialised 4-element array and crash
+    // restore() on the next frame with `Cannot read properties of null
+    // (reading '0')`. Keep the previous (valid) array in that case.
+    const colorMask = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
+    if (Array.isArray(colorMask) && colorMask.length === 4) {
+      this._lastColorMask = colorMask;
+    }
 
     // backup blending
     this._lastBlending[0] = this.gl.getParameter(this.gl.BLEND_SRC_RGB);
