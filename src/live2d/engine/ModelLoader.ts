@@ -601,6 +601,19 @@ export async function loadModelFromData(
   (userModel as any)['_moc'] = moc;
   (userModel as any)['_model'] = coreModel;
 
+  // Some CubismUserModel build paths leave `_motionManager` /
+  // `_expressionManager` as null (we bypass the constructor branch that
+  // news them up). Without these, calls like stopAllMotions() crash with
+  // `Cannot read properties of null`. Initialise them defensively here so
+  // every loaded model has a usable motion/expression manager regardless
+  // of which model3.json shape we feed in.
+  if (!(userModel as any)['_motionManager']) {
+    (userModel as any)['_motionManager'] = new CubismMotionManager();
+  }
+  if (!(userModel as any)['_expressionManager']) {
+    (userModel as any)['_expressionManager'] = new CubismExpressionMotionManager();
+  }
+
   // Create model matrix
   // Cubism model origin is at center: (0,0) in model space = center of canvas.
   // setHeight(2.0) sets scale = 2/canvasHeight. With no translation, center maps to NDC(0,0).
