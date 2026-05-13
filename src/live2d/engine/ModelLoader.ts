@@ -614,6 +614,14 @@ export async function loadModelFromData(
   (userModel as any)['_modelMatrix'] = modelMatrix;
 
   // ── Load expressions ──────────────────────────────────────────────────
+  // Some model3.json files declare Expressions but the underlying
+  // CubismUserModel did not initialise its `_expressions` map (it only gets
+  // populated through SDK paths we are bypassing). Make sure the bucket
+  // exists before we push entries into it, otherwise
+  // `setValue` blows up with `Cannot read properties of undefined`.
+  if (!(userModel as any)['_expressions']) {
+    (userModel as any)['_expressions'] = new csmMap<string, ACubismMotion>();
+  }
   for (let i = 0; i < setting.getExpressionCount(); i++) {
     const expName = setting.getExpressionName(i);
     const expFile = setting.getExpressionFileName(i);
