@@ -574,6 +574,21 @@ export async function loadModelFromData(
   kScale = 1,
 ): Promise<ModelLoadResult> {
   const gl = CubismInit.gl;
+
+  // Early format detection — Cubism Web SDK only supports Cubism 3+ models
+  // (model3.json + moc3). Older Cubism 2 models declare top-level `model` /
+  // `textures` instead of a `FileReferences` object, and ship a `.moc` (not
+  // `.moc3`) binary that this SDK cannot parse. Surface a friendly error
+  // here so users see a clear message instead of a confusing
+  // `Cannot read properties of undefined (reading 'Moc')` TypeError.
+  if (!modelJson.FileReferences) {
+    if ('model' in modelJson || 'textures' in modelJson) {
+      throw new Error(
+        '不支持 Cubism 2 模型（.model.json + .moc）。Live2D 预览工具仅支持 Cubism 3 及以上版本（需 .model3.json + .moc3）。',
+      );
+    }
+    throw new Error('无效的模型配置：model3.json 缺少 FileReferences 字段');
+  }
   const fr = modelJson.FileReferences as Record<string, unknown>;
 
   // ── Create CubismModelSetting from the model3.json text ───────────────
@@ -601,6 +616,19 @@ export async function loadModelFromData(
   (userModel as any)['_moc'] = moc;
   (userModel as any)['_model'] = coreModel;
 
+  // Some CubismUserModel build paths leave `_motionManager` /
+  // `_expressionManager` as null (we bypass the constructor branch that
+  // news them up). Without these, calls like stopAllMotions() crash with
+  // `Cannot read properties of null`. Initialise them defensively here so
+  // every loaded model has a usable motion/expression manager regardless
+  // of which model3.json shape we feed in.
+  if (!(userModel as any)['_motionManager']) {
+    (userModel as any)['_motionManager'] = new CubismMotionManager();
+  }
+  if (!(userModel as any)['_expressionManager']) {
+    (userModel as any)['_expressionManager'] = new CubismExpressionMotionManager();
+  }
+
   // Create model matrix
   // Cubism model origin is at center: (0,0) in model space = center of canvas.
   // setHeight(2.0) sets scale = 2/canvasHeight. With no translation, center maps to NDC(0,0).
@@ -614,6 +642,14 @@ export async function loadModelFromData(
   (userModel as any)['_modelMatrix'] = modelMatrix;
 
   // ── Load expressions ──────────────────────────────────────────────────
+  // Some model3.json files declare Expressions but the underlying
+  // CubismUserModel did not initialise its `_expressions` map (it only gets
+  // populated through SDK paths we are bypassing). Make sure the bucket
+  // exists before we push entries into it, otherwise
+  // `setValue` blows up with `Cannot read properties of undefined`.
+  if (!(userModel as any)['_expressions']) {
+    (userModel as any)['_expressions'] = new csmMap<string, ACubismMotion>();
+  }
   for (let i = 0; i < setting.getExpressionCount(); i++) {
     const expName = setting.getExpressionName(i);
     const expFile = setting.getExpressionFileName(i);
