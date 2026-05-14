@@ -5,6 +5,7 @@ import { ResourcePanel } from './ResourcePanel';
 import { ParameterPanel } from './ParameterPanel';
 import { ExpressionPanel } from './ExpressionPanel';
 import { Timeline } from './Timeline';
+import { Live2DErrorDialog } from './Live2DErrorDialog';
 
 interface Live2DPreviewToolProps {
   onBack: () => void;
@@ -20,7 +21,7 @@ export function Live2DPreviewTool({ onBack, onDebugLog }: Live2DPreviewToolProps
 }
 
 function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
-  const { canvasRef, modelPath, modelError } = useEditor();
+  const { canvasRef, modelPath, modelError, clearModelError } = useEditor();
   const [rightTab, setRightTab] = useState<'params' | 'expressions'>('params');
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
@@ -42,7 +43,6 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
         <div className="live2d-col live2d-col--canvas">
           <div className="live2d-canvas-wrap">
             {!modelPath && <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>}
-            {modelError && <div className="live2d-error">{modelError}</div>}
             <canvas ref={canvasRef} className="live2d-canvas" />
           </div>
         </div>
@@ -72,6 +72,9 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
       <div className="live2d-timeline-row">
         <Timeline />
       </div>
+
+      {modelError && <Live2DErrorDialog message={modelError} onClose={clearModelError} />}
     </div>
   );
 }
+

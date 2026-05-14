@@ -202,6 +202,7 @@ export interface EditorContextValue {
   endExpressionKeys: string[];
 
   loadModelByPath: (path: string) => Promise<void>;
+  clearModelError: () => void;
   openImportDialog: () => Promise<void>;
   openMotionImportDialog: () => Promise<void>;
   playMotion: (group: string, index: number) => void;
@@ -1190,6 +1191,10 @@ export function EditorProvider({
   }, [loadMotionIntoPlayer, returnToBasePose]);
 
   // ── Model loading ────────────────────────────────────────────────────────
+
+  const clearModelError = useCallback(() => {
+    setModelError(null);
+  }, []);
 
   const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean }) => {
     const savedExpressionConfigs = options?.keepManualOverrides ? expressionConfigsRef.current : {};
@@ -2564,6 +2569,7 @@ export function EditorProvider({
     motionEntries,
     modelLoaded,
     modelError,
+    clearModelError,
     modelPath,
     isPlaying,
     currentTime,

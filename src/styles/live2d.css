@@ -106,8 +106,7 @@
   height: 100%;
 }
 
-.live2d-empty,
-.live2d-error {
+.live2d-empty {
   position: absolute;
   inset: 0;
   display: flex;
@@ -117,7 +116,59 @@
   color: var(--muted);
   pointer-events: none;
 }
-.live2d-error { color: var(--accent); }
+
+/* ── error dialog (overlay + centered card) ── */
+.live2d-error-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.live2d-error-dialog {
+  min-width: 320px;
+  max-width: 480px;
+  padding: 20px 24px 16px;
+  background: var(--surface, #1f1f23);
+  color: var(--text, #e6e6e6);
+  border: 1px solid var(--elevated-card-border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.live2d-error-dialog__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent, #ff6b6b);
+}
+.live2d-error-dialog__message {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text, #e6e6e6);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.live2d-error-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.live2d-error-dialog__button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-radius: 4px;
+  border: 1px solid var(--elevated-card-border, rgba(255, 255, 255, 0.16));
+  background: var(--elevated-card, #2a2a30);
+  color: var(--text, #e6e6e6);
+  cursor: pointer;
+}
+.live2d-error-dialog__button:hover {
+  background: var(--elevated-card-hover, #34343c);
+}
 
 /* ── resource panel ── */
 .live2d-resource-panel {

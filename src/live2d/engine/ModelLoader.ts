@@ -574,6 +574,21 @@ export async function loadModelFromData(
   kScale = 1,
 ): Promise<ModelLoadResult> {
   const gl = CubismInit.gl;
+
+  // Early format detection — Cubism Web SDK only supports Cubism 3+ models
+  // (model3.json + moc3). Older Cubism 2 models declare top-level `model` /
+  // `textures` instead of a `FileReferences` object, and ship a `.moc` (not
+  // `.moc3`) binary that this SDK cannot parse. Surface a friendly error
+  // here so users see a clear message instead of a confusing
+  // `Cannot read properties of undefined (reading 'Moc')` TypeError.
+  if (!modelJson.FileReferences) {
+    if ('model' in modelJson || 'textures' in modelJson) {
+      throw new Error(
+        '不支持 Cubism 2 模型（.model.json + .moc）。Live2D 预览工具仅支持 Cubism 3 及以上版本（需 .model3.json + .moc3）。',
+      );
+    }
+    throw new Error('无效的模型配置：model3.json 缺少 FileReferences 字段');
+  }
   const fr = modelJson.FileReferences as Record<string, unknown>;
 
   // ── Create CubismModelSetting from the model3.json text ───────────────
