@@ -526,9 +526,24 @@ export class ModelInstance {
   }
 
   stopAllMotions(): void {
-    const motionMgr = this._userModel['_motionManager'] as CubismMotionManager;
+    // Guard against partially-constructed user models: when loadModelFromData
+    // throws partway through (e.g. unsupported format) modelRef may still be
+    // set to an instance whose `_userModel` was never wired up, and any
+    // caller cleanup path (MotionPlayer.unload, returnToBasePose, ...) used
+    // to crash here. Skip both the motion stop and parameter save when the
+    // underlying SDK state is missing.
+    const userModel = this._userModel as unknown as { _motionManager?: CubismMotionManager } | null;
+    const motionMgr = userModel?._motionManager ?? null;
+    if (!motionMgr) return;
     motionMgr.stopAllMotions();
-    this.model.saveParameters();
+    // CubismModel.saveParameters() dereferences an internal `_model` handle
+    // that is null when moc.createModel() never ran (e.g. unsupported format
+    // throw'd earlier). Gate the call on a sentinel field that only exists
+    // on a fully constructed CubismModel.
+    const coreModel = this.model as unknown as { _model?: unknown } | null;
+    if (coreModel?._model) {
+      this.model.saveParameters();
+    }
   }
 
   /** Restore per-curve fade times after the first updateMotion frame. */

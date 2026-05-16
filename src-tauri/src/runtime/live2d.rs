@@ -5,11 +5,27 @@ use tauri::State;
 
 use super::state::RuntimeState;
 
+/// Preset as exchanged with the frontend.
+/// `model_path` is always an absolute path on the user's machine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Live2DPreset {
     pub name: String,
     pub model_path: String,
+    #[serde(default)]
+    pub clip_keys: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Preset as stored on disk.
+/// `model_path_relative` is forward-slash, relative to `state.repo_root`, so the
+/// presets file is portable across machines.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Live2DPresetStored {
+    pub name: String,
+    pub model_path_relative: String,
     #[serde(default)]
     pub clip_keys: Option<Vec<String>>,
     #[serde(flatten)]
@@ -27,6 +43,22 @@ fn presets_path(state: &RuntimeState) -> std::path::PathBuf {
     state.repo_root.join("config").join("live2d_presets.json")
 }
 
+fn absolute_from_relative(repo_root: &Path, relative: &str) -> String {
+    repo_root.join(relative).to_string_lossy().into_owned()
+}
+
+fn relative_from_absolute(repo_root: &Path, absolute: &str) -> Result<String, String> {
+    let abs_path = Path::new(absolute);
+    let rel = abs_path.strip_prefix(repo_root).map_err(|_| {
+        format!(
+            "预设模型路径必须位于仓库目录内（repo_root={}）: {}",
+            repo_root.display(),
+            absolute,
+        )
+    })?;
+    Ok(rel.to_string_lossy().replace('\\', "/"))
+}
+
 #[tauri::command]
 pub fn read_live2d_presets(state: State<'_, RuntimeState>) -> Result<Vec<Live2DPreset>, String> {
     let path = presets_path(&state);
@@ -35,7 +67,17 @@ pub fn read_live2d_presets(state: State<'_, RuntimeState>) -> Result<Vec<Live2DP
     }
     let contents =
         std::fs::read_to_string(&path).map_err(|e| format!("读取 Live2D 预设失败: {e}"))?;
-    serde_json::from_str(&contents).map_err(|e| format!("解析 Live2D 预设失败: {e}"))
+    let stored: Vec<Live2DPresetStored> =
+        serde_json::from_str(&contents).map_err(|e| format!("解析 Live2D 预设失败: {e}"))?;
+    Ok(stored
+        .into_iter()
+        .map(|p| Live2DPreset {
+            name: p.name,
+            model_path: absolute_from_relative(&state.repo_root, &p.model_path_relative),
+            clip_keys: p.clip_keys,
+            extra: p.extra,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -47,8 +89,20 @@ pub fn write_live2d_presets(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建配置目录失败: {e}"))?;
     }
+    let stored: Vec<Live2DPresetStored> = presets
+        .into_iter()
+        .map(|p| {
+            let rel = relative_from_absolute(&state.repo_root, &p.model_path)?;
+            Ok(Live2DPresetStored {
+                name: p.name,
+                model_path_relative: rel,
+                clip_keys: p.clip_keys,
+                extra: p.extra,
+            })
+        })
+        .collect::<Result<_, String>>()?;
     let contents =
-        serde_json::to_string_pretty(&presets).map_err(|e| format!("序列化预设失败: {e}"))?;
+        serde_json::to_string_pretty(&stored).map_err(|e| format!("序列化预设失败: {e}"))?;
     std::fs::write(&path, contents).map_err(|e| format!("写入 Live2D 预设失败: {e}"))
 }
 

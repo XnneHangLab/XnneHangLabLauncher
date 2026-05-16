@@ -1275,7 +1275,9 @@ export function EditorProvider({
       // Auto-start Idle motion
       startIdlePreview();
     } catch (err: unknown) {
+      const stack = err instanceof Error && err.stack ? err.stack : String(err);
       setModelError(String(err));
+      debugLogRef.current?.(`[Live2D] loadModelByPath failed: ${String(err)}\n${stack}`, 'stderr');
     }
   }, [clearExpressionPreviewState, getPersistableManualOverrides, startIdlePreview, stripTransientExpressionParameterOverrides]);
 
