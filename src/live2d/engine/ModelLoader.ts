@@ -711,6 +711,7 @@ export async function loadModelFromData(
   // ── Create renderer ───────────────────────────────────────────────────
   userModel.createRenderer(1);
   userModel.getRenderer().initialize(coreModel, 1);
+  userModel.getRenderer().setIsPremultipliedAlpha(true);
   userModel.getRenderer().startUp(gl);
 
   // ── Load textures ─────────────────────────────────────────────────────
