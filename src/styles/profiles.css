@@ -795,6 +795,109 @@
   text-align: right;
 }
 
+/* ── Live2D expression/motion chips ── */
+.l2d-exp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.l2d-exp-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.l2d-exp-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.l2d-exp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.l2d-exp-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  font-size: 11px;
+  color: var(--text);
+  background: transparent;
+}
+
+.l2d-motion-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.l2d-motion-assign-label {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.l2d-motion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.l2d-motion-chip {
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+
+.l2d-motion-chip:hover {
+  border-color: rgba(52, 155, 255, 0.4);
+  background: rgba(52, 155, 255, 0.06);
+}
+
+.l2d-motion-chip--active {
+  border-color: rgba(52, 155, 255, 0.6);
+  background: rgba(52, 155, 255, 0.12);
+  color: var(--accent);
+}
+
+.l2d-clip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.l2d-clip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.l2d-clip-tag-remove {
+  border: none;
+  background: none;
+  color: #e85050;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 /* ── Live2D table (legacy, kept for reference) ── */
 .l2d-table {
   width: 100%;

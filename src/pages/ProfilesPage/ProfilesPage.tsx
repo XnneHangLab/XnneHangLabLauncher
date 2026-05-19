@@ -12,6 +12,7 @@ import {
   deleteProfile,
   pickFileForProfile,
 } from '../../services/config/profileBridge';
+import { readLive2DPresets } from '../../services/config/bridge';
 import type { ProfileMeta, ProfileConfig } from '../../services/config/profileConfig';
 import '../../styles/settings.css';
 import '../../styles/profiles.css';
@@ -139,7 +140,47 @@ const MIXER_LAYERS: Array<[keyof StateConfig & string, string]> = [
   ['mouse_attention_layer', '鼠标注意力层'],
 ];
 
-function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; onPatch: (patch: Record<string, unknown>) => void }) {
+const ROLE_COLORS: Record<string, string> = {
+  expression: '#4a9eff',
+  appearance: '#8b5cf6',
+  watermark: '#f59e0b',
+  system: '#6b7280',
+  test: '#ef4444',
+  unknown: '#9ca3af',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  expression: '表情',
+  appearance: '造型',
+  watermark: '水印',
+  system: '系统',
+  test: '测试',
+  unknown: '未分类',
+};
+
+interface PresetExpression {
+  name: string;
+  label: string;
+  role: string;
+  file: string;
+  description?: string;
+}
+
+interface PresetMotionAsset {
+  name: string;
+  group: string;
+  index: number;
+  file: string;
+}
+
+function Live2dControlEditor({ cfg, onPatch, modelName }: {
+  cfg: Record<string, unknown>;
+  onPatch: (patch: Record<string, unknown>) => void;
+  modelName?: string;
+}) {
+  const [presetExpressions, setPresetExpressions] = useState<PresetExpression[]>([]);
+  const [motionAssets, setMotionAssets] = useState<PresetMotionAsset[]>([]);
+
   const presets = (cfg.appearance_presets as AppearancePreset[] | undefined) ?? [];
   const statesRaw = (cfg.states as Record<string, unknown> | undefined) ?? {};
   const states = {
@@ -147,45 +188,96 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
     speaking: (statesRaw.speaking as StateConfig | undefined) ?? { ...DEFAULT_STATE_CONFIG },
   };
 
-  function setPreset(i: number, patch: Partial<AppearancePreset>) {
-    const next = [...presets]; next[i] = { ...next[i], ...patch };
-    onPatch({ appearance_presets: next });
-  }
+  useEffect(() => {
+    if (!modelName) return;
+    readLive2DPresets().then((allPresets) => {
+      const preset = allPresets.find(p => p.name === modelName);
+      if (!preset) return;
+      const exprs = (preset as Record<string, unknown>).expressions;
+      if (Array.isArray(exprs)) setPresetExpressions(exprs as PresetExpression[]);
+      const assets = (preset as Record<string, unknown>).motionAssets;
+      if (Array.isArray(assets)) setMotionAssets(assets as PresetMotionAsset[]);
+    }).catch(console.error);
+  }, [modelName]);
+
   function setState(state: 'listening' | 'speaking', patch: Partial<StateConfig>) {
     onPatch({ states: { ...statesRaw, [state]: { ...states[state], ...patch } } });
   }
-  function setClipUrl(state: 'listening' | 'speaking', i: number, url: string) {
-    const next = [...states[state].clips]; next[i] = { url };
+  function toggleClip(state: 'listening' | 'speaking', assetName: string) {
+    const current = states[state].clips;
+    const exists = current.some(c => c.url === assetName);
+    const next = exists
+      ? current.filter(c => c.url !== assetName)
+      : [...current, { url: assetName }];
     setState(state, { clips: next });
   }
+
+  const expressionsByRole = presetExpressions.reduce<Record<string, PresetExpression[]>>((acc, exp) => {
+    const role = exp.role || 'unknown';
+    (acc[role] ??= []).push(exp);
+    return acc;
+  }, {});
 
   return (
     <div className="l2d-editor">
 
-      {/* appearance_presets */}
-      <div className="l2d-section">
-        <div className="l2d-section-header">
-          <span className="l2d-section-title">appearance_presets</span>
-          <span className="l2d-section-desc">key 须与模型 emotion map 一致</span>
+      {/* Expressions overview from preset */}
+      {presetExpressions.length > 0 && (
+        <div className="l2d-section">
+          <div className="l2d-section-header">
+            <span className="l2d-section-title">表情/造型一览</span>
+            <span className="l2d-section-desc">来自 live2d_presets.json（只读）</span>
+          </div>
+          <div className="l2d-exp-groups">
+            {Object.entries(expressionsByRole).map(([role, exps]) => (
+              <div key={role} className="l2d-exp-group">
+                <span className="l2d-exp-group-label" style={{ color: ROLE_COLORS[role] ?? '#9ca3af' }}>
+                  {ROLE_LABELS[role] ?? role} ({exps.length})
+                </span>
+                <div className="l2d-exp-chips">
+                  {exps.map(exp => (
+                    <span key={exp.name} className="l2d-exp-chip"
+                      style={{ borderColor: ROLE_COLORS[role] ?? '#9ca3af' }}
+                      title={exp.description || exp.file}>
+                      {exp.label || exp.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="l2d-list">
-          {presets.map((p, i) => (
-            <div key={i} className="l2d-preset-row">
-              <input className="proxy-input l2d-preset-key" placeholder="key" value={p.key}
-                onChange={e => setPreset(i, { key: e.target.value })} />
-              <span className="l2d-preset-colon">:</span>
-              <input className="proxy-input l2d-preset-desc" placeholder="description（外观说明文案）" value={p.description}
-                onChange={e => setPreset(i, { description: e.target.value })} />
-              <button type="button" className="l2d-remove-btn"
-                onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
-            </div>
-          ))}
-          <button type="button" className="l2d-add-btn"
-            onClick={() => onPatch({ appearance_presets: [...presets, { key: '', description: '' }] })}>＋ 添加预设</button>
-        </div>
-      </div>
+      )}
 
-      {/* state cards */}
+      {/* Motion assets selection for states */}
+      {motionAssets.length > 0 && (
+        <div className="l2d-section">
+          <div className="l2d-section-header">
+            <span className="l2d-section-title">动作资产</span>
+            <span className="l2d-section-desc">点击分配到 listening/speaking</span>
+          </div>
+          {(['listening', 'speaking'] as const).map(state => {
+            const assignedUrls = new Set(states[state].clips.map(c => c.url));
+            return (
+              <div key={state} className="l2d-motion-assign">
+                <span className="l2d-motion-assign-label">{state}</span>
+                <div className="l2d-motion-chips">
+                  {motionAssets.map(asset => (
+                    <button key={asset.name} type="button"
+                      className={`l2d-motion-chip${assignedUrls.has(asset.name) ? ' l2d-motion-chip--active' : ''}`}
+                      title={asset.file}
+                      onClick={() => toggleClip(state, asset.name)}>
+                      {asset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* State cards with mixer weights */}
       {(['listening', 'speaking'] as const).map(state => (
         <div key={state} className="l2d-state-card">
           <div className="l2d-state-card-header">
@@ -203,18 +295,17 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
           <div className="l2d-state-card-body">
             <div className="l2d-state-section">
               <span className="l2d-state-section-title">
-                clips <em className="l2d-state-section-hint">路径相对于 Live2D 模型目录</em>
+                已分配 clips ({states[state].clips.length})
               </span>
-              {states[state].clips.map((c, i) => (
-                <div key={i} className="l2d-clip-row">
-                  <input className="proxy-input l2d-clip-url" placeholder="xxx.motion3.json"
-                    value={c.url} onChange={e => setClipUrl(state, i, e.target.value)} />
-                  <button type="button" className="l2d-remove-btn"
-                    onClick={() => setState(state, { clips: states[state].clips.filter((_, idx) => idx !== i) })}>×</button>
-                </div>
-              ))}
-              <button type="button" className="l2d-add-btn"
-                onClick={() => setState(state, { clips: [...states[state].clips, { url: '' }] })}>＋ 添加片段</button>
+              <div className="l2d-clip-list">
+                {states[state].clips.map((c, i) => (
+                  <span key={i} className="l2d-clip-tag">
+                    {c.url}
+                    <button type="button" className="l2d-clip-tag-remove"
+                      onClick={() => setState(state, { clips: states[state].clips.filter((_, idx) => idx !== i) })}>×</button>
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="l2d-state-section">
               <span className="l2d-state-section-title">mixer</span>
@@ -232,6 +323,28 @@ function Live2dControlEditor({ cfg, onPatch }: { cfg: Record<string, unknown>; o
           </div>
         </div>
       ))}
+
+      {/* Legacy appearance_presets (hidden if preset expressions exist) */}
+      {presetExpressions.length === 0 && presets.length > 0 && (
+        <div className="l2d-section">
+          <div className="l2d-section-header">
+            <span className="l2d-section-title">appearance_presets (legacy)</span>
+          </div>
+          <div className="l2d-list">
+            {presets.map((p, i) => (
+              <div key={i} className="l2d-preset-row">
+                <input className="proxy-input l2d-preset-key" placeholder="key" value={p.key}
+                  onChange={e => { const next = [...presets]; next[i] = { ...next[i], key: e.target.value }; onPatch({ appearance_presets: next }); }} />
+                <span className="l2d-preset-colon">:</span>
+                <input className="proxy-input l2d-preset-desc" placeholder="description" value={p.description}
+                  onChange={e => { const next = [...presets]; next[i] = { ...next[i], description: e.target.value }; onPatch({ appearance_presets: next }); }} />
+                <button type="button" className="l2d-remove-btn"
+                  onClick={() => onPatch({ appearance_presets: presets.filter((_, idx) => idx !== i) })}>×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );
@@ -438,7 +551,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
                 {isOpen && hasConfig && (
                   <div className="plugin-item-body">
                     {id === 'live2d_control' ? (
-                      <Live2dControlEditor cfg={cfg} onPatch={(patch) => setPluginCfg(id, patch)} />
+                      <Live2dControlEditor cfg={cfg} onPatch={(patch) => setPluginCfg(id, patch)} modelName={character.live2d_model_name} />
                     ) : fields ? fields.map(f => {
                       const val = cfg[f.key];
                       const effective = val !== undefined ? val : f.defaultValue;
