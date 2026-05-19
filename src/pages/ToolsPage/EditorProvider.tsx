@@ -14,7 +14,7 @@ import { spliceMotions, extractMotionSubrange, createTransitionMotion } from '..
 import { parseMotion, evaluateMotion } from '../../live2d/engine/MotionParser';
 import type { ParsedMotion, ParsedCurve, ParsedSegment, KeyPoint } from '../../live2d/types';
 import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile } from '../../services/config/bridge';
-import type { Live2DModelData, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
+import type { Live2DModelData, Live2DPreset, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -131,6 +131,7 @@ interface ImportedMotionState {
   base64: string;
   group?: string;
   index?: number;
+  pinned?: boolean;
 }
 
 export interface Live2DAdaptedPreset {
@@ -149,6 +150,7 @@ export interface Live2DAdaptedPreset {
   expressions: Array<ExpressionPresetConfig & { parameters: ExpressionParamOp[] }>;
   appearancePresets: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions: Array<{ name: string; label: string; file: string; reason: string }>;
+  motionAssets: Array<{ name: string; group: string; index: number; file: string }>;
   timeline: { clipKeys: string[]; clips?: TimelineClipRef[]; items?: PersistedTimelineItem[] };
   manualOverrides: Record<string, number>;
   importedMotions: ImportedMotionState[];
@@ -169,6 +171,7 @@ interface Live2DSessionState {
   timelineClips?: TimelineClipRef[];
   timelineItems?: PersistedTimelineItem[];
   importedMotions?: ImportedMotionState[];
+  motionAssets?: MotionEntry[];
   expressionConfigs?: Record<string, ExpressionPresetConfig>;
   expressionSegmentMarkers?: TimelineExpressionSegmentMarker[];
   endExpressionKeys?: string[];
@@ -181,6 +184,8 @@ export interface EditorContextValue {
   modelInstance: ModelInstance | null;
   keyframeOverlay: KeyframeOverlay;
   motionEntries: MotionEntry[];
+  motionAssets: MotionEntry[];
+  toggleMotionAsset: (entry: MotionEntry) => void;
   modelLoaded: boolean;
   modelError: string | null;
   modelPath: string | null;
@@ -202,6 +207,7 @@ export interface EditorContextValue {
   endExpressionKeys: string[];
 
   loadModelByPath: (path: string) => Promise<void>;
+  loadPreset: (preset: Live2DPreset) => Promise<void>;
   clearModelError: () => void;
   openImportDialog: () => Promise<void>;
   openMotionImportDialog: () => Promise<void>;
@@ -737,6 +743,8 @@ export function EditorProvider({
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const [motionEntries, setMotionEntries] = useState<MotionEntry[]>([]);
+  const [motionAssets, setMotionAssets] = useState<MotionEntry[]>([]);
+  const motionAssetsRef = useRef<MotionEntry[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -839,6 +847,7 @@ export function EditorProvider({
       timelineClips: refs,
       timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
+      motionAssets: motionAssetsRef.current,
       expressionConfigs: expressionConfigsRef.current,
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
@@ -1196,7 +1205,7 @@ export function EditorProvider({
     setModelError(null);
   }, []);
 
-  const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean }) => {
+  const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean; keepMotionAssets?: boolean }) => {
     const savedExpressionConfigs = options?.keepManualOverrides ? expressionConfigsRef.current : {};
     setModelLoaded(false);
     setModelError(null);
@@ -1211,6 +1220,7 @@ export function EditorProvider({
     expressionConfigsRef.current = savedExpressionConfigs;
     if (!options?.keepManualOverrides) manualOverridesRef.current = {};
     if (!options?.keepManualOverrides) importedMotionsRef.current = [];
+    if (!options?.keepMotionAssets) { motionAssetsRef.current = []; setMotionAssets([]); }
     if (!options?.keepTimeline) setTimelineItems([]);
 
     try {
@@ -1253,6 +1263,16 @@ export function EditorProvider({
       instance.motionEntries = normalizeMotionEntries(instance.motionEntries);
       setMotionEntries(instance.motionEntries);
 
+      // Auto-populate motionAssets with native motions if current assets are empty
+      // or don't contain any native (non-imported) entries
+      const hasNativeAssets = motionAssetsRef.current.some(a => a.group !== 'imported');
+      if (!hasNativeAssets) {
+        const nativeMotions = instance.motionEntries.filter(e => e.group !== 'imported');
+        const merged = [...motionAssetsRef.current, ...nativeMotions];
+        motionAssetsRef.current = merged;
+        setMotionAssets(merged);
+      }
+
       const values: Record<string, number> = {};
       const ranges: Record<string, ParamRange> = {};
       for (let i = 0; i < instance.parameterIds.length; i++) {
@@ -1284,6 +1304,21 @@ export function EditorProvider({
   const openImportDialog = useCallback(async () => {
     const path = await pickAnyFile('选择 Live2D 模型文件 (.model3.json)');
     if (path) await loadModelByPath(path);
+  }, [loadModelByPath]);
+
+  const loadPreset = useCallback(async (preset: Live2DPreset) => {
+    const path = preset.model?.modelPath ?? preset.modelPath;
+    if (!path) return;
+    // Restore imported motions from preset before loading model
+    const presetImported = (preset.importedMotions ?? []) as ImportedMotionState[];
+    importedMotionsRef.current = presetImported;
+    // Restore motionAssets from pinned imported motions
+    const pinned = presetImported.filter(m => m.pinned);
+    motionAssetsRef.current = pinned.map(m => ({
+      name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName,
+    }));
+    setMotionAssets(motionAssetsRef.current);
+    await loadModelByPath(path, { keepManualOverrides: true, keepMotionAssets: true });
   }, [loadModelByPath]);
 
   const openMotionImportDialog = useCallback(async () => {
@@ -1550,6 +1585,14 @@ export function EditorProvider({
             : '默认启动表达式，不作为普通表情或持久外观',
       }));
 
+    const pinnedMotions = importedMotionsRef.current.filter(m => m.pinned);
+    const motionAssetsData = pinnedMotions.map((m) => ({
+      name: m.name,
+      group: m.group ?? 'imported',
+      index: m.index ?? 0,
+      file: m.fileName,
+    }));
+
     return {
       schemaVersion: 1,
       name,
@@ -1565,6 +1608,7 @@ export function EditorProvider({
       expressions,
       appearancePresets,
       excludedExpressions,
+      motionAssets: motionAssetsData,
       timeline: {
         clipKeys: clipKeysFromRefs(timelineClipRefs(timelineItems)),
         clips: timelineClipRefs(timelineItems),
@@ -1817,6 +1861,26 @@ export function EditorProvider({
       current?.group === group && current.index === index ? null : current
     ));
   }, [currentMotion, returnToBasePose]);
+
+  const toggleMotionAsset = useCallback((entry: MotionEntry) => {
+    const group = entry.group;
+    const index = entry.index;
+    importedMotionsRef.current = importedMotionsRef.current.map(m =>
+      (m.group ?? 'imported') === group && m.index === index
+        ? { ...m, pinned: !m.pinned }
+        : m
+    );
+    // Update motionAssets view (derived from pinned importedMotions)
+    const pinned = importedMotionsRef.current.filter(m => m.pinned);
+    const pinnedEntries = pinned.map(m => ({
+      name: m.name,
+      group: m.group ?? 'imported',
+      index: m.index ?? 0,
+      file: m.fileName,
+    }));
+    motionAssetsRef.current = pinnedEntries;
+    setMotionAssets(pinnedEntries);
+  }, []);
 
   // ── Timeline clip management ─────────────────────────────────────────────
 
@@ -2506,6 +2570,17 @@ export function EditorProvider({
 
     manualOverridesRef.current = session.manualOverrides ?? {};
     importedMotionsRef.current = normalizeImportedMotions(session.importedMotions ?? []);
+    // Derive motionAssets from pinned importedMotions if session doesn't have them
+    const sessionAssets = session.motionAssets ?? [];
+    if (sessionAssets.length > 0) {
+      motionAssetsRef.current = sessionAssets;
+      setMotionAssets(sessionAssets);
+    } else {
+      const pinned = importedMotionsRef.current.filter(m => m.pinned);
+      const derived = pinned.map(m => ({ name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName }));
+      motionAssetsRef.current = derived;
+      setMotionAssets(derived);
+    }
     expressionConfigsRef.current = session.expressionConfigs ?? {};
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
@@ -2525,7 +2600,7 @@ export function EditorProvider({
     pendingSessionClipRefsRef.current = session.timelineItems ? null : session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
     setTimelineItems([]);
     setTimelinePlayback(idleTimelinePlaybackState());
-    loadModelByPath(session.modelPath, { keepManualOverrides: true })
+    loadModelByPath(session.modelPath, { keepManualOverrides: true, keepMotionAssets: true })
       .catch(console.error)
       .finally(() => setSessionReady(true));
   }, [canvasReady, clearExpressionPreviewState, loadModelByPath]);
@@ -2569,6 +2644,8 @@ export function EditorProvider({
     modelInstance: modelRef.current,
     keyframeOverlay: overlayRef.current,
     motionEntries,
+    motionAssets,
+    toggleMotionAsset,
     modelLoaded,
     modelError,
     clearModelError,
@@ -2590,6 +2667,7 @@ export function EditorProvider({
     expressionSegmentMarkers,
     endExpressionKeys,
     loadModelByPath,
+    loadPreset,
     openImportDialog,
     openMotionImportDialog,
     playMotion,

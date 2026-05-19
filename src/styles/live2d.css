@@ -369,6 +369,29 @@
 .live2d-resource-add:hover { background: var(--nav-hover-bg); color: var(--accent); }
 .live2d-resource-del:hover { background: var(--nav-hover-bg); color: var(--text); }
 
+.live2d-resource-pin {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.4;
+  transition: opacity 0.14s, color 0.14s;
+}
+.live2d-resource-pin:hover { opacity: 1; color: #f59e0b; }
+.live2d-resource-pin--active { opacity: 1; color: #f59e0b; }
+
 .live2d-resource-save {
   display: flex;
   gap: 6px;

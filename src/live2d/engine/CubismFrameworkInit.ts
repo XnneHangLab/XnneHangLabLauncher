@@ -33,7 +33,23 @@ class _CubismFrameworkInit {
   initialize(canvas: HTMLCanvasElement): void {
     if (this._initialized && this._canvas === canvas) return;
 
+    // If switching to a new canvas, dispose the old context first
+    if (this._initialized && this._canvas !== canvas) {
+      this.dispose();
+    }
+
     this._canvas = canvas;
+
+    // Handle WebGL context loss (e.g. HMR, GPU reset)
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this._initialized = false;
+      this._gl = null;
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.initialize(canvas);
+    });
+
     this._gl =
       (canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true }) as WebGL2RenderingContext) ??
       (canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true }) as WebGLRenderingContext);

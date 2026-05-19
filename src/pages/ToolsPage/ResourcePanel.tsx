@@ -6,8 +6,9 @@ import type { TimelineClip } from './EditorProvider';
 
 export function ResourcePanel() {
   const {
-    modelLoaded, modelPath, motionEntries, motionAliases, currentMotion,
-    addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
+    modelLoaded, modelPath, motionEntries, motionAssets, toggleMotionAsset,
+    motionAliases, currentMotion,
+    addClipToTimeline, timelineClips, loadModelByPath, loadPreset, openImportDialog, openMotionImportDialog,
     renameMotion, deleteMotion, playMotion,
     buildAdaptedPreset,
   } = useEditor();
@@ -35,8 +36,8 @@ export function ResourcePanel() {
     setPendingRefs(null);
   }, [modelLoaded, pendingRefs, addClipToTimeline]);
 
-  async function handleSavePreset() {
-    const name = presetName.trim();
+  async function handleSavePreset(overrideName?: string) {
+    const name = (overrideName ?? presetName).trim();
     if (!modelPath || !name) return;
     const refs = clipRefs(timelineClips);
     const clipKeys = refs.map(c => `${c.group}_${c.index}`);
@@ -61,7 +62,7 @@ export function ResourcePanel() {
 
   async function handleLoadPreset(preset: Live2DPreset) {
     setPendingRefs(preset.timeline?.clips ?? clipRefsFromKeys(preset.timeline?.clipKeys ?? preset.clipKeys));
-    await loadModelByPath(preset.model?.modelPath ?? preset.modelPath);
+    await loadPreset(preset);
   }
 
   async function handleDeletePreset(name: string) {
@@ -102,6 +103,7 @@ export function ResourcePanel() {
               const defaultLabel = m.name || `${m.group}#${m.index}`;
               const label = motionAliases[key] ?? defaultLabel;
               const isImported = m.group === 'imported';
+              const isFixed = motionAssets.some(a => a.group === m.group && a.index === m.index);
               const isPreviewing = currentMotion?.group === m.group && currentMotion.index === m.index;
               return (
                 <div
@@ -163,6 +165,14 @@ export function ResourcePanel() {
                   >
                     +
                   </button>
+                  <button
+                    type="button"
+                    className={`live2d-resource-pin${isFixed ? ' live2d-resource-pin--active' : ''}`}
+                    title={isFixed ? '从固有资产中移除' : '加入固有资产（随预设保存）'}
+                    onClick={() => toggleMotionAsset(m)}
+                  >
+                    ★
+                  </button>
                   {isImported && (
                     <button
                       type="button"
@@ -193,6 +203,14 @@ export function ResourcePanel() {
                 >
                   {p.name}
                 </span>
+                <button
+                  type="button"
+                  className="live2d-resource-add"
+                  title="覆盖更新此预设"
+                  onClick={() => handleSavePreset(p.name)}
+                >
+                  ↑
+                </button>
                 <button
                   type="button"
                   className="live2d-resource-del"
