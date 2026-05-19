@@ -1261,11 +1261,14 @@ export function EditorProvider({
       instance.motionEntries = normalizeMotionEntries(instance.motionEntries);
       setMotionEntries(instance.motionEntries);
 
-      // Auto-populate motionAssets only if not already set (e.g. from session restore or preset load)
-      if (motionAssetsRef.current.length === 0) {
+      // Auto-populate motionAssets with native motions if current assets are empty
+      // or don't contain any native (non-imported) entries
+      const hasNativeAssets = motionAssetsRef.current.some(a => a.group !== 'imported');
+      if (!hasNativeAssets) {
         const nativeMotions = instance.motionEntries.filter(e => e.group !== 'imported');
-        motionAssetsRef.current = nativeMotions;
-        setMotionAssets(nativeMotions);
+        const merged = [...motionAssetsRef.current, ...nativeMotions];
+        motionAssetsRef.current = merged;
+        setMotionAssets(merged);
       }
 
       const values: Record<string, number> = {};
