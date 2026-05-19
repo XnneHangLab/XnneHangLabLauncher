@@ -1203,7 +1203,7 @@ export function EditorProvider({
     setModelError(null);
   }, []);
 
-  const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean }) => {
+  const loadModelByPath = useCallback(async (path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean; keepMotionAssets?: boolean }) => {
     const savedExpressionConfigs = options?.keepManualOverrides ? expressionConfigsRef.current : {};
     setModelLoaded(false);
     setModelError(null);
@@ -1218,6 +1218,7 @@ export function EditorProvider({
     expressionConfigsRef.current = savedExpressionConfigs;
     if (!options?.keepManualOverrides) manualOverridesRef.current = {};
     if (!options?.keepManualOverrides) importedMotionsRef.current = [];
+    if (!options?.keepMotionAssets) { motionAssetsRef.current = []; setMotionAssets([]); }
     if (!options?.keepTimeline) setTimelineItems([]);
 
     try {
@@ -1260,10 +1261,12 @@ export function EditorProvider({
       instance.motionEntries = normalizeMotionEntries(instance.motionEntries);
       setMotionEntries(instance.motionEntries);
 
-      // Auto-populate motionAssets with native (non-imported) motions
-      const nativeMotions = instance.motionEntries.filter(e => e.group !== 'imported');
-      motionAssetsRef.current = nativeMotions;
-      setMotionAssets(nativeMotions);
+      // Auto-populate motionAssets only if not already set (e.g. from session restore or preset load)
+      if (motionAssetsRef.current.length === 0) {
+        const nativeMotions = instance.motionEntries.filter(e => e.group !== 'imported');
+        motionAssetsRef.current = nativeMotions;
+        setMotionAssets(nativeMotions);
+      }
 
       const values: Record<string, number> = {};
       const ranges: Record<string, ParamRange> = {};
@@ -2554,7 +2557,7 @@ export function EditorProvider({
     pendingSessionClipRefsRef.current = session.timelineItems ? null : session.timelineClips ?? clipRefsFromKeys(session.timelineClipKeys);
     setTimelineItems([]);
     setTimelinePlayback(idleTimelinePlaybackState());
-    loadModelByPath(session.modelPath, { keepManualOverrides: true })
+    loadModelByPath(session.modelPath, { keepManualOverrides: true, keepMotionAssets: true })
       .catch(console.error)
       .finally(() => setSessionReady(true));
   }, [canvasReady, clearExpressionPreviewState, loadModelByPath]);
