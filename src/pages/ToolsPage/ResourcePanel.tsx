@@ -8,7 +8,7 @@ export function ResourcePanel() {
   const {
     modelLoaded, modelPath, motionEntries, motionAssets, toggleMotionAsset,
     motionAliases, currentMotion,
-    addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
+    addClipToTimeline, timelineClips, loadModelByPath, loadPreset, openImportDialog, openMotionImportDialog,
     renameMotion, deleteMotion, playMotion,
     buildAdaptedPreset,
   } = useEditor();
@@ -62,7 +62,7 @@ export function ResourcePanel() {
 
   async function handleLoadPreset(preset: Live2DPreset) {
     setPendingRefs(preset.timeline?.clips ?? clipRefsFromKeys(preset.timeline?.clipKeys ?? preset.clipKeys));
-    await loadModelByPath(preset.model?.modelPath ?? preset.modelPath);
+    await loadPreset(preset);
   }
 
   async function handleDeletePreset(name: string) {

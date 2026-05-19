@@ -14,7 +14,7 @@ import { spliceMotions, extractMotionSubrange, createTransitionMotion } from '..
 import { parseMotion, evaluateMotion } from '../../live2d/engine/MotionParser';
 import type { ParsedMotion, ParsedCurve, ParsedSegment, KeyPoint } from '../../live2d/types';
 import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile } from '../../services/config/bridge';
-import type { Live2DModelData, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
+import type { Live2DModelData, Live2DPreset, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -131,6 +131,7 @@ interface ImportedMotionState {
   base64: string;
   group?: string;
   index?: number;
+  pinned?: boolean;
 }
 
 export interface Live2DAdaptedPreset {
@@ -206,6 +207,7 @@ export interface EditorContextValue {
   endExpressionKeys: string[];
 
   loadModelByPath: (path: string) => Promise<void>;
+  loadPreset: (preset: Live2DPreset) => Promise<void>;
   clearModelError: () => void;
   openImportDialog: () => Promise<void>;
   openMotionImportDialog: () => Promise<void>;
@@ -1304,6 +1306,21 @@ export function EditorProvider({
     if (path) await loadModelByPath(path);
   }, [loadModelByPath]);
 
+  const loadPreset = useCallback(async (preset: Live2DPreset) => {
+    const path = preset.model?.modelPath ?? preset.modelPath;
+    if (!path) return;
+    // Restore imported motions from preset before loading model
+    const presetImported = (preset.importedMotions ?? []) as ImportedMotionState[];
+    importedMotionsRef.current = presetImported;
+    // Restore motionAssets from pinned imported motions
+    const pinned = presetImported.filter(m => m.pinned);
+    motionAssetsRef.current = pinned.map(m => ({
+      name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName,
+    }));
+    setMotionAssets(motionAssetsRef.current);
+    await loadModelByPath(path, { keepManualOverrides: true, keepMotionAssets: true });
+  }, [loadModelByPath]);
+
   const openMotionImportDialog = useCallback(async () => {
     if (importingMotionRef.current) return;
     const instance = modelRef.current;
@@ -1568,8 +1585,13 @@ export function EditorProvider({
             : '默认启动表达式，不作为普通表情或持久外观',
       }));
 
-    const motionAssetsData = motionAssetsRef.current
-      .map((entry) => ({ name: entry.name, group: entry.group, index: entry.index, file: entry.file }));
+    const pinnedMotions = importedMotionsRef.current.filter(m => m.pinned);
+    const motionAssetsData = pinnedMotions.map((m) => ({
+      name: m.name,
+      group: m.group ?? 'imported',
+      index: m.index ?? 0,
+      file: m.fileName,
+    }));
 
     return {
       schemaVersion: 1,
@@ -1841,14 +1863,23 @@ export function EditorProvider({
   }, [currentMotion, returnToBasePose]);
 
   const toggleMotionAsset = useCallback((entry: MotionEntry) => {
-    setMotionAssets((prev) => {
-      const exists = prev.some(a => a.group === entry.group && a.index === entry.index);
-      const next = exists
-        ? prev.filter(a => !(a.group === entry.group && a.index === entry.index))
-        : [...prev, entry];
-      motionAssetsRef.current = next;
-      return next;
-    });
+    const group = entry.group;
+    const index = entry.index;
+    importedMotionsRef.current = importedMotionsRef.current.map(m =>
+      (m.group ?? 'imported') === group && m.index === index
+        ? { ...m, pinned: !m.pinned }
+        : m
+    );
+    // Update motionAssets view (derived from pinned importedMotions)
+    const pinned = importedMotionsRef.current.filter(m => m.pinned);
+    const pinnedEntries = pinned.map(m => ({
+      name: m.name,
+      group: m.group ?? 'imported',
+      index: m.index ?? 0,
+      file: m.fileName,
+    }));
+    motionAssetsRef.current = pinnedEntries;
+    setMotionAssets(pinnedEntries);
   }, []);
 
   // ── Timeline clip management ─────────────────────────────────────────────
@@ -2627,6 +2658,7 @@ export function EditorProvider({
     expressionSegmentMarkers,
     endExpressionKeys,
     loadModelByPath,
+    loadPreset,
     openImportDialog,
     openMotionImportDialog,
     playMotion,
