@@ -36,8 +36,8 @@ export function ResourcePanel() {
     setPendingRefs(null);
   }, [modelLoaded, pendingRefs, addClipToTimeline]);
 
-  async function handleSavePreset() {
-    const name = presetName.trim();
+  async function handleSavePreset(overrideName?: string) {
+    const name = (overrideName ?? presetName).trim();
     if (!modelPath || !name) return;
     const refs = clipRefs(timelineClips);
     const clipKeys = refs.map(c => `${c.group}_${c.index}`);
@@ -203,6 +203,14 @@ export function ResourcePanel() {
                 >
                   {p.name}
                 </span>
+                <button
+                  type="button"
+                  className="live2d-resource-add"
+                  title="覆盖更新此预设"
+                  onClick={() => handleSavePreset(p.name)}
+                >
+                  ↑
+                </button>
                 <button
                   type="button"
                   className="live2d-resource-del"
