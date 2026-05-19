@@ -195,8 +195,19 @@ function Live2dControlEditor({ cfg, onPatch, modelName }: {
       if (!preset) return;
       const exprs = (preset as Record<string, unknown>).expressions;
       if (Array.isArray(exprs)) setPresetExpressions(exprs as PresetExpression[]);
+      // Motion assets: prefer motionAssets field, fall back to pinned importedMotions
       const assets = (preset as Record<string, unknown>).motionAssets;
-      if (Array.isArray(assets)) setMotionAssets(assets as PresetMotionAsset[]);
+      if (Array.isArray(assets) && assets.length > 0) {
+        setMotionAssets(assets as PresetMotionAsset[]);
+      } else {
+        const imported = (preset as Record<string, unknown>).importedMotions;
+        if (Array.isArray(imported)) {
+          const pinned = imported
+            .filter((m: any) => m.pinned)
+            .map((m: any) => ({ name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName }));
+          if (pinned.length > 0) setMotionAssets(pinned as PresetMotionAsset[]);
+        }
+      }
     }).catch(console.error);
   }, [modelName]);
 
@@ -379,6 +390,11 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
 
   const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [presetNames, setPresetNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    readLive2DPresets().then(presets => setPresetNames(presets.map(p => p.name))).catch(console.error);
+  }, []);
 
   function toggleOpen(id: string) {
     setOpenPlugins(prev => {
@@ -465,9 +481,12 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
         {/* ── Character visual ── */}
         <div className="group-title">角色外观</div>
         <SettingCard>
-          <SettingRow name="live2d_model_name" description="Live2D 模型名称">
-            <input className="proxy-input" value={character.live2d_model_name ?? ''}
-              onChange={e => setCharacter({ live2d_model_name: e.target.value })} />
+          <SettingRow name="live2d_model_name" description="Live2D 模型预设">
+            <select className="proxy-input" value={character.live2d_model_name ?? ''}
+              onChange={e => setCharacter({ live2d_model_name: e.target.value })}>
+              <option value="">（未选择）</option>
+              {presetNames.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
           </SettingRow>
           <SettingRow name="avatar" description="static/avatars/ 下的文件名">
             <BrowsePath value={character.avatar ?? ''} onChange={v => setCharacter({ avatar: v })} onBrowse={browseAvatar} />
