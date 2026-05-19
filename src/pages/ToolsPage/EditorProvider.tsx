@@ -2570,8 +2570,17 @@ export function EditorProvider({
 
     manualOverridesRef.current = session.manualOverrides ?? {};
     importedMotionsRef.current = normalizeImportedMotions(session.importedMotions ?? []);
-    motionAssetsRef.current = session.motionAssets ?? [];
-    setMotionAssets(session.motionAssets ?? []);
+    // Derive motionAssets from pinned importedMotions if session doesn't have them
+    const sessionAssets = session.motionAssets ?? [];
+    if (sessionAssets.length > 0) {
+      motionAssetsRef.current = sessionAssets;
+      setMotionAssets(sessionAssets);
+    } else {
+      const pinned = importedMotionsRef.current.filter(m => m.pinned);
+      const derived = pinned.map(m => ({ name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName }));
+      motionAssetsRef.current = derived;
+      setMotionAssets(derived);
+    }
     expressionConfigsRef.current = session.expressionConfigs ?? {};
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
