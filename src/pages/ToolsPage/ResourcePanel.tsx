@@ -6,7 +6,8 @@ import type { TimelineClip } from './EditorProvider';
 
 export function ResourcePanel() {
   const {
-    modelLoaded, modelPath, motionEntries, motionAliases, currentMotion,
+    modelLoaded, modelPath, motionEntries, motionAssets, toggleMotionAsset,
+    motionAliases, currentMotion,
     addClipToTimeline, timelineClips, loadModelByPath, openImportDialog, openMotionImportDialog,
     renameMotion, deleteMotion, playMotion,
     buildAdaptedPreset,
@@ -102,6 +103,7 @@ export function ResourcePanel() {
               const defaultLabel = m.name || `${m.group}#${m.index}`;
               const label = motionAliases[key] ?? defaultLabel;
               const isImported = m.group === 'imported';
+              const isFixed = motionAssets.some(a => a.group === m.group && a.index === m.index);
               const isPreviewing = currentMotion?.group === m.group && currentMotion.index === m.index;
               return (
                 <div
@@ -162,6 +164,14 @@ export function ResourcePanel() {
                     onClick={() => addClipToTimeline(m.group, m.index)}
                   >
                     +
+                  </button>
+                  <button
+                    type="button"
+                    className={`live2d-resource-pin${isFixed ? ' live2d-resource-pin--active' : ''}`}
+                    title={isFixed ? '从固有资产中移除' : '加入固有资产（随预设保存）'}
+                    onClick={() => toggleMotionAsset(m)}
+                  >
+                    ★
                   </button>
                   {isImported && (
                     <button

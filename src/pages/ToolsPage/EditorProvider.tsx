@@ -170,6 +170,7 @@ interface Live2DSessionState {
   timelineClips?: TimelineClipRef[];
   timelineItems?: PersistedTimelineItem[];
   importedMotions?: ImportedMotionState[];
+  motionAssets?: MotionEntry[];
   expressionConfigs?: Record<string, ExpressionPresetConfig>;
   expressionSegmentMarkers?: TimelineExpressionSegmentMarker[];
   endExpressionKeys?: string[];
@@ -182,6 +183,8 @@ export interface EditorContextValue {
   modelInstance: ModelInstance | null;
   keyframeOverlay: KeyframeOverlay;
   motionEntries: MotionEntry[];
+  motionAssets: MotionEntry[];
+  toggleMotionAsset: (entry: MotionEntry) => void;
   modelLoaded: boolean;
   modelError: string | null;
   modelPath: string | null;
@@ -738,6 +741,8 @@ export function EditorProvider({
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const [motionEntries, setMotionEntries] = useState<MotionEntry[]>([]);
+  const [motionAssets, setMotionAssets] = useState<MotionEntry[]>([]);
+  const motionAssetsRef = useRef<MotionEntry[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -840,6 +845,7 @@ export function EditorProvider({
       timelineClips: refs,
       timelineItems: timelinePersistenceItems(timelineItems),
       importedMotions: importedMotionsRef.current,
+      motionAssets: motionAssetsRef.current,
       expressionConfigs: expressionConfigsRef.current,
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
@@ -1254,6 +1260,11 @@ export function EditorProvider({
       instance.motionEntries = normalizeMotionEntries(instance.motionEntries);
       setMotionEntries(instance.motionEntries);
 
+      // Auto-populate motionAssets with native (non-imported) motions
+      const nativeMotions = instance.motionEntries.filter(e => e.group !== 'imported');
+      motionAssetsRef.current = nativeMotions;
+      setMotionAssets(nativeMotions);
+
       const values: Record<string, number> = {};
       const ranges: Record<string, ParamRange> = {};
       for (let i = 0; i < instance.parameterIds.length; i++) {
@@ -1551,8 +1562,7 @@ export function EditorProvider({
             : '默认启动表达式，不作为普通表情或持久外观',
       }));
 
-    const motionAssets = motionEntries
-      .filter((entry) => entry.group !== 'imported')
+    const motionAssetsData = motionAssetsRef.current
       .map((entry) => ({ name: entry.name, group: entry.group, index: entry.index, file: entry.file }));
 
     return {
@@ -1570,7 +1580,7 @@ export function EditorProvider({
       expressions,
       appearancePresets,
       excludedExpressions,
-      motionAssets,
+      motionAssets: motionAssetsData,
       timeline: {
         clipKeys: clipKeysFromRefs(timelineClipRefs(timelineItems)),
         clips: timelineClipRefs(timelineItems),
@@ -1581,7 +1591,7 @@ export function EditorProvider({
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
     };
-  }, [expressionMetas, getPersistableManualOverrides, modelPath, motionEntries, timelineItems]);
+  }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineItems]);
 
   const playTimelineFromIndex = useCallback((index: number, startTime = 0) => {
     const items = timelineItemsRef.current;
@@ -1823,6 +1833,17 @@ export function EditorProvider({
       current?.group === group && current.index === index ? null : current
     ));
   }, [currentMotion, returnToBasePose]);
+
+  const toggleMotionAsset = useCallback((entry: MotionEntry) => {
+    setMotionAssets((prev) => {
+      const exists = prev.some(a => a.group === entry.group && a.index === entry.index);
+      const next = exists
+        ? prev.filter(a => !(a.group === entry.group && a.index === entry.index))
+        : [...prev, entry];
+      motionAssetsRef.current = next;
+      return next;
+    });
+  }, []);
 
   // ── Timeline clip management ─────────────────────────────────────────────
 
@@ -2512,6 +2533,8 @@ export function EditorProvider({
 
     manualOverridesRef.current = session.manualOverrides ?? {};
     importedMotionsRef.current = normalizeImportedMotions(session.importedMotions ?? []);
+    motionAssetsRef.current = session.motionAssets ?? [];
+    setMotionAssets(session.motionAssets ?? []);
     expressionConfigsRef.current = session.expressionConfigs ?? {};
     clearExpressionPreviewState();
     setExpressionConfigs(session.expressionConfigs ?? {});
@@ -2575,6 +2598,8 @@ export function EditorProvider({
     modelInstance: modelRef.current,
     keyframeOverlay: overlayRef.current,
     motionEntries,
+    motionAssets,
+    toggleMotionAsset,
     modelLoaded,
     modelError,
     clearModelError,
