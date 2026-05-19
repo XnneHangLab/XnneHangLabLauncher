@@ -50,6 +50,13 @@ export interface Live2DTimelinePreset {
   items?: Live2DTimelineItem[];
 }
 
+export interface Live2DMotionAsset {
+  name: string;
+  group: string;
+  index: number;
+  file: string;
+}
+
 export interface Live2DPreset {
   name: string;
   modelPath: string;
@@ -69,6 +76,7 @@ export interface Live2DPreset {
   expressions?: Live2DExpressionPreset[];
   appearancePresets?: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions?: Array<{ name: string; label: string; file: string; reason: string }>;
+  motionAssets?: Live2DMotionAsset[];
   timeline?: Live2DTimelinePreset;
   manualOverrides?: Record<string, number>;
   importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;

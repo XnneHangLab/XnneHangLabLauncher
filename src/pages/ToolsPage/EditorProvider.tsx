@@ -149,6 +149,7 @@ export interface Live2DAdaptedPreset {
   expressions: Array<ExpressionPresetConfig & { parameters: ExpressionParamOp[] }>;
   appearancePresets: Array<{ key: string; expression: string; description?: string }>;
   excludedExpressions: Array<{ name: string; label: string; file: string; reason: string }>;
+  motionAssets: Array<{ name: string; group: string; index: number; file: string }>;
   timeline: { clipKeys: string[]; clips?: TimelineClipRef[]; items?: PersistedTimelineItem[] };
   manualOverrides: Record<string, number>;
   importedMotions: ImportedMotionState[];
@@ -1550,6 +1551,10 @@ export function EditorProvider({
             : '默认启动表达式，不作为普通表情或持久外观',
       }));
 
+    const motionAssets = motionEntries
+      .filter((entry) => entry.group !== 'imported')
+      .map((entry) => ({ name: entry.name, group: entry.group, index: entry.index, file: entry.file }));
+
     return {
       schemaVersion: 1,
       name,
@@ -1565,6 +1570,7 @@ export function EditorProvider({
       expressions,
       appearancePresets,
       excludedExpressions,
+      motionAssets,
       timeline: {
         clipKeys: clipKeysFromRefs(timelineClipRefs(timelineItems)),
         clips: timelineClipRefs(timelineItems),
@@ -1575,7 +1581,7 @@ export function EditorProvider({
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
     };
-  }, [expressionMetas, getPersistableManualOverrides, modelPath, timelineItems]);
+  }, [expressionMetas, getPersistableManualOverrides, modelPath, motionEntries, timelineItems]);
 
   const playTimelineFromIndex = useCallback((index: number, startTime = 0) => {
     const items = timelineItemsRef.current;
