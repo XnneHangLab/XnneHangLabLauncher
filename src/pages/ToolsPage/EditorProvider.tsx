@@ -756,6 +756,8 @@ export function EditorProvider({
   const modelDataRef = useRef<Live2DModelData | null>(null);
 
   const [modelPath, setModelPath] = useState<string | null>(null);
+  const modelPathRef = useRef<string | null>(null);
+  const loadModelByPathRef = useRef<(path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean; keepMotionAssets?: boolean }) => Promise<void>>(async () => {});
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const [motionEntries, setMotionEntries] = useState<MotionEntry[]>([]);
@@ -942,10 +944,21 @@ export function EditorProvider({
       CubismInit.resize();
       cubismReadyRef.current = true;
       setCanvasReady(true);
+
+      // When WebGL context is restored after loss (sleep/wake, GPU reset),
+      // reload the model so textures and buffers are re-uploaded.
+      CubismInit.onContextRestored(() => {
+        const currentPath = modelPathRef.current;
+        if (currentPath) {
+          loadModelByPathRef.current(currentPath, { keepManualOverrides: true, keepMotionAssets: true })
+            .catch(console.error);
+        }
+      });
     };
     tryInit();
     return () => {
       cancelled = true;
+      CubismInit.clearContextCallbacks();
     };
   }, []);
 
@@ -1232,6 +1245,7 @@ export function EditorProvider({
     setModelLoaded(false);
     setModelError(null);
     setModelPath(path);
+    modelPathRef.current = path;
     setTimelinePlayback(idleTimelinePlaybackState(options?.keepTimeline ? timelineItemsRef.current : []));
     setParamRanges({});
     setParamValues({});
@@ -1322,6 +1336,9 @@ export function EditorProvider({
       debugLogRef.current?.(`[Live2D] loadModelByPath failed: ${String(err)}\n${stack}`, 'stderr');
     }
   }, [clearExpressionPreviewState, getPersistableManualOverrides, startIdlePreview, stripTransientExpressionParameterOverrides]);
+
+  // Keep ref in sync for context-restored callback
+  loadModelByPathRef.current = loadModelByPath;
 
   const openImportDialog = useCallback(async () => {
     const path = await pickAnyFile('选择 Live2D 模型文件 (.model3.json)');
