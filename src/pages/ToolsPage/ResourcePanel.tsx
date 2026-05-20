@@ -239,7 +239,7 @@ export function ResourcePanel() {
             onChange={(e) => setPresetName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); }}
           />
-          <button type="button" className="live2d-btn" onClick={handleSavePreset}>
+          <button type="button" className="live2d-btn" onClick={() => handleSavePreset()}>
             保存
           </button>
         </div>
