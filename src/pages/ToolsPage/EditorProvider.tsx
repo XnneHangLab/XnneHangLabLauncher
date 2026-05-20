@@ -269,7 +269,23 @@ function readLive2DSession(): Live2DSessionState | null {
 }
 
 function writeLive2DSession(state: Live2DSessionState): void {
-  window.localStorage.setItem(live2dSessionKey, JSON.stringify(state));
+  try {
+    window.localStorage.setItem(live2dSessionKey, JSON.stringify(state));
+  } catch (e) {
+    // localStorage quota exceeded — strip base64 from imported motions and retry
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      const stripped = {
+        ...state,
+        importedMotions: state.importedMotions?.map(m => ({ ...m, base64: '' })),
+      };
+      try {
+        window.localStorage.setItem(live2dSessionKey, JSON.stringify(stripped));
+      } catch {
+        // Still too large — clear session entirely
+        window.localStorage.removeItem(live2dSessionKey);
+      }
+    }
+  }
 }
 
 function clipKey(group: string, index: number): string {
@@ -839,6 +855,12 @@ export function EditorProvider({
 
   const writeCurrentSession = useCallback((overrides: Record<string, number> = manualOverridesRef.current) => {
     const refs = timelineClipRefs(timelineItems);
+    // Strip base64 from imported motions to avoid localStorage quota issues.
+    // Motions will be re-read from disk on session restore via their path.
+    const lightImportedMotions = importedMotionsRef.current.map(m => ({
+      ...m,
+      base64: '',
+    }));
     writeLive2DSession({
       modelPath,
       manualOverrides: getPersistableManualOverrides(overrides),
@@ -846,7 +868,7 @@ export function EditorProvider({
       timelineClipKeys: clipKeysFromRefs(refs),
       timelineClips: refs,
       timelineItems: timelinePersistenceItems(timelineItems),
-      importedMotions: importedMotionsRef.current,
+      importedMotions: lightImportedMotions,
       motionAssets: motionAssetsRef.current,
       expressionConfigs: expressionConfigsRef.current,
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
@@ -2568,8 +2590,22 @@ export function EditorProvider({
       return;
     }
 
+    // Async restore: re-hydrate imported motions from disk then load model
+    (async () => {
     manualOverridesRef.current = session.manualOverrides ?? {};
-    importedMotionsRef.current = normalizeImportedMotions(session.importedMotions ?? []);
+    // Re-hydrate imported motions: re-read base64 from disk for motions stripped during session save
+    const rawImported = normalizeImportedMotions(session.importedMotions ?? []);
+    const hydratePromises = rawImported.map(async (m) => {
+      if (m.base64 || !m.path) return m;
+      try {
+        const b64 = await readFileBase64(m.path);
+        return { ...m, base64: b64 };
+      } catch {
+        return m; // file may have been moved/deleted
+      }
+    });
+    const hydratedImported = await Promise.all(hydratePromises);
+    importedMotionsRef.current = hydratedImported;
     // Derive motionAssets from pinned importedMotions if session doesn't have them
     const sessionAssets = session.motionAssets ?? [];
     if (sessionAssets.length > 0) {
@@ -2603,6 +2639,7 @@ export function EditorProvider({
     loadModelByPath(session.modelPath, { keepManualOverrides: true, keepMotionAssets: true })
       .catch(console.error)
       .finally(() => setSessionReady(true));
+    })().catch(console.error);
   }, [canvasReady, clearExpressionPreviewState, loadModelByPath]);
 
   useEffect(() => {
