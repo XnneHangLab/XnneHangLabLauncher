@@ -13,7 +13,7 @@ import { KeyframeOverlay } from '../../live2d/engine/KeyframeOverlay';
 import { spliceMotions, extractMotionSubrange, createTransitionMotion } from '../../live2d/engine/MotionSplicer';
 import { parseMotion, evaluateMotion } from '../../live2d/engine/MotionParser';
 import type { ParsedMotion, ParsedCurve, ParsedSegment, KeyPoint } from '../../live2d/types';
-import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile } from '../../services/config/bridge';
+import { readLive2DModelData, pickAnyFile, readFileBase64, pickSaveFile, writeFile, toRelativePath, toAbsolutePath } from '../../services/config/bridge';
 import type { Live2DModelData, Live2DPreset, Live2DTimelineItem as PersistedTimelineItem } from '../../services/config/bridge';
 import type { MotionData } from '../../live2d/types';
 
@@ -1331,11 +1331,22 @@ export function EditorProvider({
   const loadPreset = useCallback(async (preset: Live2DPreset) => {
     const path = preset.model?.modelPath ?? preset.modelPath;
     if (!path) return;
-    // Restore imported motions from preset before loading model
+    // Restore imported motions from preset — hydrate base64 from disk if stripped
     const presetImported = (preset.importedMotions ?? []) as ImportedMotionState[];
-    importedMotionsRef.current = presetImported;
+    const hydrated = await Promise.all(presetImported.map(async (m) => {
+      if (m.base64 || !m.path) return m;
+      try {
+        const isRelative = !m.path.match(/^[A-Za-z]:[/\\]/) && !m.path.startsWith('/');
+        const absPath = isRelative ? await toAbsolutePath(m.path) : m.path;
+        const b64 = await readFileBase64(absPath);
+        return { ...m, base64: b64 };
+      } catch {
+        return m;
+      }
+    }));
+    importedMotionsRef.current = hydrated;
     // Restore motionAssets from pinned imported motions
-    const pinned = presetImported.filter(m => m.pinned);
+    const pinned = hydrated.filter(m => m.pinned);
     motionAssetsRef.current = pinned.map(m => ({
       name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName,
     }));
@@ -1349,11 +1360,14 @@ export function EditorProvider({
     if (!instance) return;
     importingMotionRef.current = true;
     try {
-      const path = await pickAnyFile('选择动作文件 (.motion3.json)');
-      if (!path) return;
-      const b64 = await readFileBase64(path);
-      const fileName = path.split(/[/\\]/).pop() ?? path;
-      const existingImport = importedMotionsRef.current.find((motion) => motion.path === path || motion.base64 === b64);
+      const absolutePath = await pickAnyFile('选择动作文件 (.motion3.json)');
+      if (!absolutePath) return;
+      const relativePath = await toRelativePath(absolutePath).catch(() => absolutePath);
+      const b64 = await readFileBase64(absolutePath);
+      const fileName = absolutePath.split(/[/\\]/).pop() ?? absolutePath;
+      const existingImport = importedMotionsRef.current.find(
+        (motion) => motion.path === relativePath || motion.path === absolutePath,
+      );
       const existingGroup = existingImport?.group ?? 'imported';
       const existingIndex = existingImport?.index;
       if (existingIndex !== undefined) {
@@ -1383,7 +1397,7 @@ export function EditorProvider({
       instance.motionEntries = normalizeMotionEntries([...instance.motionEntries, entry]);
       importedMotionsRef.current = normalizeImportedMotions([
         ...importedMotionsRef.current,
-        { path, fileName, name: motionName, base64: b64, group, index: nextIndex },
+        { path: relativePath, fileName, name: motionName, base64: b64, group, index: nextIndex },
       ]);
       setMotionAliases(prev => ({ ...prev, [key]: motionName }));
       setMotionEntries(instance.motionEntries);
@@ -1637,7 +1651,7 @@ export function EditorProvider({
         items: timelinePersistenceItems(timelineItems),
       },
       manualOverrides: getPersistableManualOverrides(),
-      importedMotions: importedMotionsRef.current,
+      importedMotions: importedMotionsRef.current.map(m => ({ ...m, base64: '' })),
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
     };
@@ -2593,12 +2607,15 @@ export function EditorProvider({
     // Async restore: re-hydrate imported motions from disk then load model
     (async () => {
     manualOverridesRef.current = session.manualOverrides ?? {};
-    // Re-hydrate imported motions: re-read base64 from disk for motions stripped during session save
+    // Re-hydrate imported motions: resolve relative paths and re-read base64 from disk
     const rawImported = normalizeImportedMotions(session.importedMotions ?? []);
     const hydratePromises = rawImported.map(async (m) => {
       if (m.base64 || !m.path) return m;
       try {
-        const b64 = await readFileBase64(m.path);
+        // Path may be relative (new format) or absolute (legacy) — resolve to absolute for reading
+        const isRelative = !m.path.match(/^[A-Za-z]:[/\\]/) && !m.path.startsWith('/');
+        const absPath = isRelative ? await toAbsolutePath(m.path) : m.path;
+        const b64 = await readFileBase64(absPath);
         return { ...m, base64: b64 };
       } catch {
         return m; // file may have been moved/deleted
@@ -2652,7 +2669,7 @@ export function EditorProvider({
       timelineClipKeys: clipKeysFromRefs(refs),
       timelineClips: refs,
       timelineItems: timelinePersistenceItems(timelineItems),
-      importedMotions: importedMotionsRef.current,
+      importedMotions: importedMotionsRef.current.map(m => ({ ...m, base64: '' })),
       expressionConfigs,
       expressionSegmentMarkers: expressionSegmentMarkersRef.current,
       endExpressionKeys: endExpressionKeysRef.current,
