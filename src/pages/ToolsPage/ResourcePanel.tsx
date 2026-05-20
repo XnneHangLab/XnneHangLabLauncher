@@ -38,7 +38,14 @@ export function ResourcePanel() {
 
   async function handleSavePreset(overrideName?: string) {
     const name = (overrideName ?? presetName).trim();
-    if (!modelPath || !name) return;
+    if (!name) {
+      alert('请输入预设名称');
+      return;
+    }
+    if (!modelPath) {
+      alert('请先导入模型');
+      return;
+    }
     const refs = clipRefs(timelineClips);
     const clipKeys = refs.map(c => `${c.group}_${c.index}`);
     const adaptedPreset = buildAdaptedPreset(name);
