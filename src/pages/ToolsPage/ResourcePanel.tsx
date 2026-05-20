@@ -3,6 +3,7 @@ import { useEditor } from './EditorProvider';
 import { readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
 import type { Live2DPreset } from '../../services/config/bridge';
 import type { TimelineClip } from './EditorProvider';
+import { ToastDialog } from './ToastDialog';
 
 export function ResourcePanel() {
   const {
@@ -16,6 +17,7 @@ export function ResourcePanel() {
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [pendingRefs, setPendingRefs] = useState<Array<{ group: string; index: number }> | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const clipRefs = (clips: TimelineClip[]) => clips.map((clip) => ({ group: clip.group, index: clip.index }));
   const clipRefsFromKeys = (keys?: string[]) => (keys ?? []).flatMap((key) => {
@@ -39,11 +41,11 @@ export function ResourcePanel() {
   async function handleSavePreset(overrideName?: string) {
     const name = (overrideName ?? presetName).trim();
     if (!name) {
-      alert('请输入预设名称');
+      setToast('请输入预设名称');
       return;
     }
     if (!modelPath) {
-      alert('请先导入模型');
+      setToast('请先导入模型');
       return;
     }
     const refs = clipRefs(timelineClips);
@@ -79,6 +81,7 @@ export function ResourcePanel() {
   }
 
   return (
+    <>
     <div className="live2d-resource-panel">
       <div className="live2d-resource-section">
         <div className="live2d-panel-title">模型</div>
@@ -245,5 +248,7 @@ export function ResourcePanel() {
         </div>
       </div>
     </div>
+    {toast && <ToastDialog message={toast} onClose={() => setToast(null)} title="提示" />}
+    </>
   );
 }
