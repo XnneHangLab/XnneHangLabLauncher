@@ -3,6 +3,7 @@ import { useEditor } from './EditorProvider';
 import { readLive2DPresets, writeLive2DPresets } from '../../services/config/bridge';
 import type { Live2DPreset } from '../../services/config/bridge';
 import type { TimelineClip } from './EditorProvider';
+import { ToastDialog } from './ToastDialog';
 
 export function ResourcePanel() {
   const {
@@ -16,6 +17,7 @@ export function ResourcePanel() {
   const [presets, setPresets] = useState<Live2DPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [pendingRefs, setPendingRefs] = useState<Array<{ group: string; index: number }> | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const clipRefs = (clips: TimelineClip[]) => clips.map((clip) => ({ group: clip.group, index: clip.index }));
   const clipRefsFromKeys = (keys?: string[]) => (keys ?? []).flatMap((key) => {
@@ -38,7 +40,14 @@ export function ResourcePanel() {
 
   async function handleSavePreset(overrideName?: string) {
     const name = (overrideName ?? presetName).trim();
-    if (!modelPath || !name) return;
+    if (!name) {
+      setToast('请输入预设名称');
+      return;
+    }
+    if (!modelPath) {
+      setToast('请先导入模型');
+      return;
+    }
     const refs = clipRefs(timelineClips);
     const clipKeys = refs.map(c => `${c.group}_${c.index}`);
     const adaptedPreset = buildAdaptedPreset(name);
@@ -72,6 +81,7 @@ export function ResourcePanel() {
   }
 
   return (
+    <>
     <div className="live2d-resource-panel">
       <div className="live2d-resource-section">
         <div className="live2d-panel-title">模型</div>
@@ -232,11 +242,13 @@ export function ResourcePanel() {
             onChange={(e) => setPresetName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); }}
           />
-          <button type="button" className="live2d-btn" onClick={handleSavePreset}>
+          <button type="button" className="live2d-btn" onClick={() => handleSavePreset()}>
             保存
           </button>
         </div>
       </div>
     </div>
+    {toast && <ToastDialog message={toast} onClose={() => setToast(null)} title="提示" />}
+    </>
   );
 }

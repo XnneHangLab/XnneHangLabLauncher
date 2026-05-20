@@ -355,3 +355,21 @@ pub async fn pick_save_file(title: String, default_name: String) -> Result<Optio
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| format!("写入文件失败: {e}"))
 }
+
+/// Return the repo root path so the frontend can compute relative paths.
+#[tauri::command]
+pub fn get_repo_root(state: State<'_, RuntimeState>) -> String {
+    state.repo_root.to_string_lossy().replace('\\', "/")
+}
+
+/// Convert an absolute path to a repo-relative path (forward slashes).
+#[tauri::command]
+pub fn to_relative_path(state: State<'_, RuntimeState>, absolute: String) -> Result<String, String> {
+    relative_from_absolute(&state.repo_root, &absolute)
+}
+
+/// Convert a repo-relative path to an absolute path.
+#[tauri::command]
+pub fn to_absolute_path(state: State<'_, RuntimeState>, relative: String) -> String {
+    absolute_from_relative(&state.repo_root, &relative)
+}

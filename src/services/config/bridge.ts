@@ -134,3 +134,15 @@ export function pickSaveFile(title: string, defaultName: string) {
 export function writeFile(path: string, content: string) {
   return invoke<void>('write_file', { path, content });
 }
+
+export function getRepoRoot() {
+  return invoke<string>('get_repo_root');
+}
+
+export function toRelativePath(absolute: string) {
+  return invoke<string>('to_relative_path', { absolute });
+}
+
+export function toAbsolutePath(relative: string) {
+  return invoke<string>('to_absolute_path', { relative });
+}

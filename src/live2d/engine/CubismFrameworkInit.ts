@@ -26,6 +26,25 @@ class _CubismFrameworkInit {
     return this._initialized;
   }
 
+  private _contextLostCallbacks: Array<() => void> = [];
+  private _contextRestoredCallbacks: Array<() => void> = [];
+
+  /** Register a callback for when WebGL context is lost. */
+  onContextLost(cb: () => void): void {
+    this._contextLostCallbacks.push(cb);
+  }
+
+  /** Register a callback for when WebGL context is restored. */
+  onContextRestored(cb: () => void): void {
+    this._contextRestoredCallbacks.push(cb);
+  }
+
+  /** Remove all context loss/restore callbacks. */
+  clearContextCallbacks(): void {
+    this._contextLostCallbacks = [];
+    this._contextRestoredCallbacks = [];
+  }
+
   /**
    * Create WebGL context from canvas and start Cubism Framework.
    * Safe to call multiple times — idempotent.
@@ -40,14 +59,16 @@ class _CubismFrameworkInit {
 
     this._canvas = canvas;
 
-    // Handle WebGL context loss (e.g. HMR, GPU reset)
+    // Handle WebGL context loss (e.g. HMR, GPU reset, sleep/wake)
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this._initialized = false;
       this._gl = null;
+      for (const cb of this._contextLostCallbacks) cb();
     });
     canvas.addEventListener('webglcontextrestored', () => {
       this.initialize(canvas);
+      for (const cb of this._contextRestoredCallbacks) cb();
     });
 
     this._gl =
