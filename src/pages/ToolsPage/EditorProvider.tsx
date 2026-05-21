@@ -1369,36 +1369,33 @@ export function EditorProvider({
     }));
     setMotionAssets(motionAssetsRef.current);
     // Restore expression configs (label, role, description) from preset before model reload
-    if (preset.expressions?.length) {
-      const restoredConfigs: Record<string, ExpressionPresetConfig> = {};
-      for (const exp of preset.expressions) {
-        const key = expressionKey(exp.name, exp.file);
-        restoredConfigs[key] = {
-          name: exp.name,
-          label: exp.label || exp.name,
-          file: exp.file,
-          role: exp.role as ExpressionRole,
-          applyMode: exp.applyMode as ExpressionApplyMode,
-          isDefaultStartup: exp.isDefaultStartup,
-          isWatermarkControl: exp.isWatermarkControl,
-          description: exp.description,
-        };
-      }
-      expressionConfigsRef.current = restoredConfigs;
+    const restoredConfigs: Record<string, ExpressionPresetConfig> = {};
+    for (const exp of preset.expressions ?? []) {
+      const key = expressionKey(exp.name, exp.file);
+      restoredConfigs[key] = {
+        name: exp.name,
+        label: exp.label || exp.name,
+        file: exp.file,
+        role: exp.role as ExpressionRole,
+        applyMode: exp.applyMode as ExpressionApplyMode,
+        isDefaultStartup: exp.isDefaultStartup,
+        isWatermarkControl: exp.isWatermarkControl,
+        description: exp.description,
+      };
     }
+    expressionConfigsRef.current = restoredConfigs;
     // Restore expression segment markers and end expression keys from preset
-    const presetAny = preset as Record<string, unknown>;
-    if (Array.isArray(presetAny.expressionSegmentMarkers)) {
-      expressionSegmentMarkersRef.current = presetAny.expressionSegmentMarkers as TimelineExpressionSegmentMarker[];
+    if (Array.isArray(preset.expressionSegmentMarkers)) {
+      expressionSegmentMarkersRef.current = preset.expressionSegmentMarkers as TimelineExpressionSegmentMarker[];
       setExpressionSegmentMarkers(expressionSegmentMarkersRef.current);
     }
-    if (Array.isArray(presetAny.endExpressionKeys)) {
-      endExpressionKeysRef.current = presetAny.endExpressionKeys as string[];
+    if (Array.isArray(preset.endExpressionKeys)) {
+      endExpressionKeysRef.current = preset.endExpressionKeys;
       setEndExpressionKeys(endExpressionKeysRef.current);
     }
     // Restore manual overrides from preset
-    if (presetAny.manualOverrides && typeof presetAny.manualOverrides === 'object') {
-      manualOverridesRef.current = presetAny.manualOverrides as Record<string, number>;
+    if (preset.manualOverrides && typeof preset.manualOverrides === 'object') {
+      manualOverridesRef.current = preset.manualOverrides;
     }
     await loadModelByPath(path, { keepManualOverrides: true, keepMotionAssets: true });
   }, [loadModelByPath]);

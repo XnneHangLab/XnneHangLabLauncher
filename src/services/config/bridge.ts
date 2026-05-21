@@ -80,6 +80,8 @@ export interface Live2DPreset {
   timeline?: Live2DTimelinePreset;
   manualOverrides?: Record<string, number>;
   importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;
+  expressionSegmentMarkers?: Array<{ uid: string; time: number; expressionKeys: string[] }>;
+  endExpressionKeys?: string[];
 }
 
 export interface Live2DModelData {
