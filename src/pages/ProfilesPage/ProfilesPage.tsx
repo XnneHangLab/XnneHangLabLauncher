@@ -12,7 +12,8 @@ import {
   deleteProfile,
   pickFileForProfile,
 } from '../../services/config/profileBridge';
-import { readLive2DPresets } from '../../services/config/bridge';
+import { readLabConfig, readLive2DPresets, writeLabConfig } from '../../services/config/bridge';
+import type { LabConfig } from '../../services/config/labConfig';
 import type { ProfileMeta, ProfileConfig } from '../../services/config/profileConfig';
 import '../../styles/settings.css';
 import '../../styles/profiles.css';
@@ -376,11 +377,13 @@ interface ProfileEditorProps {
   onChange: (next: ProfileConfig) => void;
   onSave: () => void;
   onDelete: () => void;
+  onSetActive: () => void;
   saving: boolean;
   avatarAbsPath?: string | null;
+  activeProfileFile: string | null;
 }
 
-function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avatarAbsPath }: ProfileEditorProps) {
+function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, saving, avatarAbsPath, activeProfileFile }: ProfileEditorProps) {
   const profile = config.profile ?? { description: '' };
   const character = config.character ?? {};
   const ttsPreprocessor = character.tts_preprocessor ?? {};
@@ -640,6 +643,9 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, saving, avata
 
         <div className="settings-save-row">
           <button type="button" className="profile-delete-btn" onClick={onDelete}>删除</button>
+          {activeProfileFile !== file && (
+            <button type="button" className="settings-save-button" onClick={onSetActive}>设为启动角色</button>
+          )}
           <button type="button" className="settings-save-button" onClick={onSave} disabled={saving}>
             {saving ? '保存中…' : '保存'}
           </button>
@@ -660,16 +666,21 @@ export function ProfilesPage() {
   const [newName, setNewName] = useState('');
   const [showNewInput, setShowNewInput] = useState(false);
   const [error, setError] = useState('');
+  const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
+
+  const activeProfileFile = labConfig?.agent.memory_agent_profile
+    ?.replace(/^profiles\//, '').replace(/\.toml$/, '') ?? null;
 
   useEffect(() => {
     void (async () => {
       try {
-        const list = await listProfiles();
+        const [list, cfg] = await Promise.all([listProfiles(), readLabConfig()]);
         setMetas(list);
+        setLabConfig(cfg);
         if (list.length > 0) {
-          const cfg = await readProfile(list[0].file);
+          const profileCfg = await readProfile(list[0].file);
           setSelectedFile(list[0].file);
-          setActiveConfig(cfg);
+          setActiveConfig(profileCfg);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -738,6 +749,17 @@ export function ProfilesPage() {
 
   const selectedMeta = metas.find(m => m.file === selectedFile);
 
+  async function handleSetActive() {
+    if (!selectedFile || !labConfig) return;
+    const updated = { ...labConfig, agent: { ...labConfig.agent, memory_agent_profile: `profiles/${selectedFile}.toml` } };
+    try {
+      await writeLabConfig(updated);
+      setLabConfig(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="profiles-page">
       <div className="profiles-topbar">
@@ -748,7 +770,10 @@ export function ProfilesPage() {
               onClick={() => handleSelect(m.file)}>
               <ProfileAvatar name={m.character_name || m.file} absPath={m.avatar_abs_path} />
               <div className="profile-chip__text">
-                <span className="profile-chip__name">{m.character_name || m.file}</span>
+                <span className="profile-chip__name">
+                  {m.character_name || m.file}
+                  {activeProfileFile === m.file && <span className="profile-chip__badge">启动</span>}
+                </span>
                 <span className="profile-chip__file">{m.file}</span>
               </div>
             </button>
@@ -781,8 +806,10 @@ export function ProfilesPage() {
           onChange={setActiveConfig}
           onSave={handleSave}
           onDelete={handleDelete}
+          onSetActive={handleSetActive}
           saving={saving}
           avatarAbsPath={selectedMeta?.avatar_abs_path ?? null}
+          activeProfileFile={activeProfileFile}
         />
       ) : (
         <div className="profiles-empty">
