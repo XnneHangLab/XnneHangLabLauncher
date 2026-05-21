@@ -11,8 +11,6 @@ export interface ProfileConfig {
     description: string;
   };
   character?: {
-    conf_name?: string;
-    conf_uid?: string;
     live2d_model_name?: string;
     character_name?: string;
     avatar?: string;
