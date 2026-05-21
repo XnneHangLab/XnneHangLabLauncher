@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
 import { SettingsTabs } from '../../components/settings/SettingsTabs/SettingsTabs';
@@ -13,6 +13,8 @@ import type {
   RuntimeDriver,
 } from '../../services/runtime/runtime';
 import type { LabConfig } from '../../services/config/labConfig';
+import { listProfiles } from '../../services/config/profileBridge';
+import type { ProfileMeta } from '../../services/config/profileConfig';
 import { ServiceConfigPanel } from '../ServiceConfigPage/ServiceConfigPage';
 import { ModelAIPanel } from '../ModelAIPage/ModelAIPage';
 import { SpeechPanel } from '../SpeechPage/SpeechPage';
@@ -48,6 +50,11 @@ export function SettingsPage({
   const [activeTab, setActiveTab] = useState<SettingsTabId>('launch');
   const [localDriver, setLocalDriver] = useState<RuntimeDriver>(runtimeDriver);
   const [localPythonExePath, setLocalPythonExePath] = useState(pythonExePath);
+  const [profileMetas, setProfileMetas] = useState<ProfileMeta[]>([]);
+
+  useEffect(() => {
+    listProfiles().then(setProfileMetas).catch(() => {});
+  }, []);
 
   const environmentLabel = environmentProbe
     ? formatEnvironmentStatus(environmentProbe.status)
@@ -191,6 +198,19 @@ export function SettingsPage({
               <>
                 <div className="group-title">功能开关</div>
                 <SettingCard>
+                  <SettingRow name="启动角色" description="后端启动时加载的角色配置，切换后需重启后端生效">
+                    <select
+                      className="proxy-input"
+                      value={labConfig.agent.memory_agent_profile}
+                      onChange={(e) => onSaveLabConfig({ ...labConfig, agent: { ...labConfig.agent, memory_agent_profile: e.target.value } })}
+                    >
+                      {profileMetas.map((m) => (
+                        <option key={m.file} value={`profiles/${m.file}.toml`}>
+                          {m.character_name || m.file}
+                        </option>
+                      ))}
+                    </select>
+                  </SettingRow>
                   <SettingRow name="TTS 引擎" description="语音合成后端，关闭则禁用 TTS">
                     <div className="driver-select-wrap">
                       {(['none', 'gsv_lite', 'genie_tts', 'qwen_tts'] as const).map((p) => (

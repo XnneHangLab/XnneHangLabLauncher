@@ -979,3 +979,16 @@
 .l2d-table-textarea:focus {
   border-color: var(--accent);
 }
+
+/* ── Active profile badge ── */
+.profile-chip__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(52, 155, 255, 0.15);
+  color: #5ab4ff;
+  vertical-align: middle;
+}
