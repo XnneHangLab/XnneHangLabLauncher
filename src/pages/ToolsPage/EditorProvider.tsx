@@ -1385,18 +1385,12 @@ export function EditorProvider({
     }
     expressionConfigsRef.current = restoredConfigs;
     // Restore expression segment markers and end expression keys from preset
-    if (Array.isArray(preset.expressionSegmentMarkers)) {
-      expressionSegmentMarkersRef.current = preset.expressionSegmentMarkers as TimelineExpressionSegmentMarker[];
-      setExpressionSegmentMarkers(expressionSegmentMarkersRef.current);
-    }
-    if (Array.isArray(preset.endExpressionKeys)) {
-      endExpressionKeysRef.current = preset.endExpressionKeys;
-      setEndExpressionKeys(endExpressionKeysRef.current);
-    }
+    expressionSegmentMarkersRef.current = (preset.expressionSegmentMarkers ?? []) as TimelineExpressionSegmentMarker[];
+    setExpressionSegmentMarkers(expressionSegmentMarkersRef.current);
+    endExpressionKeysRef.current = preset.endExpressionKeys ?? [];
+    setEndExpressionKeys(endExpressionKeysRef.current);
     // Restore manual overrides from preset
-    if (preset.manualOverrides && typeof preset.manualOverrides === 'object') {
-      manualOverridesRef.current = preset.manualOverrides;
-    }
+    manualOverridesRef.current = preset.manualOverrides ?? {};
     await loadModelByPath(path, { keepManualOverrides: true, keepMotionAssets: true });
   }, [loadModelByPath]);
 
