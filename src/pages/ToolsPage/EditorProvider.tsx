@@ -1321,7 +1321,7 @@ export function EditorProvider({
       setParamRanges(ranges);
       setParamMetas(collectParamMetas(instance.parameterIds, data.modelJson as Record<string, unknown>, data.files));
       const nextExpressionMetas = collectExpressionMetas(data.modelJson as Record<string, unknown>, data.files);
-      const nextExpressionConfigs = mergeExpressionConfigs(nextExpressionMetas, expressionConfigsRef.current);
+      const nextExpressionConfigs = mergeExpressionConfigs(nextExpressionMetas, savedExpressionConfigs);
       setExpressionMetas(nextExpressionMetas);
       setExpressionConfigs(nextExpressionConfigs);
       expressionConfigsRef.current = nextExpressionConfigs;
@@ -1368,6 +1368,29 @@ export function EditorProvider({
       name: m.name, group: m.group ?? 'imported', index: m.index ?? 0, file: m.fileName,
     }));
     setMotionAssets(motionAssetsRef.current);
+    // Restore expression configs (label, role, description) from preset before model reload
+    const restoredConfigs: Record<string, ExpressionPresetConfig> = {};
+    for (const exp of preset.expressions ?? []) {
+      const key = expressionKey(exp.name, exp.file);
+      restoredConfigs[key] = {
+        name: exp.name,
+        label: exp.label || exp.name,
+        file: exp.file,
+        role: exp.role as ExpressionRole,
+        applyMode: exp.applyMode as ExpressionApplyMode,
+        isDefaultStartup: exp.isDefaultStartup,
+        isWatermarkControl: exp.isWatermarkControl,
+        description: exp.description,
+      };
+    }
+    expressionConfigsRef.current = restoredConfigs;
+    // Restore expression segment markers and end expression keys from preset
+    expressionSegmentMarkersRef.current = (preset.expressionSegmentMarkers ?? []) as TimelineExpressionSegmentMarker[];
+    setExpressionSegmentMarkers(expressionSegmentMarkersRef.current);
+    endExpressionKeysRef.current = preset.endExpressionKeys ?? [];
+    setEndExpressionKeys(endExpressionKeysRef.current);
+    // Restore manual overrides from preset
+    manualOverridesRef.current = preset.manualOverrides ?? {};
     await loadModelByPath(path, { keepManualOverrides: true, keepMotionAssets: true });
   }, [loadModelByPath]);
 

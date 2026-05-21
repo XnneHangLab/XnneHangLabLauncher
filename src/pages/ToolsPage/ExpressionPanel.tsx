@@ -188,13 +188,19 @@ function ExpressionConfigControls({
           <option key={value} value={value}>{label}</option>
         ))}
       </select>
-      <input
-        type="text"
-        className="live2d-expression-input live2d-expression-input--desc"
-        value={config.description ?? ''}
-        placeholder="说明"
-        onChange={(event) => onChange({ description: event.target.value })}
-      />
+      {(config.role === 'expression' || config.role === 'appearance') && (
+        <input
+          type="text"
+          className="live2d-expression-input live2d-expression-input--desc"
+          value={config.description ?? ''}
+          placeholder={
+            config.role === 'expression'
+              ? '例：[害羞] 你这人怎么这样嘛！'
+              : '例：双马尾，灵动俏皮，少了正式感多了亲近感'
+          }
+          onChange={(event) => onChange({ description: event.target.value })}
+        />
+      )}
     </div>
   );
 }

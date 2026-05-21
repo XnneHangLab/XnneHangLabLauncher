@@ -57,6 +57,12 @@ export interface Live2DMotionAsset {
   file: string;
 }
 
+export interface Live2DExpressionSegmentMarker {
+  uid: string;
+  time: number;
+  expressionKeys: string[];
+}
+
 export interface Live2DPreset {
   name: string;
   modelPath: string;
@@ -80,6 +86,8 @@ export interface Live2DPreset {
   timeline?: Live2DTimelinePreset;
   manualOverrides?: Record<string, number>;
   importedMotions?: Array<{ path: string; fileName: string; name: string; base64: string }>;
+  expressionSegmentMarkers?: Live2DExpressionSegmentMarker[];
+  endExpressionKeys?: string[];
 }
 
 export interface Live2DModelData {
