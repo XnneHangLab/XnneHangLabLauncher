@@ -392,7 +392,6 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
   const enabledPlugins = config.plugins?.enabled ?? [];
 
   const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [presetNames, setPresetNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -623,23 +622,6 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
             </div>
           )}
         </div>
-
-        {/* ── Advanced (collapsible) ── */}
-        <button type="button" className="profile-advanced-toggle" onClick={() => setShowAdvanced(v => !v)}>
-          高级 {showAdvanced ? '▴' : '▾'}
-        </button>
-        {showAdvanced && (
-          <SettingCard>
-            <SettingRow name="conf_name" description="Live2D 配置文件名">
-              <input className="proxy-input" value={character.conf_name ?? ''}
-                onChange={e => setCharacter({ conf_name: e.target.value })} />
-            </SettingRow>
-            <SettingRow name="conf_uid" description="Live2D 配置 UID">
-              <input className="proxy-input" value={character.conf_uid ?? ''}
-                onChange={e => setCharacter({ conf_uid: e.target.value })} />
-            </SettingRow>
-          </SettingCard>
-        )}
 
         <div className="settings-save-row">
           <button type="button" className="profile-delete-btn" onClick={onDelete}>删除</button>
