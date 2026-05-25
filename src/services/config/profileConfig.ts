@@ -25,6 +25,7 @@ export interface ProfileConfig {
     };
     tts?: {
       character_name?: string;
+      voice?: string;
     };
   };
   prompt?: {

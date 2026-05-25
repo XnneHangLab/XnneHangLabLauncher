@@ -992,3 +992,53 @@
   color: #5ab4ff;
   vertical-align: middle;
 }
+
+/* ── TTS Emotion editor ── */
+.tts-emotion-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tts-emotion-row:last-child {
+  border-bottom: none;
+}
+
+.tts-emotion-fields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tts-emotion-clips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 2px;
+}
+
+.tts-emotion-play {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+
+.tts-emotion-play:hover {
+  border-color: rgba(52, 155, 255, 0.4);
+  background: rgba(52, 155, 255, 0.06);
+  color: var(--text);
+}
+
+.tts-emotion-play--active {
+  border-color: rgba(52, 155, 255, 0.6);
+  background: rgba(52, 155, 255, 0.12);
+  color: #5ab4ff;
+}

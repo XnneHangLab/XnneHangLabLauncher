@@ -60,6 +60,9 @@ pub fn run() {
             runtime::live2d::get_repo_root,
             runtime::live2d::to_relative_path,
             runtime::live2d::to_absolute_path,
+            runtime::voice::read_voice_config,
+            runtime::voice::write_voice_emotions,
+            runtime::voice::scan_voice_emotions,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
