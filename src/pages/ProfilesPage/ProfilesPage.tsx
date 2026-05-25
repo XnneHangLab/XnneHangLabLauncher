@@ -13,6 +13,8 @@ import {
   pickFileForProfile,
 } from '../../services/config/profileBridge';
 import { readLabConfig, readLive2DPresets, writeLabConfig } from '../../services/config/bridge';
+import { readVoiceConfig, writeVoiceEmotions, scanVoiceEmotions } from '../../services/config/voiceBridge';
+import type { VoiceEmotion } from '../../services/config/voiceConfig';
 import type { LabConfig } from '../../services/config/labConfig';
 import type { ProfileMeta, ProfileConfig } from '../../services/config/profileConfig';
 import '../../styles/settings.css';
@@ -393,10 +395,56 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
 
   const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
   const [presetNames, setPresetNames] = useState<string[]>([]);
+  const [voiceEmotions, setVoiceEmotions] = useState<VoiceEmotion[]>([]);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
+  const [voiceAssetDir, setVoiceAssetDir] = useState<string>('');
+  const [playingClip, setPlayingClip] = useState<string | null>(null);
 
   useEffect(() => {
     readLive2DPresets().then(presets => setPresetNames(presets.map(p => p.name))).catch(console.error);
   }, []);
+
+  // Load voice emotions when voice changes
+  const currentVoice = tts.voice ?? '';
+  useEffect(() => {
+    if (!currentVoice) { setVoiceEmotions([]); setVoiceId(null); setVoiceAssetDir(''); return; }
+    setVoiceId(currentVoice);
+    readVoiceConfig(currentVoice)
+      .then(cfg => { setVoiceEmotions(cfg.emotions); setVoiceAssetDir(cfg.assetDir); })
+      .catch(() => { setVoiceEmotions([]); setVoiceAssetDir(''); });
+  }, [currentVoice]);
+
+  function updateVoiceEmotion(index: number, patch: Partial<VoiceEmotion>) {
+    const next = voiceEmotions.map((e, i) => i === index ? { ...e, ...patch } : e);
+    setVoiceEmotions(next);
+    if (voiceId) void writeVoiceEmotions(voiceId, next);
+  }
+
+  async function handleSyncVoiceEmotions() {
+    if (!voiceId) return;
+    const scanned = await scanVoiceEmotions(voiceId);
+    const existing = new Set(voiceEmotions.map(e => e.name));
+    const newEmotions = scanned
+      .filter(name => !existing.has(name))
+      .map(name => ({ name, label: name, description: '', clips: [] }));
+    if (newEmotions.length > 0) {
+      const merged = [...voiceEmotions, ...newEmotions];
+      setVoiceEmotions(merged);
+      await writeVoiceEmotions(voiceId, merged);
+    }
+  }
+
+  function playAudioClip(absPath: string) {
+    if (playingClip === absPath) {
+      setPlayingClip(null);
+      return;
+    }
+    setPlayingClip(absPath);
+    const audio = new Audio(convertFileSrc(absPath));
+    audio.onended = () => setPlayingClip(null);
+    audio.onerror = () => setPlayingClip(null);
+    audio.play().catch(() => setPlayingClip(null));
+  }
 
   function toggleOpen(id: string) {
     setOpenPlugins(prev => {
@@ -506,9 +554,13 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
         {/* ── TTS / Voice ── */}
         <div className="group-title">语音</div>
         <SettingCard>
-          <SettingRow name="character_name" description="voices/ 下的子目录名">
+          <SettingRow name="character_name" description="TTS 模型目录名（models/<provider>/ 下）">
             <input className="proxy-input" value={tts.character_name ?? ''}
               onChange={e => setTts({ character_name: e.target.value })} />
+          </SettingRow>
+          <SettingRow name="voice" description="语音情绪配置（config/voices/ 下的文件名，不含 .toml）">
+            <input className="proxy-input" value={tts.voice ?? ''}
+              onChange={e => setTts({ voice: e.target.value })} />
           </SettingRow>
           <SettingRow name="预处理" description="点击开启对应文本过滤">
             <div className="tts-flags">
@@ -528,6 +580,61 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
             </div>
           </SettingRow>
         </SettingCard>
+
+        {/* ── TTS Emotions ── */}
+        {voiceEmotions.length > 0 && (
+          <>
+            <div className="group-title">
+              TTS 情绪
+              <button type="button" className="l2d-add-btn" style={{ marginLeft: 8 }} onClick={handleSyncVoiceEmotions}>
+                同步目录
+              </button>
+            </div>
+            {voiceAssetDir && (
+              <div className="profile-chip__file" style={{ padding: '0 2px 6px', opacity: 0.6 }}>
+                资源目录: {voiceAssetDir}
+              </div>
+            )}
+            <SettingCard>
+              {voiceEmotions.map((emotion, index) => (
+                <div key={emotion.name} className="tts-emotion-row">
+                  <div className="tts-emotion-fields">
+                    <span className="l2d-preset-key" title={`name: ${emotion.name}`}>{emotion.name}</span>
+                    <input
+                      className="proxy-input"
+                      style={{ width: 100 }}
+                      value={emotion.label}
+                      placeholder={emotion.name}
+                      title="label — 用于 [tts:label] 标签"
+                      onChange={e => updateVoiceEmotion(index, { label: e.target.value })}
+                    />
+                    <input
+                      className="proxy-input l2d-preset-desc"
+                      value={emotion.description}
+                      placeholder="说明 — 注入 prompt 引导模型选择"
+                      onChange={e => updateVoiceEmotion(index, { description: e.target.value })}
+                    />
+                  </div>
+                  {emotion.clips.length > 0 && (
+                    <div className="tts-emotion-clips">
+                      {emotion.clips.map(clip => (
+                        <button
+                          key={clip.absPath}
+                          type="button"
+                          className={`tts-emotion-play${playingClip === clip.absPath ? ' tts-emotion-play--active' : ''}`}
+                          onClick={() => playAudioClip(clip.absPath)}
+                          title={clip.fileName}
+                        >
+                          {playingClip === clip.absPath ? '■' : '▶'} {clip.fileName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </SettingCard>
+          </>
+        )}
 
         {/* ── Prompt ── */}
         <div className="group-title">提示词</div>
