@@ -965,11 +965,21 @@ export function EditorProvider({
   // ── Animation loop ───────────────────────────────────────────────────────
 
   useEffect(() => {
+    let initWaitFrames = 0;
     const loop = (now: number) => {
       const dt = lastTimeRef.current ? Math.min((now - lastTimeRef.current) / 1000, 0.05) : 0.016;
       lastTimeRef.current = now;
 
       try {
+        if (!CubismInit.isInitialized) {
+          initWaitFrames++;
+          if (initWaitFrames === 300) {
+            console.warn('[Live2D] CubismFramework still not initialized after ~5s');
+            debugLogRef.current?.('[Live2D] CubismFramework 初始化超时，请检查 WebGL 是否可用', 'stderr');
+          }
+          rafRef.current = requestAnimationFrame(loop);
+          return;
+        }
         const model = modelRef.current;
         if (model) {
           const player = motionPlayerRef.current;
