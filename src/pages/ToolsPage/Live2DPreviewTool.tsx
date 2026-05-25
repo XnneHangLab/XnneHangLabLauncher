@@ -22,10 +22,11 @@ export function Live2DPreviewTool({ onBack, onDebugLog, isActive }: Live2DPrevie
 }
 
 function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
-  const { canvasRef, modelPath, modelError, clearModelError } = useEditor();
+  const { canvasRef, modelPath, modelLoaded, modelError, clearModelError } = useEditor();
   const [rightTab, setRightTab] = useState<'params' | 'expressions'>('params');
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
+  const isLoading = !!modelPath && !modelLoaded && !modelError;
 
   return (
     <div className="live2d-tool">
@@ -44,6 +45,7 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
         <div className="live2d-col live2d-col--canvas">
           <div className="live2d-canvas-wrap">
             {!modelPath && <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>}
+            {isLoading && <div className="live2d-loading"><span className="live2d-loading-spinner" />加载模型中…</div>}
             <canvas ref={canvasRef} className="live2d-canvas" />
           </div>
         </div>
