@@ -742,9 +742,11 @@ function collectParamMetas(
 export function EditorProvider({
   children,
   onDebugLog,
+  isActive = false,
 }: {
   children: React.ReactNode;
   onDebugLog?: (text: string, kind?: ConsoleLogEntry['kind']) => void;
+  isActive?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modelRef = useRef<ModelInstance | null>(null);
@@ -923,16 +925,10 @@ export function EditorProvider({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || cubismReadyRef.current) return;
+    if (!canvas || cubismReadyRef.current || !isActive) return;
 
-    // Wait until the canvas has a real layout size before initialising
-    // Cubism / WebGL. Cold-start on Tauri can mount the canvas before the
-    // first layout pass, so clientWidth/Height are still 0 — initialising
-    // WebGL then leaves getParameter() returning null for some queries
-    // (notably COLOR_WRITEMASK), which poisons RendererProfile_WebGL.save()
-    // and crashes every subsequent draw with `Cannot read properties of
-    // null (reading '0')`. ResizeObserver in CubismFrameworkInit picks up
-    // the real size later.
+    // Only attempt init when the page is active (visible). The canvas is
+    // always mounted but has zero size when the tools page is hidden.
     let cancelled = false;
     const tryInit = () => {
       if (cancelled || cubismReadyRef.current) return;
@@ -940,13 +936,16 @@ export function EditorProvider({
         requestAnimationFrame(tryInit);
         return;
       }
-      CubismInit.initialize(canvas);
-      CubismInit.resize();
-      cubismReadyRef.current = true;
-      setCanvasReady(true);
+      try {
+        CubismInit.initialize(canvas);
+        CubismInit.resize();
+        cubismReadyRef.current = true;
+        setCanvasReady(true);
+        debugLogRef.current?.('[Live2D] CubismFramework 初始化成功', 'system');
+      } catch (e) {
+        debugLogRef.current?.(`[Live2D] CubismFramework 初始化失败: ${String(e)}`, 'stderr');
+      }
 
-      // When WebGL context is restored after loss (sleep/wake, GPU reset),
-      // reload the model so textures and buffers are re-uploaded.
       CubismInit.onContextRestored(() => {
         const currentPath = modelPathRef.current;
         if (currentPath) {
@@ -960,23 +959,17 @@ export function EditorProvider({
       cancelled = true;
       CubismInit.clearContextCallbacks();
     };
-  }, []);
+  }, [isActive]);
 
   // ── Animation loop ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    let initWaitFrames = 0;
     const loop = (now: number) => {
       const dt = lastTimeRef.current ? Math.min((now - lastTimeRef.current) / 1000, 0.05) : 0.016;
       lastTimeRef.current = now;
 
       try {
         if (!CubismInit.isInitialized) {
-          initWaitFrames++;
-          if (initWaitFrames === 300) {
-            console.warn('[Live2D] CubismFramework still not initialized after ~5s');
-            debugLogRef.current?.('[Live2D] CubismFramework 初始化超时，请检查 WebGL 是否可用', 'stderr');
-          }
           rafRef.current = requestAnimationFrame(loop);
           return;
         }
