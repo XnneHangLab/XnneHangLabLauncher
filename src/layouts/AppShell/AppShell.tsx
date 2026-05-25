@@ -84,7 +84,7 @@ export function AppShell() {
       try {
         listManagedFolders()
           .then((paths) => { if (!disposed) setFolders(buildFolderItemsFromPaths(paths)); })
-          .catch(() => {});
+          .catch((e) => { console.warn('[AppShell] listManagedFolders failed, will retry on backend status change:', e); });
 
         listModelStatuses()
           .then((statuses) => { if (!disposed) setModelStatuses(statuses); })
@@ -174,6 +174,10 @@ export function AppShell() {
           ...current,
           createConsoleLog('system', '后端进程已退出'),
         ]);
+        // Re-fetch folder cards in case the initial load failed
+        listManagedFolders()
+          .then((paths) => { if (!disposed) setFolders(buildFolderItemsFromPaths(paths)); })
+          .catch(() => {});
       }
     })
       .then((cleanup) => {
@@ -507,6 +511,10 @@ export function AppShell() {
     setInspection(null);
     setFolders([]);
     setTasks([]);
+    // Re-fetch folders for the new workspace
+    listManagedFolders()
+      .then((paths) => setFolders(buildFolderItemsFromPaths(paths)))
+      .catch(() => {});
   }
 
   async function handleChooseWorkspaceRoot() {
