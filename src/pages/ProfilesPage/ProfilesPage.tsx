@@ -545,10 +545,6 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
             <input className="proxy-input" value={character.human_name ?? ''}
               onChange={e => setCharacter({ human_name: e.target.value })} />
           </SettingRow>
-          <SettingRow name="default_expression_emotion" description="默认情绪标签">
-            <input className="proxy-input" value={character.default_expression_emotion ?? ''}
-              onChange={e => setCharacter({ default_expression_emotion: e.target.value })} />
-          </SettingRow>
         </SettingCard>
 
         {/* ── TTS / Voice ── */}
