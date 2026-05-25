@@ -19,9 +19,10 @@ const TOOLS: ToolDef[] = [
 
 interface ToolsPageProps {
   onDebugLog?: (text: string, kind?: ConsoleLogEntry['kind']) => void;
+  isActive?: boolean;
 }
 
-export function ToolsPage({ onDebugLog }: ToolsPageProps) {
+export function ToolsPage({ onDebugLog, isActive = false }: ToolsPageProps) {
   const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
     return window.localStorage.getItem('live2d.activeTool') === 'live2d' ? 'live2d' : null;
   });
@@ -32,7 +33,7 @@ export function ToolsPage({ onDebugLog }: ToolsPageProps) {
   }, [activeTool]);
 
   if (activeTool === 'live2d') {
-    return <Live2DPreviewTool onBack={() => setActiveTool(null)} onDebugLog={onDebugLog} />;
+    return <Live2DPreviewTool onBack={() => setActiveTool(null)} onDebugLog={onDebugLog} isActive={isActive} />;
   }
 
   return (

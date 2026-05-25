@@ -674,7 +674,7 @@ export function AppShell() {
               className={`page-layer page-layer--tools${activePage === 'tools' ? ' page-layer--active' : ''}`}
               aria-hidden={activePage !== 'tools'}
             >
-              <ToolsPage onDebugLog={handleLive2DDebugLog} />
+              <ToolsPage onDebugLog={handleLive2DDebugLog} isActive={activePage === 'tools'} />
             </div>
             {activePage !== 'tools' && (
               <div className="page-layer page-layer--active">

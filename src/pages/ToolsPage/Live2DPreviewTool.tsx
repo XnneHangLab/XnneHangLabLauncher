@@ -10,11 +10,12 @@ import { Live2DErrorDialog } from './Live2DErrorDialog';
 interface Live2DPreviewToolProps {
   onBack: () => void;
   onDebugLog?: (text: string, kind?: ConsoleLogEntry['kind']) => void;
+  isActive?: boolean;
 }
 
-export function Live2DPreviewTool({ onBack, onDebugLog }: Live2DPreviewToolProps) {
+export function Live2DPreviewTool({ onBack, onDebugLog, isActive }: Live2DPreviewToolProps) {
   return (
-    <EditorProvider onDebugLog={onDebugLog}>
+    <EditorProvider onDebugLog={onDebugLog} isActive={isActive}>
       <Live2DToolInner onBack={onBack} />
     </EditorProvider>
   );
