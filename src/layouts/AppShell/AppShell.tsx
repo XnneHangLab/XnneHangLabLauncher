@@ -21,6 +21,8 @@ import {
   openManagedPath,
   pickPythonPath,
   probeEnvironment,
+  stopFrontend,
+  stopWebui,
   setRuntimeDriver as setRuntimeDriverApi,
   subscribeFrontendStatus,
   subscribeRuntimeEvents,
@@ -635,6 +637,32 @@ export function AppShell() {
     }
   }
 
+  async function handleStopWebui() {
+    try {
+      setLogs((current) => [...current, createConsoleLog('system', '正在停止后端…')]);
+      await stopWebui();
+      setLogs((current) => [...current, createConsoleLog('system', '后端停止指令已发送')]);
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', `停止后端失败: ${toErrorMessage(error)}`),
+      ]);
+    }
+  }
+
+  async function handleStopFrontend() {
+    try {
+      setLogs((current) => [...current, createConsoleLog('system', '正在停止前端…')]);
+      await stopFrontend();
+      setLogs((current) => [...current, createConsoleLog('system', '前端停止指令已发送')]);
+    } catch (error) {
+      setLogs((current) => [
+        ...current,
+        createConsoleLog('stderr', `停止前端失败: ${toErrorMessage(error)}`),
+      ]);
+    }
+  }
+
   async function handleSaveLabConfig(config: LabConfig) {
     try {
       await writeLabConfig(config);
@@ -709,8 +737,10 @@ export function AppShell() {
                   modelStatuses,
                   onOpenPath: handleOpenManagedPath,
                   onLaunchWebui: handleLaunchWebui,
+                  onStopWebui: handleStopWebui,
                   webuiRunning,
                   onLaunchFrontend: handleLaunchFrontend,
+                  onStopFrontend: handleStopFrontend,
                   frontendRunning,
                   runtimeDriver,
                   runtimeMode,

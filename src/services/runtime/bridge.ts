@@ -64,6 +64,14 @@ export function launchFrontend() {
   return invoke<void>('launch_frontend');
 }
 
+export function stopWebui() {
+  return invoke<void>('stop_webui');
+}
+
+export function stopFrontend() {
+  return invoke<void>('stop_frontend');
+}
+
 export async function subscribeWebuiStatus(onStatus: (status: string) => void) {
   return listen<string>('webui:status', (event) => {
     onStatus(event.payload);
