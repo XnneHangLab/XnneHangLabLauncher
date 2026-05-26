@@ -378,6 +378,44 @@ pub async fn launch_frontend(
     .await
 }
 
+#[tauri::command]
+pub async fn stop_webui(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let runtime_state = RuntimeState {
+        repo_root: state.repo_root.clone(),
+        workspace_root: state.workspace_root.clone(),
+        queue: state.queue.clone(),
+        driver_config: state.driver_config.clone(),
+        webui: state.webui.clone(),
+        frontend: state.frontend.clone(),
+    };
+    run_blocking_runtime_action(move || {
+        cleanup_webui_processes(&app, &runtime_state).map(|_| ())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stop_frontend(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let runtime_state = RuntimeState {
+        repo_root: state.repo_root.clone(),
+        workspace_root: state.workspace_root.clone(),
+        queue: state.queue.clone(),
+        driver_config: state.driver_config.clone(),
+        webui: state.webui.clone(),
+        frontend: state.frontend.clone(),
+    };
+    run_blocking_runtime_action(move || {
+        cleanup_frontend_processes(&app, &runtime_state).map(|_| ())
+    })
+    .await
+}
+
 fn validate_download_target(target: &str) -> Result<(&'static str, &'static str), String> {
     match target {
         "genie-base" => Ok(("genie-base", "GenieData 基础资源")),

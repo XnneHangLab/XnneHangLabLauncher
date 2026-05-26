@@ -39,6 +39,8 @@ pub fn run() {
             runtime::commands::pick_python_path_command,
             runtime::commands::launch_webui,
             runtime::commands::launch_frontend,
+            runtime::commands::stop_webui,
+            runtime::commands::stop_frontend,
             runtime::config::read_lab_config,
             runtime::config::write_lab_config,
             runtime::config::fetch_model_list,

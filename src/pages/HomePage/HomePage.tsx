@@ -10,8 +10,10 @@ interface HomePageProps {
   onOpenPath: (pathKey: string) => void;
   onOpenModels: () => void;
   onLaunchWebui: () => void;
+  onStopWebui: () => void;
   webuiRunning: boolean;
   onLaunchFrontend: () => void;
+  onStopFrontend: () => void;
   frontendRunning: boolean;
 }
 
@@ -20,8 +22,10 @@ export function HomePage({
   onOpenPath,
   onOpenModels,
   onLaunchWebui,
+  onStopWebui,
   webuiRunning,
   onLaunchFrontend,
+  onStopFrontend,
   frontendRunning,
 }: HomePageProps) {
   return (
@@ -44,8 +48,10 @@ export function HomePage({
           notices={notices}
           onOpenModels={onOpenModels}
           onLaunchWebui={onLaunchWebui}
+          onStopWebui={onStopWebui}
           webuiRunning={webuiRunning}
           onLaunchFrontend={onLaunchFrontend}
+          onStopFrontend={onStopFrontend}
           frontendRunning={frontendRunning}
         />
       </div>

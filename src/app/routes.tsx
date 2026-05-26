@@ -43,8 +43,10 @@ interface RenderPageOptions {
   modelStatuses: Record<string, string>;
   onOpenPath: (pathKey: string) => void;
   onLaunchWebui: () => void;
+  onStopWebui: () => void;
   webuiRunning: boolean;
   onLaunchFrontend: () => void;
+  onStopFrontend: () => void;
   frontendRunning: boolean;
   runtimeDriver: RuntimeDriver;
   runtimeMode: string;
@@ -77,8 +79,10 @@ export function renderPage(
           onOpenPath={options.onOpenPath}
           onOpenModels={options.onOpenModels}
           onLaunchWebui={options.onLaunchWebui}
+          onStopWebui={options.onStopWebui}
           webuiRunning={options.webuiRunning}
           onLaunchFrontend={options.onLaunchFrontend}
+          onStopFrontend={options.onStopFrontend}
           frontendRunning={options.frontendRunning}
         />
       );
