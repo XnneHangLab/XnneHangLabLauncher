@@ -741,6 +741,78 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
   );
 }
 
+// ── Character Status Panel ────────────────────────────────────────────────────
+
+function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
+  profileId: string;
+  characterName: string;
+  avatarAbsPath: string | null;
+}) {
+  return (
+    <div className="status-panel">
+      <div className="status-grid">
+        {/* Row 1 */}
+        <div className="status-card status-card--character">
+          <div className="status-card-header">角色状态</div>
+          <div className="status-card-body status-card-body--center">
+            {avatarAbsPath ? (
+              <img className="status-avatar-img" src={convertFileSrc(avatarAbsPath)} alt={characterName} />
+            ) : (
+              <div className="status-avatar-placeholder">{(characterName || profileId)[0]?.toUpperCase()}</div>
+            )}
+            <div className="status-character-name">{characterName || profileId}</div>
+            <span className="status-mood-badge">平静</span>
+          </div>
+          <div className="status-footer-row">
+            <div className="status-footer-item"><span className="status-footer-label">位置</span><span className="status-footer-value">自动获取</span></div>
+            <div className="status-footer-item"><span className="status-footer-label">活动</span><span className="status-footer-value">待机</span></div>
+            <div className="status-footer-item"><span className="status-footer-label">时段</span><span className="status-footer-value">—</span></div>
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="status-card-header">实时天气</div>
+          <div className="status-card-body">
+            <div className="status-weather-placeholder">需要配置地区</div>
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="status-card-header">运行时</div>
+          <div className="status-card-body">
+            <div className="status-kv-row"><span className="status-kv-label">心情分</span><span className="status-kv-value status-kv-value--muted">需要后端运行</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">对话轮次</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">主动发言</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+          </div>
+        </div>
+
+        {/* Row 2 */}
+        <div className="status-card">
+          <div className="status-card-header">性格测试</div>
+          <div className="status-card-body">
+            <div className="status-kv-row"><span className="status-kv-label">MBTI</span><span className="status-kv-value status-kv-value--muted">未测试</span></div>
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="status-card-header">近期事件</div>
+          <div className="status-card-body">
+            <div className="status-weather-placeholder">暂无记录</div>
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="status-card-header">社交状态</div>
+          <div className="status-card-body">
+            <div className="status-kv-row"><span className="status-kv-label">关系满意度</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">关系趋势</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Profiles page ─────────────────────────────────────────────────────────────
 
 export function ProfilesPage() {
@@ -750,6 +822,7 @@ export function ProfilesPage() {
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState('');
   const [showNewInput, setShowNewInput] = useState(false);
+  const [profileTab, setProfileTab] = useState<'config' | 'status'>('config');
   const [error, setError] = useState('');
   const [labConfig, setLabConfig] = useState<LabConfig | null>(null);
 
@@ -884,7 +957,22 @@ export function ProfilesPage() {
         {error && <span className="profile-error">{error}</span>}
       </div>
 
-      {activeConfig && selectedFile ? (
+      {selectedFile && (
+        <div className="profile-tab-bar">
+          <button type="button"
+            className={`profile-tab${profileTab === 'config' ? ' profile-tab--active' : ''}`}
+            onClick={() => setProfileTab('config')}>
+            配置
+          </button>
+          <button type="button"
+            className={`profile-tab${profileTab === 'status' ? ' profile-tab--active' : ''}`}
+            onClick={() => setProfileTab('status')}>
+            状态
+          </button>
+        </div>
+      )}
+
+      {profileTab === 'config' && activeConfig && selectedFile ? (
         <ProfileEditor
           file={selectedFile}
           config={activeConfig}
@@ -895,6 +983,12 @@ export function ProfilesPage() {
           saving={saving}
           avatarAbsPath={selectedMeta?.avatar_abs_path ?? null}
           activeProfileFile={activeProfileFile}
+        />
+      ) : profileTab === 'status' && selectedFile ? (
+        <CharacterStatusPanel
+          profileId={selectedFile}
+          characterName={selectedMeta?.character_name ?? ''}
+          avatarAbsPath={selectedMeta?.avatar_abs_path ?? null}
         />
       ) : (
         <div className="profiles-empty">
