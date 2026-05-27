@@ -848,18 +848,82 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
     mood_score: number | null;
     proactive_interval_s: number | null;
     weather?: { temperature: number; windspeed: number; description: string } | null;
+    weather_error?: string | null;
   } | null>(null);
+
+  const [mbtiResult, setMbtiResult] = useState<{
+    type: string;
+    description: string;
+    dimensions: Record<string, { dominant: string; strength: number; [k: string]: any }>;
+    answers: Array<{ question_id: number; choice: string; reasoning: string; question_text?: string; option_a?: string; option_b?: string }>;
+  } | null>(null);
+  const [mbtiTesting, setMbtiTesting] = useState(false);
+  const [mbtiError, setMbtiError] = useState('');
+
+  // Load MBTI result: try backend first, fallback to localStorage
+  useEffect(() => {
+    setMbtiResult(null);
+    setMbtiError('');
+    const cached = localStorage.getItem(`mbti_result_${profileId}`);
+    if (cached) {
+      try { setMbtiResult(JSON.parse(cached)); } catch {}
+    }
+    fetch('http://127.0.0.1:12393/mbti/result')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'completed' && data.result) {
+          setMbtiResult(data.result);
+          localStorage.setItem(`mbti_result_${profileId}`, JSON.stringify(data.result));
+        }
+      })
+      .catch(() => {});
+  }, [profileId]);
+
+  async function handleRunMbtiTest() {
+    setMbtiTesting(true);
+    setMbtiError('');
+    try {
+      const res = await fetch('http://127.0.0.1:12393/mbti/run', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        setMbtiError(data.error);
+      } else if (data.result) {
+        setMbtiResult(data.result);
+        localStorage.setItem(`mbti_result_${profileId}`, JSON.stringify(data.result));
+      }
+    } catch (e) {
+      setMbtiError('无法连接后端');
+    } finally {
+      setMbtiTesting(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
+    // Load cached weather for offline display
+    let cachedWeather: { temperature: number; windspeed: number; description: string } | null = null;
+    try {
+      const raw = localStorage.getItem(`weather_${profileId}`);
+      if (raw) cachedWeather = JSON.parse(raw);
+    } catch {}
+
     const poll = async () => {
       try {
         const res = await fetch('http://127.0.0.1:12393/status');
         if (res.ok && !cancelled) {
-          setStatus(await res.json());
+          const data = await res.json();
+          setStatus(data);
+          if (data.weather) {
+            localStorage.setItem(`weather_${profileId}`, JSON.stringify(data.weather));
+          }
         }
       } catch {
-        if (!cancelled) setStatus(null);
+        if (!cancelled) {
+          setStatus(cachedWeather
+            ? { online: false, mood_score: null, proactive_interval_s: null, weather: cachedWeather }
+            : null
+          );
+        }
       }
     };
     void poll();
@@ -969,7 +1033,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                 <div className="status-weather-time">{getTimeSlotIcon()} {getTimeSlot()}</div>
               </>
             ) : (
-              <div className="status-weather-placeholder">{online ? '未配置位置' : '离线'}</div>
+              <div className="status-weather-placeholder">{online ? (status?.weather_error || '未配置位置') : '离线'}</div>
             )}
           </div>
         </div>
@@ -978,7 +1042,66 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
         <div className="status-card">
           <div className="status-card-header">性格测试</div>
           <div className="status-card-body">
-            <div className="status-kv-row"><span className="status-kv-label">MBTI</span><span className="status-kv-value status-kv-value--muted">未测试</span></div>
+            {mbtiResult ? (
+              <>
+                <div className="mbti-result-hero">
+                  <span className="mbti-type">{mbtiResult.type}</span>
+                  <span className="mbti-desc">{mbtiResult.description}</span>
+                </div>
+                <div className="mbti-dimensions">
+                  {Object.entries(mbtiResult.dimensions).map(([key, dim]) => {
+                    const left = key[0];
+                    const right = key[1];
+                    const leftScore = dim[left] ?? 0;
+                    const rightScore = dim[right] ?? 0;
+                    const total = leftScore + rightScore || 7;
+                    const leftPct = Math.round((leftScore / total) * 100);
+                    return (
+                      <div key={key} className="mbti-dim-row">
+                        <span className="mbti-dim-pole">{left}</span>
+                        <div className="mbti-dim-bar">
+                          <div className="mbti-dim-bar-left" style={{ width: `${leftPct}%` }} />
+                          <div className="mbti-dim-bar-right" style={{ width: `${100 - leftPct}%` }} />
+                        </div>
+                        <span className="mbti-dim-pole">{right}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {mbtiResult.answers && mbtiResult.answers.length > 0 && (
+                  <details className="mbti-answers-detail">
+                    <summary className="mbti-answers-summary">查看每题详情 ({mbtiResult.answers.length} 题)</summary>
+                    <div className="mbti-answers-list">
+                      {mbtiResult.answers.map((ans, i) => (
+                        <div key={i} className="mbti-answer-item">
+                          <div className="mbti-answer-header">
+                            <span className="mbti-answer-id">Q{ans.question_id}</span>
+                            <span className="mbti-answer-question">{ans.question_text || ''}</span>
+                          </div>
+                          <div className="mbti-answer-body">
+                            <span className="mbti-answer-choice">{ans.choice.toUpperCase()}: {ans.choice === 'a' ? ans.option_a : ans.option_b}</span>
+                          </div>
+                          {ans.reasoning && <div className="mbti-answer-reason">{ans.reasoning}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                <button type="button" className="l2d-add-btn" onClick={handleRunMbtiTest} disabled={mbtiTesting}>
+                  {mbtiTesting ? '测试中…' : '重新测试'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="status-kv-row">
+                  <span className="status-kv-label">MBTI</span>
+                  <span className="status-kv-value status-kv-value--muted">{mbtiError || '未测试'}</span>
+                </div>
+                <button type="button" className="l2d-add-btn" onClick={handleRunMbtiTest} disabled={mbtiTesting || !online}>
+                  {mbtiTesting ? '测试中…' : '开始测试'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
