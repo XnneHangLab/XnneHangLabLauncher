@@ -15,6 +15,9 @@ export interface ProfileConfig {
     character_name?: string;
     avatar?: string;
     human_name?: string;
+    location_city?: string;
+    location_lat?: number;
+    location_lng?: number;
     tts_preprocessor?: {
       remove_special_char?: boolean;
       ignore_brackets?: boolean;

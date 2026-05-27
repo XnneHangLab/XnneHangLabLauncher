@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SettingCard } from '../../components/settings/SettingCard/SettingCard';
 import { SettingRow } from '../../components/settings/SettingRow/SettingRow';
@@ -547,6 +547,17 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
           </SettingRow>
         </SettingCard>
 
+        {/* ── Location ── */}
+        <div className="group-title">位置</div>
+        <SettingCard>
+          <SettingRow name="城市" description="用于天气查询，输入后从列表选择">
+            <LocationPicker
+              city={character.location_city ?? ''}
+              onSelect={(city, lat, lng) => setCharacter({ location_city: city, location_lat: lat, location_lng: lng })}
+            />
+          </SettingRow>
+        </SettingCard>
+
         {/* ── TTS / Voice ── */}
         <div className="group-title">语音</div>
         <SettingCard>
@@ -741,6 +752,90 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
   );
 }
 
+// ── Location Picker ───────────────────────────────────────────────────────────
+
+import cities from '../../data/cities.json';
+
+function LocationPicker({ city, onSelect }: {
+  city: string;
+  onSelect: (city: string, lat: number, lng: number) => void;
+}) {
+  const [input, setInput] = useState(city);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = input.trim()
+    ? cities.filter(c => c.name.includes(input.trim())).slice(0, 8)
+    : [];
+
+  function handleSelect(c: { name: string; lat: number; lng: number }) {
+    setInput(c.name);
+    setShowDropdown(false);
+    onSelect(c.name, c.lat, c.lng);
+  }
+
+  async function handleIpLocate() {
+    setLocating(true);
+    try {
+      const res = await fetch('http://ip-api.com/json/?fields=city,lat,lon&lang=zh-CN');
+      if (!res.ok) throw new Error('请求失败');
+      const data = await res.json();
+      const matched = cities.find(c => data.city?.includes(c.name) || c.name.includes(data.city ?? ''));
+      if (matched) {
+        handleSelect(matched);
+      } else if (data.lat && data.lon) {
+        setInput(data.city || '未知');
+        onSelect(data.city || '未知', data.lat, data.lon);
+        setShowDropdown(false);
+      } else {
+        setInput('定位失败');
+      }
+    } catch {
+      setInput('无法访问定位服务');
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  return (
+    <div className="location-picker">
+      <div className="location-input-wrap">
+        <input
+          ref={inputRef}
+          className={`proxy-input${input.trim() && !cities.some(c => c.name === input.trim()) && city !== input.trim() ? ' location-input--unmatched' : ''}`}
+          value={input}
+          placeholder="输入城市名搜索"
+          onChange={e => { setInput(e.target.value); setShowDropdown(true); }}
+          onFocus={() => { if (input.trim()) setShowDropdown(true); }}
+          onBlur={() => {
+            setTimeout(() => setShowDropdown(false), 200);
+            const exact = cities.find(c => c.name === input.trim());
+            if (exact && exact.name !== city) {
+              handleSelect(exact);
+            }
+          }}
+        />
+        <button type="button" className="location-locate-btn" onClick={handleIpLocate} disabled={locating} title="IP 自动定位">
+          {locating ? '…' : '⊕'}
+        </button>
+      </div>
+      {showDropdown && filtered.length > 0 && inputRef.current && (() => {
+        const rect = inputRef.current!.getBoundingClientRect();
+        return (
+          <div className="location-dropdown" style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width }}>
+            {filtered.map(c => (
+              <button key={c.name} type="button" className="location-option" onMouseDown={() => handleSelect(c)}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ── Character Status Panel ────────────────────────────────────────────────────
 
 function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
@@ -748,6 +843,78 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
   characterName: string;
   avatarAbsPath: string | null;
 }) {
+  const [status, setStatus] = useState<{
+    online: boolean;
+    mood_score: number | null;
+    proactive_interval_s: number | null;
+    weather?: { temperature: number; windspeed: number; description: string } | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:12393/status');
+        if (res.ok && !cancelled) {
+          setStatus(await res.json());
+        }
+      } catch {
+        if (!cancelled) setStatus(null);
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
+
+  const online = status?.online ?? false;
+  const moodScore = status?.mood_score;
+  const proactiveInterval = status?.proactive_interval_s;
+
+  const getTimeSlot = () => {
+    const hour = new Date().getHours();
+    if (hour < 6) return '凌晨';
+    if (hour < 12) return '上午';
+    if (hour < 14) return '中午';
+    if (hour < 18) return '下午';
+    if (hour < 22) return '晚上';
+    return '深夜';
+  };
+
+  const getMoodLabel = (score: number) => {
+    if (score >= 90) return '兴奋';
+    if (score >= 80) return '愉快';
+    if (score >= 60) return '平静';
+    if (score >= 40) return '低落';
+    return '消沉';
+  };
+
+  const formatInterval = (s: number) => {
+    if (s < 60) return `${s.toFixed(0)}s`;
+    return `${(s / 60).toFixed(1)}min`;
+  };
+
+  const getWeatherIcon = (desc: string) => {
+    if (desc.includes('雷')) return '⛈️';
+    if (desc.includes('雪')) return '🌨️';
+    if (desc.includes('雨')) return '🌧️';
+    if (desc.includes('雾')) return '🌫️';
+    if (desc.includes('阴')) return '☁️';
+    if (desc.includes('多云')) return '⛅';
+    if (desc.includes('晴')) return '☀️';
+    return '🌤️';
+  };
+
+  const getTimeSlotIcon = () => {
+    const hour = new Date().getHours();
+    if (hour < 6) return '🌙';
+    if (hour < 12) return '🌅';
+    if (hour < 14) return '☀️';
+    if (hour < 18) return '🌤️';
+    if (hour < 22) return '🌆';
+    return '🌙';
+  };
+
   return (
     <div className="status-panel">
       <div className="status-grid">
@@ -761,28 +928,49 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
               <div className="status-avatar-placeholder">{(characterName || profileId)[0]?.toUpperCase()}</div>
             )}
             <div className="status-character-name">{characterName || profileId}</div>
-            <span className="status-mood-badge">平静</span>
+            <span className={`status-mood-badge${!online ? ' status-mood-badge--offline' : ''}`}>
+              {online && moodScore != null ? getMoodLabel(moodScore) : '离线'}
+            </span>
           </div>
           <div className="status-footer-row">
-            <div className="status-footer-item"><span className="status-footer-label">位置</span><span className="status-footer-value">自动获取</span></div>
-            <div className="status-footer-item"><span className="status-footer-label">活动</span><span className="status-footer-value">待机</span></div>
-            <div className="status-footer-item"><span className="status-footer-label">时段</span><span className="status-footer-value">—</span></div>
-          </div>
-        </div>
-
-        <div className="status-card">
-          <div className="status-card-header">实时天气</div>
-          <div className="status-card-body">
-            <div className="status-weather-placeholder">需要配置地区</div>
+            <div className="status-footer-item"><span className="status-footer-label">时段</span><span className="status-footer-value">{getTimeSlot()}</span></div>
+            <div className="status-footer-item"><span className="status-footer-label">状态</span><span className="status-footer-value">{online ? '在线' : '离线'}</span></div>
           </div>
         </div>
 
         <div className="status-card">
           <div className="status-card-header">运行时</div>
           <div className="status-card-body">
-            <div className="status-kv-row"><span className="status-kv-label">心情分</span><span className="status-kv-value status-kv-value--muted">需要后端运行</span></div>
-            <div className="status-kv-row"><span className="status-kv-label">对话轮次</span><span className="status-kv-value status-kv-value--muted">—</span></div>
-            <div className="status-kv-row"><span className="status-kv-label">主动发言</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+            <div className="status-kv-row">
+              <span className="status-kv-label">心情分</span>
+              <span className={`status-kv-value${!online ? ' status-kv-value--muted' : ''}`}>
+                {online && moodScore != null ? `${moodScore}/100` : '离线'}
+              </span>
+            </div>
+            <div className="status-kv-row">
+              <span className="status-kv-label">主动发言间隔</span>
+              <span className={`status-kv-value${!online ? ' status-kv-value--muted' : ''}`}>
+                {online && proactiveInterval != null ? formatInterval(proactiveInterval) : online ? '已禁用' : '离线'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="status-card">
+          <div className="status-card-header">实时天气</div>
+          <div className="status-card-body">
+            {status?.weather ? (
+              <>
+                <div className="status-weather-hero">
+                  <span className="status-weather-icon">{getWeatherIcon(status.weather.description)}</span>
+                  <span className="status-weather-temp">{status.weather.temperature}°C</span>
+                </div>
+                <div className="status-weather-desc">{status.weather.description}，风速 {status.weather.windspeed} km/h</div>
+                <div className="status-weather-time">{getTimeSlotIcon()} {getTimeSlot()}</div>
+              </>
+            ) : (
+              <div className="status-weather-placeholder">{online ? '未配置位置' : '离线'}</div>
+            )}
           </div>
         </div>
 
