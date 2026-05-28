@@ -30,9 +30,7 @@ export const heroConfetti: HeroConfettiPiece[] = [
   { top: '178px', left: '76%', color: '#72a7ff', rotate: '-32deg', width: '18px' },
 ];
 
-export const versionMeta = [
-  '启动器版本：绘心启动器 0.1.0',
-];
+export const versionMeta: string[] = [];
 
 export const notices = [
   '绘心是 XnneHangLab 正在持续迭代的启动器产品，也会沉淀为可复用模板，后续会逐步扩展到语音、模型管理与控制台能力。',

@@ -1446,3 +1446,105 @@
   padding-left: 28px;
   font-style: italic;
 }
+
+/* ── Status events ── */
+.status-events-body {
+  gap: 4px !important;
+  padding: 8px !important;
+}
+
+.status-event-card {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.status-event-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.status-event-summary:hover {
+  background: rgba(52, 155, 255, 0.04);
+}
+
+.status-event-date {
+  color: var(--muted);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.status-event-title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.status-event-detail {
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-event-line {
+  font-size: 11px;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.status-event-line--user {
+  color: #5ab4ff;
+  background: rgba(52, 155, 255, 0.06);
+}
+
+.status-event-line--ai {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.06);
+}
+
+/* ── Social chart ── */
+.status-social-chart {
+  margin-top: 8px;
+}
+
+.status-social-svg {
+  width: 100%;
+  height: 40px;
+}
+
+.status-social-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.status-social-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.status-social-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-card-hint {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 0.7;
+  margin-left: 6px;
+}

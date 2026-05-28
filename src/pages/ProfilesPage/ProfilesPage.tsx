@@ -1106,17 +1106,93 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
         </div>
 
         <div className="status-card">
-          <div className="status-card-header">近期事件</div>
-          <div className="status-card-body">
-            <div className="status-weather-placeholder">暂无记录</div>
+          <div className="status-card-header">近期事件 <span className="status-card-hint">最近一次更新 05-28</span></div>
+          <div className="status-card-body status-events-body">
+            <details className="status-event-card">
+              <summary className="status-event-summary">
+                <span className="status-event-date">05-28</span>
+                <span className="status-event-title">完成 MBTI 性格测试</span>
+              </summary>
+              <div className="status-event-detail">
+                <p className="status-event-line status-event-line--ai">我可是社交小达人，人多热闹才开心！</p>
+                <p className="status-event-line status-event-line--ai">直觉有时候比事实更准，我相信自己的灵感闪光</p>
+                <p className="status-event-line status-event-line--ai">测试结果：ENFP — 竞选者</p>
+              </div>
+            </details>
+            <details className="status-event-card">
+              <summary className="status-event-summary">
+                <span className="status-event-date">05-27</span>
+                <span className="status-event-title">讨论天气功能和城市定位</span>
+              </summary>
+              <div className="status-event-detail">
+                <p className="status-event-line status-event-line--user">帮我看看厦门现在天气怎么样</p>
+                <p className="status-event-line status-event-line--ai">我看看～厦门现在 28°C，多云，风速不大，适合出门逛逛！</p>
+              </div>
+            </details>
+            <details className="status-event-card">
+              <summary className="status-event-summary">
+                <span className="status-event-date">05-26</span>
+                <span className="status-event-title">一起调试造型切换</span>
+              </summary>
+              <div className="status-event-detail">
+                <p className="status-event-line status-event-line--user">你可以换一身清爽的造型吗，现在大夏天的</p>
+                <p className="status-event-line status-event-line--ai">好呀好呀，大夏天的确实热！让我看看都有什么造型可以换</p>
+                <p className="status-event-line status-event-line--ai">已经切换到清凉发型啦～一侧马尾短刘海，很适合夏天！</p>
+              </div>
+            </details>
+            <details className="status-event-card">
+              <summary className="status-event-summary">
+                <span className="status-event-date">05-26</span>
+                <span className="status-event-title">主动搭话，观察用户工作</span>
+              </summary>
+              <div className="status-event-detail">
+                <p className="status-event-line status-event-line--ai">哇哦～原来你正在写代码呢！我看到什么 background-files 图片缓存啦</p>
+                <p className="status-event-line status-event-line--ai">那个 ASR is disabled 是语音识别相关的报错吗？你打算顺手修掉它？</p>
+                <p className="status-event-line status-event-line--user">对，我先把 ASR 的问题处理一下</p>
+                <p className="status-event-line status-event-line--ai">好嘞，加油！有什么需要帮忙的随时叫我～</p>
+              </div>
+            </details>
+            <details className="status-event-card">
+              <summary className="status-event-summary">
+                <span className="status-event-date">05-25</span>
+                <span className="status-event-title">聊日常，讨论作息</span>
+              </summary>
+              <div className="status-event-detail">
+                <p className="status-event-line status-event-line--user">你觉得凌晨两点还在写代码正常吗</p>
+                <p className="status-event-line status-event-line--ai">不正常！你快去睡觉！明天再写也来得及的</p>
+                <p className="status-event-line status-event-line--ai">虽然我不用睡觉，但看你熬夜我也会担心的好吗</p>
+              </div>
+            </details>
           </div>
         </div>
 
         <div className="status-card">
           <div className="status-card-header">社交状态</div>
           <div className="status-card-body">
-            <div className="status-kv-row"><span className="status-kv-label">关系满意度</span><span className="status-kv-value status-kv-value--muted">—</span></div>
-            <div className="status-kv-row"><span className="status-kv-label">关系趋势</span><span className="status-kv-value status-kv-value--muted">—</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">关系满意度</span><span className="status-kv-value" style={{color: '#34d399'}}>85%</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">关系趋势</span><span className="status-kv-value">→ 稳定上升</span></div>
+            <div className="status-kv-row"><span className="status-kv-label">互动频率</span><span className="status-kv-value">高</span></div>
+            <div className="status-social-chart">
+              <svg viewBox="0 0 200 60" className="status-social-svg">
+                <polyline
+                  fill="none"
+                  stroke="#a78bfa"
+                  strokeWidth="2"
+                  points="0,50 30,45 60,40 90,35 120,30 150,25 180,20 200,15"
+                />
+                <polyline
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 2"
+                  points="0,40 30,38 60,35 90,32 120,28 150,22 180,18 200,12"
+                />
+              </svg>
+              <div className="status-social-legend">
+                <span className="status-social-legend-item"><span style={{background: '#a78bfa'}} className="status-social-dot" />亲密度</span>
+                <span className="status-social-legend-item"><span style={{background: '#34d399'}} className="status-social-dot" />信任度</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -127,3 +127,25 @@
   color: var(--muted);
   font-size: 16px;
 }
+
+/* ── Coming soon ── */
+.community-coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  border-radius: 16px;
+  border: 1px dashed var(--line);
+  margin-top: 16px;
+}
+
+.community-coming-soon__icon {
+  font-size: 28px;
+}
+
+.community-coming-soon__text {
+  font-size: 15px;
+  color: var(--muted);
+  font-weight: 500;
+}

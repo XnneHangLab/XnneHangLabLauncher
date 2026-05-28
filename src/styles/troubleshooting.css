@@ -1,59 +1,81 @@
 .troubleshooting-page {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 4px 2px 18px;
-  gap: 0;
+  padding: 24px 28px;
+  overflow-y: auto;
 }
 
 .troubleshooting-section-title {
-  margin: 10px 0 6px;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text);
+  margin: 0 0 4px;
 }
 
 .troubleshooting-desc {
-  margin: 0 0 18px;
-  color: var(--muted);
   font-size: 13px;
-  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 16px;
 }
 
-.troubleshooting-channels {
+.troubleshooting-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  margin-bottom: 28px;
 }
 
-.troubleshooting-channel {
-  padding: 5px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--elevated-card-border);
-  background: linear-gradient(160deg, var(--elevated-card-bg-start), var(--elevated-card-bg-end));
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: default;
-}
-
-.troubleshooting-sub-title {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  opacity: 0.7;
-}
-
-.troubleshooting-empty {
-  width: 100%;
-  padding: 28px 20px;
-  border-radius: 14px;
+.troubleshooting-card {
+  border-radius: 12px;
   border: 1px solid var(--line);
-  background: linear-gradient(160deg, var(--card-bg-start), var(--card-bg-end));
-  color: var(--muted);
+  background: linear-gradient(180deg, var(--card-bg-start), var(--card-bg-end));
+  overflow: hidden;
+  transition: border-color 0.14s;
+}
+
+.troubleshooting-card[open] {
+  border-color: rgba(52, 155, 255, 0.3);
+}
+
+.troubleshooting-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.troubleshooting-card__header:hover {
+  background: rgba(52, 155, 255, 0.03);
+}
+
+.troubleshooting-card__title {
   font-size: 13px;
-  text-align: center;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.troubleshooting-card__tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.troubleshooting-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  background: rgba(52, 155, 255, 0.1);
+  color: #5ab4ff;
+}
+
+.troubleshooting-card__body {
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.troubleshooting-card__body p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 10px 0 0;
 }
