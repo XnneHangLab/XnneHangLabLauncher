@@ -938,6 +938,8 @@ export function EditorProvider({
       }
       try {
         CubismInit.initialize(canvas);
+        const savedScale = localStorage.getItem('live2d_preview_render_scale');
+        if (savedScale) CubismInit.renderScale = Number(savedScale);
         CubismInit.resize();
         cubismReadyRef.current = true;
         setCanvasReady(true);

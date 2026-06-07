@@ -42,6 +42,28 @@
   white-space: nowrap;
 }
 
+.live2d-render-scale {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.live2d-scale-btn {
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--elevated-card-border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.live2d-scale-btn:hover { color: var(--text); }
+.live2d-scale-btn--active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .live2d-btn {
   padding: 5px 12px;
   border-radius: var(--radius);

@@ -10,6 +10,7 @@ class _CubismFrameworkInit {
   private _initialized = false;
   private _canvas: HTMLCanvasElement | null = null;
   private _resizeObserver: ResizeObserver | null = null;
+  private _renderScale = 1.0;
 
   /** Get the WebGL context (only valid after initialize()). */
   get gl(): WebGL2RenderingContext | WebGLRenderingContext {
@@ -117,22 +118,29 @@ class _CubismFrameworkInit {
     this._canvas = null;
   }
 
+  get renderScale(): number {
+    return this._renderScale;
+  }
+
+  set renderScale(scale: number) {
+    this._renderScale = Math.max(0.25, Math.min(1.0, scale));
+    this.resize(true);
+  }
+
   /**
    * Resize the viewport to match canvas display size.
    * Safe to call repeatedly — no-ops if dimensions are unchanged or zero.
    */
-  resize(): void {
+  resize(force = false): void {
     if (!this._canvas || !this._gl) return;
-    const w = Math.floor(this._canvas.clientWidth * window.devicePixelRatio);
-    const h = Math.floor(this._canvas.clientHeight * window.devicePixelRatio);
-    // Skip degenerate sizes — happens before the first layout pass.
-    // ResizeObserver will fire again with real dimensions once layout settles.
+    const dpr = Math.min(window.devicePixelRatio, 2) * this._renderScale;
+    const w = Math.floor(this._canvas.clientWidth * dpr);
+    const h = Math.floor(this._canvas.clientHeight * dpr);
     if (w === 0 || h === 0) return;
-    if (this._canvas.width !== w || this._canvas.height !== h) {
-      this._canvas.width = w;
-      this._canvas.height = h;
-      this._gl.viewport(0, 0, this._gl.drawingBufferWidth, this._gl.drawingBufferHeight);
-    }
+    if (!force && this._canvas.width === w && this._canvas.height === h) return;
+    this._canvas.width = w;
+    this._canvas.height = h;
+    this._gl.viewport(0, 0, this._gl.drawingBufferWidth, this._gl.drawingBufferHeight);
   }
 }
 
