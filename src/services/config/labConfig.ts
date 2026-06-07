@@ -57,12 +57,10 @@ export interface LabConfig {
       llm_provider: string;
       llm_model_name: string;
       support_vision: boolean;
-      reasoning: boolean;
     };
     vision_model: {
       llm_provider: string;
       llm_model_name: string;
-      reasoning: boolean;
     };
     prompts: {
       vision_prompt: string;

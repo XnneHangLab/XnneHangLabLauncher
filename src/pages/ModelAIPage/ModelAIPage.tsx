@@ -140,14 +140,12 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
       llm_provider: '',
       llm_model_name: '',
       support_vision: false,
-      reasoning: true,
     },
   );
   const [visionModel, setVisionModel] = useState(
     labConfig?.agent.vision_model ?? {
       llm_provider: '',
       llm_model_name: '',
-      reasoning: true,
     },
   );
   const [modelCache, setModelCache] = useState<Record<string, string[]>>({});
@@ -262,13 +260,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
             onChange={(next) => setChatModel({ ...chatModel, support_vision: next })}
           />
         </SettingRow>
-        <SettingRow name="推理模式" description="启用 thinking / reasoning 模式" icon="🧠">
-          <ToggleSwitch
-            label="推理模式"
-            checked={chatModel.reasoning}
-            onChange={(next) => setChatModel({ ...chatModel, reasoning: next })}
-          />
-        </SettingRow>
       </SettingCard>
 
       <div className="group-title">视觉模型</div>
@@ -286,13 +277,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
             value={visionModel.llm_model_name}
             onChange={(v) => setVisionModel({ ...visionModel, llm_model_name: v })}
             models={visionProviderModels}
-          />
-        </SettingRow>
-        <SettingRow name="推理模式" icon="🧠">
-          <ToggleSwitch
-            label="推理模式"
-            checked={visionModel.reasoning}
-            onChange={(next) => setVisionModel({ ...visionModel, reasoning: next })}
           />
         </SettingRow>
       </SettingCard>
