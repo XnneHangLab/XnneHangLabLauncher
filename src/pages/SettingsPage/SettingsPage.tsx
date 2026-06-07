@@ -233,9 +233,23 @@ export function SettingsPage({
                       ))}
                     </div>
                   </SettingRow>
+                  <SettingRow name="翻译引擎" description="用户语言与角色语言不同时的翻译方式">
+                    <div className="driver-select-wrap">
+                      {(['none', 'deeplx', 'llm'] as const).map((p) => (
+                        <button key={p} type="button"
+                          className={`driver-option${(labConfig.agent?.translate_provider ?? 'none') === p ? ' driver-option--active' : ''}`}
+                          onClick={() => onSaveLabConfig({
+                            ...labConfig,
+                            agent: { ...labConfig.agent, translate_provider: p },
+                            package: { ...labConfig.package, llm_translate: p === 'llm' },
+                          })}>
+                          {p === 'none' ? '关闭' : p === 'deeplx' ? 'DeepLX' : 'LLM 本地'}
+                        </button>
+                      ))}
+                    </div>
+                  </SettingRow>
                   {(
                     [
-                      ['llm_translate', 'LLM 翻译', '使用本地 GGUF 模型执行翻译'],
                       ['local_embedding', '本地向量嵌入', 'BGE-M3 GGUF 向量化，用于记忆搜索'],
                       ['memory_bench', 'Memory Bench', '记忆压测工具'],
                     ] as Array<[keyof LabConfig['package'], string, string]>
