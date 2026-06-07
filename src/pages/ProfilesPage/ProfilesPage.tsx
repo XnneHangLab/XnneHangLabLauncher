@@ -31,6 +31,7 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
   { id: 'memory', description: '长期记忆检索与写入' },
   { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
   { id: 'mood_chat', description: '主动发起情绪化对话' },
+  { id: 'visual_observer', description: '游戏陪伴模式下的后台视觉轮询与摘要' },
 ];
 
 type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'select';
@@ -53,6 +54,11 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'interval_low_s', type: 'number', description: '心情 >= 60 时的主动发言间隔（秒）', defaultValue: 120 },
     { key: 'mood_increase', type: 'number', description: '用户发言后增加的心情分', defaultValue: 5 },
     { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分', defaultValue: 10 },
+    { key: 'game_companion_mode', type: 'boolean', description: '启用游戏陪伴模式', defaultValue: false },
+    { key: 'game_mood_decrease', type: 'number', description: '游戏模式下超时扣除的心情分', defaultValue: 2 },
+    { key: 'game_interval_s', type: 'number', description: '游戏模式下检查视觉摘要的间隔（秒）', defaultValue: 1 },
+    { key: 'game_prompt_suffix', type: 'textarea', description: '游戏模式下追加到 prompt 的后缀', defaultValue: '根据视觉摘要简短评论，不超过两句话。不要提问。' },
+    { key: 'game_require_visual_change', type: 'boolean', description: '游戏模式下是否要求有视觉变化才发言', defaultValue: true },
   ],
   pre_tool_preview: [
     { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数', defaultValue: 30 },
@@ -80,6 +86,10 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'searxng_url', type: 'text', description: 'SearXNG 实例基础 URL，留空时插件不会注册', defaultValue: '' },
     { key: 'user_agent', type: 'text', description: '请求 SearXNG 时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
     { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）', defaultValue: 10.0 },
+  ],
+  visual_observer: [
+    { key: 'poll_interval_s', type: 'number', description: '截图轮询间隔（秒）', defaultValue: 8.0 },
+    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发摘要', defaultValue: 5 },
   ],
 };
 
@@ -860,6 +870,19 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
   const [mbtiTesting, setMbtiTesting] = useState(false);
   const [mbtiError, setMbtiError] = useState('');
 
+  const [voStatus, setVoStatus] = useState<{
+    online: boolean;
+    game_companion_active?: boolean;
+    active?: boolean;
+    total_captures?: number;
+    pending_diffs?: number;
+    pending_ocr_count?: number;
+    diff_buffer?: Array<Record<string, any>>;
+    latest_summary?: string | null;
+    visual_digest?: { text: string; frame_count: number; timestamp: number } | null;
+  } | null>(null);
+  const [voExpanded, setVoExpanded] = useState(false);
+
   // Load MBTI result: try backend first, fallback to localStorage
   useEffect(() => {
     setMbtiResult(null);
@@ -928,7 +951,21 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
     };
     void poll();
     const timer = setInterval(poll, 5000);
-    return () => { cancelled = true; clearInterval(timer); };
+
+    const pollVo = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:12393/status/visual-observer');
+        if (res.ok && !cancelled) {
+          setVoStatus(await res.json());
+        }
+      } catch {
+        if (!cancelled) setVoStatus(null);
+      }
+    };
+    void pollVo();
+    const voTimer = setInterval(pollVo, 3000);
+
+    return () => { cancelled = true; clearInterval(timer); clearInterval(voTimer); };
   }, []);
 
   const online = status?.online ?? false;
@@ -1106,9 +1143,101 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
         </div>
 
         <div className="status-card">
-          <div className="status-card-header">近期事件</div>
+          <div className="status-card-header">视觉观察</div>
           <div className="status-card-body">
-            <div className="status-weather-placeholder">暂无记录</div>
+            {voStatus?.active ? (
+              <>
+                <div className="status-kv-row">
+                  <span className="status-kv-label">模式</span>
+                  <span className="status-kv-value">{voStatus.game_companion_active ? '🎮 陪玩' : '正常'}</span>
+                </div>
+                <div className="status-kv-row">
+                  <span className="status-kv-label">截图数</span>
+                  <span className="status-kv-value">{voStatus.total_captures ?? 0}</span>
+                </div>
+                <div className="status-kv-row">
+                  <span className="status-kv-label">待处理 diff</span>
+                  <span className="status-kv-value">{voStatus.pending_diffs ?? 0} 帧 / {voStatus.pending_ocr_count ?? 0} OCR</span>
+                </div>
+                {voStatus.latest_summary && (
+                  <div className="status-kv-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                    <span className="status-kv-label">最近摘要</span>
+                    <span className="status-kv-value" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{voStatus.latest_summary}</span>
+                  </div>
+                )}
+                {voStatus.diff_buffer && voStatus.diff_buffer.length > 0 && (
+                  <details className="mbti-answers-detail" open={voExpanded} onToggle={(e) => setVoExpanded((e.target as HTMLDetailsElement).open)}>
+                    <summary className="mbti-answers-summary">帧间 diff 详情 ({voStatus.diff_buffer.length} 条)</summary>
+                    <div className="mbti-answers-list">
+                      {voStatus.diff_buffer.map((d, i) => (
+                        <div key={i} className="mbti-answer-item">
+                          <div className="mbti-answer-header">
+                            <span className="mbti-answer-id">#{i + 1}</span>
+                            <span className="mbti-answer-question">{d.scene_change || '无场景变化'}</span>
+                          </div>
+                          {d.new_ocr?.length > 0 && (
+                            <div className="mbti-answer-body">
+                              <span className="mbti-answer-choice">OCR: {d.new_ocr.join(' | ')}</span>
+                            </div>
+                          )}
+                          {(d.entities_added?.length > 0 || d.entities_removed?.length > 0) && (
+                            <div className="mbti-answer-reason">
+                              {d.entities_added?.length > 0 && `+${d.entities_added.join(', ')} `}
+                              {d.entities_removed?.length > 0 && `-${d.entities_removed.join(', ')}`}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {(voStatus as any).session_history?.length > 0 && (
+                  <details className="mbti-answers-detail">
+                    <summary className="mbti-answers-summary">
+                      历史总结 ({(voStatus as any).session_history.length} 轮)
+                      <button
+                        type="button"
+                        className="l2d-add-btn"
+                        style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const text = JSON.stringify((voStatus as any).session_history, null, 2);
+                          navigator.clipboard.writeText(text);
+                        }}
+                      >复制 JSON</button>
+                    </summary>
+                    <div className="mbti-answers-list">
+                      {(voStatus as any).session_history.map((s: any, si: number) => (
+                        <div key={si} className="mbti-answer-item">
+                          <div className="mbti-answer-header">
+                            <span className="mbti-answer-id">轮 {si + 1}</span>
+                            <span className="mbti-answer-question" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                              {s.ocr_count} OCR · {s.diffs?.length ?? 0} diff
+                            </span>
+                          </div>
+                          <div className="mbti-answer-body">
+                            <span className="mbti-answer-choice" style={{ whiteSpace: 'pre-wrap' }}>{s.summary}</span>
+                          </div>
+                          {s.diffs?.length > 0 && (
+                            <details style={{ marginTop: 4 }}>
+                              <summary style={{ fontSize: 11, color: 'var(--muted)', cursor: 'pointer' }}>展开 {s.diffs.length} 条 diff</summary>
+                              {s.diffs.map((d: any, di: number) => (
+                                <div key={di} style={{ fontSize: 11, padding: '2px 0', borderTop: '1px solid var(--border)' }}>
+                                  <span style={{ fontWeight: 600 }}>#{di + 1}</span> {d.scene_change || '无场景变化'}
+                                  {d.new_ocr?.length > 0 && <div style={{ color: 'var(--muted)' }}>OCR: {d.new_ocr.join(' | ')}</div>}
+                                </div>
+                              ))}
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : (
+              <div className="status-weather-placeholder">{online ? '未启用' : '离线'}</div>
+            )}
           </div>
         </div>
 
