@@ -49,21 +49,6 @@ export function SpeechPanel({ labConfig, onSaveLabConfig }: SpeechPanelProps) {
           </div>
         </SettingRow>
 
-        <SettingRow name="ASR 引擎" description="sherpa 或 qwen_asr" icon="🎙">
-          <div className="driver-select-wrap">
-            {(['sherpa', 'qwen_asr'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={`driver-option${asr.asr_model_provider === p ? ' driver-option--active' : ''}`}
-                onClick={() => setAsr({ ...asr, asr_model_provider: p })}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </SettingRow>
-
         <SettingRow name="FFMPEG_PATH" description="ffmpeg 可执行文件路径或命令名" icon="🎬">
           <BrowsePath
             value={asr.FFMPEG_PATH}
