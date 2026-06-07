@@ -66,6 +66,21 @@ export function ServiceConfigPanel({ labConfig, onSaveLabConfig }: ServiceConfig
             ))}
           </div>
         </SettingRow>
+
+        <SettingRow name="Live2D 渲染比例" description="降低可减少 GPU 负载，0.5 即为半分辨率渲染" icon="🖼️">
+          <div className="driver-select-wrap">
+            {([0.25, 0.5, 0.75, 1.0] as const).map((scale) => (
+              <button
+                key={scale}
+                type="button"
+                className={`driver-option${(local.live2d_render_scale ?? 1.0) === scale ? ' driver-option--active' : ''}`}
+                onClick={() => setLocal({ ...local, live2d_render_scale: scale })}
+              >
+                {scale === 1.0 ? '1x' : `${scale}x`}
+              </button>
+            ))}
+          </div>
+        </SettingRow>
       </SettingCard>
 
       <div className="settings-save-row">

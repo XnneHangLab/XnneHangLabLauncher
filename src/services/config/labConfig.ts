@@ -102,6 +102,7 @@ export interface LabConfig {
     port: number;
     config_alts_dir: string;
     uvicorn_log_level: string;
+    live2d_render_scale: number;
   };
   memory_bench: {
     search_limit: number;
