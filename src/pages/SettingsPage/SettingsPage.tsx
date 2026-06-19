@@ -216,7 +216,11 @@ export function SettingsPage({
                       {(['none', 'gsv_lite', 'genie_tts', 'qwen_tts'] as const).map((p) => (
                         <button key={p} type="button"
                           className={`driver-option${(labConfig.agent.tts?.provider ?? 'genie_tts') === p ? ' driver-option--active' : ''}`}
-                          onClick={() => onSaveLabConfig({ ...labConfig, agent: { ...labConfig.agent, tts: { ...labConfig.agent.tts, provider: p } } })}>
+                          onClick={() => onSaveLabConfig({
+                            ...labConfig,
+                            agent: { ...labConfig.agent, tts: { ...labConfig.agent.tts, provider: p } },
+                            package: { ...labConfig.package, gsv_lite: p === 'gsv_lite', genie_tts: p === 'genie_tts', qwen_tts: p === 'qwen_tts' },
+                          })}>
                           {p === 'none' ? '关闭' : p === 'gsv_lite' ? 'GSV-Lite' : p === 'genie_tts' ? 'Genie' : 'Qwen'}
                         </button>
                       ))}
@@ -227,7 +231,11 @@ export function SettingsPage({
                       {(['none', 'sherpa', 'qwen'] as const).map((p) => (
                         <button key={p} type="button"
                           className={`driver-option${(labConfig.asr?.asr_model_provider ?? 'sherpa') === p ? ' driver-option--active' : ''}`}
-                          onClick={() => onSaveLabConfig({ ...labConfig, asr: { ...labConfig.asr, asr_model_provider: p } })}>
+                          onClick={() => onSaveLabConfig({
+                            ...labConfig,
+                            asr: { ...labConfig.asr, asr_model_provider: p },
+                            package: { ...labConfig.package, sherpa_asr: p === 'sherpa', qwen_asr: p === 'qwen' },
+                          })}>
                           {p === 'none' ? '关闭' : p === 'sherpa' ? 'Sherpa' : 'Qwen'}
                         </button>
                       ))}

@@ -96,6 +96,11 @@ export interface LabConfig {
     llm_translate: boolean;
     local_embedding: boolean;
     memory_bench: boolean;
+    sherpa_asr: boolean;
+    qwen_asr: boolean;
+    gsv_lite: boolean;
+    genie_tts: boolean;
+    qwen_tts: boolean;
   };
   root: { root_dir: string };
   server: {
