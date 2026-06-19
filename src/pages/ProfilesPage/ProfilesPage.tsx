@@ -93,6 +93,7 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'ocr_max_items', type: 'number', description: '每帧保留面积最大的前 N 条 OCR', defaultValue: 10 },
     { key: 'ocr_min_confidence', type: 'number', description: 'OCR 置信度过滤阈值', defaultValue: 0.6 },
     { key: 'ocr_min_length', type: 'number', description: 'OCR 最短文字长度', defaultValue: 2 },
+    { key: 'vision_boost', type: 'boolean', description: '触发摘要时同时发送截图给 VLM（需可用视觉模型）', defaultValue: false },
   ],
 };
 

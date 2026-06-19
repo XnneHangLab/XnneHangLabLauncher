@@ -265,34 +265,38 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
 
       <div className="group-title">视觉模型</div>
       <SettingCard>
-        <SettingRow name="提供商" icon="🏭">
+        <SettingRow name="提供商" description="留空=不使用视觉模型" icon="🏭">
           <ModelInput
             value={visionModel.llm_provider}
-            onChange={(v) => setVisionModel({ ...visionModel, llm_provider: v })}
-            models={providers.map((p) => p.name).filter(Boolean)}
-            placeholder="填写提供商名称"
+            onChange={(v) => setVisionModel({ ...visionModel, llm_provider: v, llm_model_name: v ? visionModel.llm_model_name : '' })}
+            models={['', ...providers.map((p) => p.name).filter(Boolean)]}
+            placeholder="不使用视觉模型"
           />
         </SettingRow>
-        <SettingRow name="模型名称" icon="🤖">
-          <ModelInput
-            value={visionModel.llm_model_name}
-            onChange={(v) => setVisionModel({ ...visionModel, llm_model_name: v })}
-            models={visionProviderModels}
-          />
-        </SettingRow>
-        <SettingRow name="推理深度" description="设为 none 可关闭慢模型的内置 thinking，加快响应" icon="🧠">
-          <select
-            className="proxy-input"
-            value={visionModel.reasoning_effort ?? ''}
-            onChange={(e) => setVisionModel({ ...visionModel, reasoning_effort: e.target.value || null })}
-          >
-            <option value="">默认（由模型决定）</option>
-            <option value="none">关闭</option>
-            <option value="low">低</option>
-            <option value="medium">中</option>
-            <option value="high">高</option>
-          </select>
-        </SettingRow>
+        {visionModel.llm_provider && (
+          <>
+            <SettingRow name="模型名称" icon="🤖">
+              <ModelInput
+                value={visionModel.llm_model_name}
+                onChange={(v) => setVisionModel({ ...visionModel, llm_model_name: v })}
+                models={visionProviderModels}
+              />
+            </SettingRow>
+            <SettingRow name="推理深度" description="设为 none 可关闭慢模型的内置 thinking，加快响应" icon="🧠">
+              <select
+                className="proxy-input"
+                value={visionModel.reasoning_effort ?? ''}
+                onChange={(e) => setVisionModel({ ...visionModel, reasoning_effort: e.target.value || null })}
+              >
+                <option value="">默认（由模型决定）</option>
+                <option value="none">关闭</option>
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+              </select>
+            </SettingRow>
+          </>
+        )}
       </SettingCard>
       <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px', lineHeight: 1.5 }}>
         ⓘ 游戏陪伴模式的截图轮询始终使用此视觉模型分析画面，不会调用对话模型。
