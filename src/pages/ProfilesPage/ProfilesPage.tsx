@@ -88,8 +88,11 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）', defaultValue: 10.0 },
   ],
   visual_observer: [
-    { key: 'poll_interval_s', type: 'number', description: '截图轮询间隔（秒）', defaultValue: 8.0 },
-    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发摘要', defaultValue: 5 },
+    { key: 'poll_interval_s', type: 'number', description: '截图轮询间隔（秒）', defaultValue: 1.0 },
+    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发摘要', defaultValue: 20 },
+    { key: 'ocr_max_items', type: 'number', description: '每帧保留面积最大的前 N 条 OCR', defaultValue: 10 },
+    { key: 'ocr_min_confidence', type: 'number', description: 'OCR 置信度过滤阈值', defaultValue: 0.6 },
+    { key: 'ocr_min_length', type: 'number', description: 'OCR 最短文字长度', defaultValue: 2 },
   ],
 };
 
@@ -875,11 +878,12 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
     game_companion_active?: boolean;
     active?: boolean;
     total_captures?: number;
-    pending_diffs?: number;
     pending_ocr_count?: number;
-    diff_buffer?: Array<Record<string, any>>;
+    accumulated_ocr?: string[];
+    current_frame_ocr?: string[];
     latest_summary?: string | null;
     visual_digest?: { text: string; frame_count: number; timestamp: number } | null;
+    session_history?: Array<Record<string, any>>;
   } | null>(null);
   const [voExpanded, setVoExpanded] = useState(false);
 
@@ -1156,79 +1160,66 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                   <span className="status-kv-value">{voStatus.total_captures ?? 0}</span>
                 </div>
                 <div className="status-kv-row">
-                  <span className="status-kv-label">待处理 diff</span>
-                  <span className="status-kv-value">{voStatus.pending_diffs ?? 0} 帧 / {voStatus.pending_ocr_count ?? 0} OCR</span>
+                  <span className="status-kv-label">待触发 OCR</span>
+                  <span className="status-kv-value">{voStatus.pending_ocr_count ?? 0} 条新增（阈值 {voStatus.ocr_threshold ?? 20}）{voStatus.speaking ? ' ⏸ 暂停中' : ''}</span>
                 </div>
+                {voStatus.current_frame_ocr && voStatus.current_frame_ocr.length > 0 && (
+                  <details className="mbti-answers-detail">
+                    <summary className="mbti-answers-summary">当前帧 OCR ({voStatus.current_frame_ocr.length} 条)</summary>
+                    <div className="mbti-answers-list">
+                      {voStatus.current_frame_ocr.map((text, i) => (
+                        <div key={i} className="mbti-answer-item" style={{ padding: '2px 0' }}>
+                          <span style={{ fontSize: 12 }}>{text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {voStatus.accumulated_ocr && voStatus.accumulated_ocr.length > 0 && (
+                  <details className="mbti-answers-detail">
+                    <summary className="mbti-answers-summary">累积新增 OCR ({voStatus.accumulated_ocr.length} 条)</summary>
+                    <div className="mbti-answers-list">
+                      {voStatus.accumulated_ocr.map((text, i) => (
+                        <div key={i} className="mbti-answer-item" style={{ padding: '2px 0' }}>
+                          <span style={{ fontSize: 12 }}>{text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
                 {voStatus.latest_summary && (
                   <div className="status-kv-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                     <span className="status-kv-label">最近摘要</span>
                     <span className="status-kv-value" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{voStatus.latest_summary}</span>
                   </div>
                 )}
-                {voStatus.diff_buffer && voStatus.diff_buffer.length > 0 && (
-                  <details className="mbti-answers-detail" open={voExpanded} onToggle={(e) => setVoExpanded((e.target as HTMLDetailsElement).open)}>
-                    <summary className="mbti-answers-summary">帧间 diff 详情 ({voStatus.diff_buffer.length} 条)</summary>
-                    <div className="mbti-answers-list">
-                      {voStatus.diff_buffer.map((d, i) => (
-                        <div key={i} className="mbti-answer-item">
-                          <div className="mbti-answer-header">
-                            <span className="mbti-answer-id">#{i + 1}</span>
-                            <span className="mbti-answer-question">{d.scene_change || '无场景变化'}</span>
-                          </div>
-                          {d.new_ocr?.length > 0 && (
-                            <div className="mbti-answer-body">
-                              <span className="mbti-answer-choice">OCR: {d.new_ocr.join(' | ')}</span>
-                            </div>
-                          )}
-                          {(d.entities_added?.length > 0 || d.entities_removed?.length > 0) && (
-                            <div className="mbti-answer-reason">
-                              {d.entities_added?.length > 0 && `+${d.entities_added.join(', ')} `}
-                              {d.entities_removed?.length > 0 && `-${d.entities_removed.join(', ')}`}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-                {(voStatus as any).session_history?.length > 0 && (
+                {voStatus.session_history && voStatus.session_history.length > 0 && (
                   <details className="mbti-answers-detail">
                     <summary className="mbti-answers-summary">
-                      历史总结 ({(voStatus as any).session_history.length} 轮)
+                      历史总结 ({voStatus.session_history.length} 轮)
                       <button
                         type="button"
                         className="l2d-add-btn"
                         style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px' }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          const text = JSON.stringify((voStatus as any).session_history, null, 2);
+                          const text = JSON.stringify(voStatus.session_history, null, 2);
                           navigator.clipboard.writeText(text);
                         }}
                       >复制 JSON</button>
                     </summary>
                     <div className="mbti-answers-list">
-                      {(voStatus as any).session_history.map((s: any, si: number) => (
+                      {voStatus.session_history.map((s: any, si: number) => (
                         <div key={si} className="mbti-answer-item">
                           <div className="mbti-answer-header">
                             <span className="mbti-answer-id">轮 {si + 1}</span>
                             <span className="mbti-answer-question" style={{ fontSize: 11, color: 'var(--muted)' }}>
-                              {s.ocr_count} OCR · {s.diffs?.length ?? 0} diff
+                              {s.ocr_count} OCR
                             </span>
                           </div>
                           <div className="mbti-answer-body">
                             <span className="mbti-answer-choice" style={{ whiteSpace: 'pre-wrap' }}>{s.summary}</span>
                           </div>
-                          {s.diffs?.length > 0 && (
-                            <details style={{ marginTop: 4 }}>
-                              <summary style={{ fontSize: 11, color: 'var(--muted)', cursor: 'pointer' }}>展开 {s.diffs.length} 条 diff</summary>
-                              {s.diffs.map((d: any, di: number) => (
-                                <div key={di} style={{ fontSize: 11, padding: '2px 0', borderTop: '1px solid var(--border)' }}>
-                                  <span style={{ fontWeight: 600 }}>#{di + 1}</span> {d.scene_change || '无场景变化'}
-                                  {d.new_ocr?.length > 0 && <div style={{ color: 'var(--muted)' }}>OCR: {d.new_ocr.join(' | ')}</div>}
-                                </div>
-                              ))}
-                            </details>
-                          )}
                         </div>
                       ))}
                     </div>

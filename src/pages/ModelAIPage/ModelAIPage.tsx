@@ -146,6 +146,7 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
     labConfig?.agent.vision_model ?? {
       llm_provider: '',
       llm_model_name: '',
+      reasoning_effort: null,
     },
   );
   const [modelCache, setModelCache] = useState<Record<string, string[]>>({});
@@ -279,7 +280,24 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
             models={visionProviderModels}
           />
         </SettingRow>
+        <SettingRow name="推理深度" description="设为 none 可关闭慢模型的内置 thinking，加快响应" icon="🧠">
+          <select
+            className="proxy-input"
+            value={visionModel.reasoning_effort ?? ''}
+            onChange={(e) => setVisionModel({ ...visionModel, reasoning_effort: e.target.value || null })}
+          >
+            <option value="">默认（由模型决定）</option>
+            <option value="none">关闭</option>
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select>
+        </SettingRow>
       </SettingCard>
+      <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px', lineHeight: 1.5 }}>
+        ⓘ 游戏陪伴模式的截图轮询始终使用此视觉模型分析画面，不会调用对话模型。
+        如需启用轮询，建议配置速度快、价格便宜的视觉模型。
+      </p>
 
       <div className="settings-save-row">
         <button type="button" className="settings-save-button" onClick={handleSave}>

@@ -61,6 +61,7 @@ export interface LabConfig {
     vision_model: {
       llm_provider: string;
       llm_model_name: string;
+      reasoning_effort: string | null;
     };
     prompts: {
       vision_prompt: string;
