@@ -666,7 +666,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
           <SettingRow name="format" description="情绪 / 格式 prompt 路径">
             <BrowsePath value={prompt.format ?? ''} onChange={v => setPrompt({ format: v })} onBrowse={browseFormat} wide />
           </SettingRow>
-          <SettingRow name="show_control_tags">
+          <SettingRow name="show_control_tags" description="在前端显示 [tts:...][expression:...] 控制标签（调试用）">
             <ToggleSwitch label="show_control_tags" checked={prompt.show_control_tags ?? false}
               onChange={v => setPrompt({ show_control_tags: v })} />
           </SettingRow>
