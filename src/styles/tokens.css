@@ -74,6 +74,24 @@
   --nav-active-inset: rgba(255, 255, 255, 0.03);
   --skel-base: rgba(255, 255, 255, 0.05);
   --skel-shine: rgba(255, 255, 255, 0.10);
+  /* plugin dependency semantic colours */
+  --dep-ok-bg: rgba(52, 211, 153, 0.12);
+  --dep-ok-border: rgba(52, 211, 153, 0.30);
+  --dep-ok-text: #34d399;
+  --dep-warn-bg: rgba(251, 146, 60, 0.12);
+  --dep-warn-border: rgba(251, 146, 60, 0.30);
+  --dep-warn-text: #fb923c;
+  --dep-warn-item-border: rgba(251, 146, 60, 0.35);
+  --dep-ref-bg: rgba(139, 92, 246, 0.10);
+  --dep-ref-border: rgba(139, 92, 246, 0.25);
+  --dep-ref-text: #a78bfa;
+  --dep-danger-text: #f87171;
+  --dep-danger-border: rgba(239, 68, 68, 0.40);
+  --dep-danger-hover-bg: rgba(239, 68, 68, 0.10);
+  --dep-danger-hover-border: rgba(239, 68, 68, 0.60);
+  --dep-danger-hover-text: #fca5a5;
+  --dep-confirm-bg: rgba(251, 146, 60, 0.08);
+  --dep-confirm-border: rgba(251, 146, 60, 0.20);
 }
 
 .launcher-root[data-theme='day'] {
@@ -151,4 +169,22 @@
   --nav-active-inset: rgba(255, 255, 255, 0.55);
   --skel-base: rgba(24, 34, 49, 0.06);
   --skel-shine: rgba(24, 34, 49, 0.12);
+  /* plugin dependency semantic colours */
+  --dep-ok-bg: rgba(16, 185, 129, 0.08);
+  --dep-ok-border: rgba(16, 185, 129, 0.30);
+  --dep-ok-text: #059669;
+  --dep-warn-bg: rgba(234, 88, 12, 0.07);
+  --dep-warn-border: rgba(234, 88, 12, 0.30);
+  --dep-warn-text: #c2410c;
+  --dep-warn-item-border: rgba(234, 88, 12, 0.30);
+  --dep-ref-bg: rgba(109, 40, 217, 0.07);
+  --dep-ref-border: rgba(109, 40, 217, 0.22);
+  --dep-ref-text: #7c3aed;
+  --dep-danger-text: #dc2626;
+  --dep-danger-border: rgba(220, 38, 38, 0.35);
+  --dep-danger-hover-bg: rgba(220, 38, 38, 0.08);
+  --dep-danger-hover-border: rgba(220, 38, 38, 0.50);
+  --dep-danger-hover-text: #b91c1c;
+  --dep-confirm-bg: rgba(234, 88, 12, 0.06);
+  --dep-confirm-border: rgba(234, 88, 12, 0.18);
 }

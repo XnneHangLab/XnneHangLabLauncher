@@ -351,6 +351,111 @@
   color: var(--muted);
 }
 
+.plugin-item--warn {
+  border-color: var(--dep-warn-item-border);
+}
+
+/* ── Dependency badges ── */
+.plugin-dep-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.plugin-dep-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  border: 1px solid transparent;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+
+.plugin-dep-badge--requires.plugin-dep-badge--ok {
+  background: var(--dep-ok-bg);
+  border-color: var(--dep-ok-border);
+  color: var(--dep-ok-text);
+}
+
+.plugin-dep-badge--requires.plugin-dep-badge--missing {
+  background: var(--dep-warn-bg);
+  border-color: var(--dep-warn-border);
+  color: var(--dep-warn-text);
+}
+
+.plugin-dep-badge--dependent {
+  background: var(--dep-ref-bg);
+  border-color: var(--dep-ref-border);
+  color: var(--dep-ref-text);
+}
+
+/* ── Inline disable confirmation ── */
+.plugin-dep-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  background: var(--dep-confirm-bg);
+  border-top: 1px solid var(--dep-confirm-border);
+}
+
+.plugin-dep-confirm-msg {
+  font-size: 12px;
+  color: var(--dep-warn-text);
+  flex: 1;
+  min-width: 0;
+}
+
+.plugin-dep-confirm-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.plugin-dep-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.plugin-dep-btn:hover {
+  background: var(--card-bg-start);
+  color: var(--text);
+}
+
+.plugin-dep-btn--danger {
+  border-color: var(--dep-danger-border);
+  color: var(--dep-danger-text);
+}
+
+.plugin-dep-btn--danger:hover {
+  background: var(--dep-danger-hover-bg);
+  border-color: var(--dep-danger-hover-border);
+  color: var(--dep-danger-hover-text);
+}
+
+.plugin-dep-btn--only {
+  border-color: var(--dep-warn-border);
+  color: var(--dep-warn-text);
+}
+
+.plugin-dep-btn--only:hover {
+  background: var(--dep-warn-bg);
+  border-color: var(--dep-warn-border);
+  color: var(--dep-warn-text);
+}
+
 .plugin-field-row--json {
   flex-direction: column;
   gap: 6px;
