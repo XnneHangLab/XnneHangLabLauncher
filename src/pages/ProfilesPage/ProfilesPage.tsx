@@ -1329,7 +1329,13 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
               </>
             ) : (
               <div className="status-weather-placeholder">
-                {!online ? '离线' : voStatus?.loaded ? '已加载，等待游戏模式' : '未启用'}
+                {!online
+                  ? '离线'
+                  : voStatus?.loaded
+                    ? (voStatus.total_captures ?? 0) > 0
+                      ? `已暂停（共 ${voStatus.total_captures} 帧）`
+                      : '已加载，发送消息后启动'
+                    : '未启用'}
               </div>
             )}
           </div>
