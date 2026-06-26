@@ -20,7 +20,7 @@ import type { ProfileMeta, ProfileConfig } from '../../services/config/profileCo
 import '../../styles/settings.css';
 import '../../styles/profiles.css';
 
-const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
+const KNOWN_PLUGINS: Array<{ id: string; description: string; requires?: string[] }> = [
   { id: 'pre_tool_preview', description: '工具调用前展示简短预览文本' },
   { id: 'tool_call_integrity', description: '保证工具调用结构完整' },
   { id: 'web_fetch', description: '允许 Agent 抓取网页内容' },
@@ -30,9 +30,30 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string }> = [
   { id: 'diary', description: '读写日记文件' },
   { id: 'memory', description: '长期记忆检索与写入' },
   { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
-  { id: 'mood_chat', description: '主动发起情绪化对话' },
+  { id: 'mood_chat', description: '主动发起情绪化对话', requires: ['visual_observer'] },
   { id: 'visual_observer', description: '游戏陪伴模式下的后台视觉轮询与摘要' },
 ];
+
+const PLUGIN_MAP = new Map(KNOWN_PLUGINS.map(p => [p.id, p]));
+
+/** 返回启用 id 所需的完整前置链（拓扑顺序，前置在前，id 本身在最后） */
+function resolveEnableChain(id: string): string[] {
+  const result: string[] = [];
+  const visited = new Set<string>();
+  function visit(pid: string) {
+    if (visited.has(pid)) return;
+    visited.add(pid);
+    for (const req of PLUGIN_MAP.get(pid)?.requires ?? []) visit(req);
+    result.push(pid);
+  }
+  visit(id);
+  return result;
+}
+
+/** 返回当前已启用中、依赖 id 的插件列表 */
+function findDependents(id: string, enabled: string[]): string[] {
+  return KNOWN_PLUGINS.filter(p => p.requires?.includes(id) && enabled.includes(p.id)).map(p => p.id);
+}
 
 type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'select';
 interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; options?: string[]; }
@@ -408,6 +429,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
   const enabledPlugins = config.plugins?.enabled ?? [];
 
   const [openPlugins, setOpenPlugins] = useState<Set<string>>(new Set);
+  const [confirmDisable, setConfirmDisable] = useState<{ id: string; dependents: string[] } | null>(null);
   const [presetNames, setPresetNames] = useState<string[]>([]);
   const [voiceEmotions, setVoiceEmotions] = useState<VoiceEmotion[]>([]);
   const [voiceId, setVoiceId] = useState<string | null>(null);
@@ -483,12 +505,33 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
     onChange({ ...config, prompt: { ...prompt, ...patch } });
   }
   function togglePlugin(id: string, on: boolean) {
-    const current = enabledPlugins.filter((p) => p !== id);
-    const next = on ? [...current, id] : current;
-    onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
-    if (on && (PLUGIN_CONFIG_FIELDS[id] || PLUGIN_CUSTOM_EDITORS.has(id))) {
-      setOpenPlugins(prev => new Set(prev).add(id));
+    if (on) {
+      const chain = resolveEnableChain(id);
+      const toAdd = chain.filter(pid => !enabledPlugins.includes(pid));
+      const next = [...enabledPlugins, ...toAdd];
+      onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
+      toAdd.forEach(pid => {
+        if (PLUGIN_CONFIG_FIELDS[pid] || PLUGIN_CUSTOM_EDITORS.has(pid)) {
+          setOpenPlugins(prev => new Set(prev).add(pid));
+        }
+      });
+    } else {
+      const dependents = findDependents(id, enabledPlugins);
+      if (dependents.length > 0) {
+        setConfirmDisable({ id, dependents });
+        return;
+      }
+      const next = enabledPlugins.filter(p => p !== id);
+      onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
     }
+  }
+
+  function forceDisable(id: string, andDependents: boolean) {
+    setConfirmDisable(null);
+    const toRemove = new Set([id]);
+    if (andDependents) findDependents(id, enabledPlugins).forEach(d => toRemove.add(d));
+    const next = enabledPlugins.filter(p => !toRemove.has(p));
+    onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
   }
   function getPluginCfg(id: string): Record<string, unknown> {
     const raw = config.plugins?.[id];
@@ -675,18 +718,39 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
         {/* ── Plugins ── */}
         <div className="group-title">插件</div>
         <div className="plugin-list">
-          {KNOWN_PLUGINS.map(({ id, description }) => {
+          {KNOWN_PLUGINS.map(({ id, description, requires }) => {
             const isOn = enabledPlugins.includes(id);
             const fields = PLUGIN_CONFIG_FIELDS[id];
             const isOpen = openPlugins.has(id);
             const cfg = getPluginCfg(id);
             const hasConfig = fields || PLUGIN_CUSTOM_EDITORS.has(id);
+            const unmetDeps = (requires ?? []).filter(r => !enabledPlugins.includes(r));
+            const dependents = findDependents(id, enabledPlugins);
+            const isPendingDisable = confirmDisable?.id === id;
             return (
-              <div key={id} className={`plugin-item${isOn ? ' plugin-item--on' : ''}${isOpen ? ' plugin-item--open' : ''}`}>
+              <div key={id} className={`plugin-item${isOn ? ' plugin-item--on' : ''}${isOpen ? ' plugin-item--open' : ''}${unmetDeps.length > 0 && isOn ? ' plugin-item--warn' : ''}`}>
                 <div className="plugin-item-header">
                   <div className="plugin-item-info">
                     <span className="plugin-item-name">{id}</span>
                     <span className="plugin-item-desc">{description}</span>
+                    {(requires && requires.length > 0) || dependents.length > 0 ? (
+                      <div className="plugin-dep-badges">
+                        {(requires ?? []).map(r => (
+                          <span
+                            key={r}
+                            className={`plugin-dep-badge plugin-dep-badge--requires${enabledPlugins.includes(r) ? ' plugin-dep-badge--ok' : ' plugin-dep-badge--missing'}`}
+                            title={enabledPlugins.includes(r) ? `前置 ${r} 已启用` : `前置 ${r} 未启用，将自动启用`}
+                          >
+                            ↳ {r}
+                          </span>
+                        ))}
+                        {dependents.map(d => (
+                          <span key={d} className="plugin-dep-badge plugin-dep-badge--dependent" title={`${d} 依赖此插件`}>
+                            ↑ {d}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="plugin-item-controls">
                     <ToggleSwitch label={id} checked={isOn} onChange={(on) => togglePlugin(id, on)} />
@@ -697,6 +761,24 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
                     )}
                   </div>
                 </div>
+                {isPendingDisable && (
+                  <div className="plugin-dep-confirm">
+                    <span className="plugin-dep-confirm-msg">
+                      ⚠ {confirmDisable.dependents.join('、')} 依赖此插件
+                    </span>
+                    <div className="plugin-dep-confirm-actions">
+                      <button type="button" className="plugin-dep-btn plugin-dep-btn--danger" onClick={() => forceDisable(id, true)}>
+                        同时禁用
+                      </button>
+                      <button type="button" className="plugin-dep-btn plugin-dep-btn--only" onClick={() => forceDisable(id, false)}>
+                        仅禁用此项
+                      </button>
+                      <button type="button" className="plugin-dep-btn" onClick={() => setConfirmDisable(null)}>
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isOpen && hasConfig && (
                   <div className="plugin-item-body">
                     {id === 'live2d_control' ? (
