@@ -975,6 +975,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
 
   const [voStatus, setVoStatus] = useState<{
     online: boolean;
+    loaded?: boolean;
     game_companion_active?: boolean;
     active?: boolean;
     total_captures?: number;
@@ -1249,7 +1250,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
         <div className="status-card">
           <div className="status-card-header">视觉观察</div>
           <div className="status-card-body">
-            {voStatus?.active ? (
+            {voStatus?.loaded && voStatus?.active ? (
               <>
                 <div className="status-kv-row">
                   <span className="status-kv-label">模式</span>
@@ -1327,7 +1328,9 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                 )}
               </>
             ) : (
-              <div className="status-weather-placeholder">{online ? '未启用' : '离线'}</div>
+              <div className="status-weather-placeholder">
+                {!online ? '离线' : voStatus?.loaded ? '已加载，等待游戏模式' : '未启用'}
+              </div>
             )}
           </div>
         </div>
