@@ -20,12 +20,12 @@ import type { ProfileMeta, ProfileConfig } from '../../services/config/profileCo
 import '../../styles/settings.css';
 import '../../styles/profiles.css';
 
-const KNOWN_PLUGINS: Array<{ id: string; description: string; requires?: string[] }> = [
+const KNOWN_PLUGINS: Array<{ id: string; description: string; requires?: string[]; conflicts?: string[] }> = [
   { id: 'pre_tool_preview', description: '工具调用前展示简短预览文本' },
   { id: 'tool_call_integrity', description: '保证工具调用结构完整' },
   { id: 'web_fetch', description: '允许 Agent 抓取网页内容' },
-  { id: 'web_search_ddg', description: 'DuckDuckGo 网络搜索' },
-  { id: 'web_search_searxng', description: 'SearXNG 网络搜索' },
+  { id: 'web_search_ddg', description: 'DuckDuckGo 网络搜索', conflicts: ['web_search_searxng'] },
+  { id: 'web_search_searxng', description: 'SearXNG 网络搜索', conflicts: ['web_search_ddg'] },
   { id: 'screen_shot', description: '允许 Agent 调用截图能力' },
   { id: 'diary', description: '读写日记文件' },
   { id: 'memory', description: '长期记忆检索与写入' },
@@ -53,6 +53,11 @@ function resolveEnableChain(id: string): string[] {
 /** 返回当前已启用中、依赖 id 的插件列表 */
 function findDependents(id: string, enabled: string[]): string[] {
   return KNOWN_PLUGINS.filter(p => p.requires?.includes(id) && enabled.includes(p.id)).map(p => p.id);
+}
+
+/** 返回与 id 冲突、且当前已启用的插件列表 */
+function findActiveConflicts(id: string, enabled: string[]): string[] {
+  return (PLUGIN_MAP.get(id)?.conflicts ?? []).filter(c => enabled.includes(c));
 }
 
 type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'select';
@@ -506,9 +511,10 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
   }
   function togglePlugin(id: string, on: boolean) {
     if (on) {
+      const activeConflicts = findActiveConflicts(id, enabledPlugins);
       const chain = resolveEnableChain(id);
       const toAdd = chain.filter(pid => !enabledPlugins.includes(pid));
-      const next = [...enabledPlugins, ...toAdd];
+      const next = [...enabledPlugins.filter(p => !activeConflicts.includes(p)), ...toAdd];
       onChange({ ...config, plugins: { ...(config.plugins ?? {}), enabled: next } });
       toAdd.forEach(pid => {
         if (PLUGIN_CONFIG_FIELDS[pid] || PLUGIN_CUSTOM_EDITORS.has(pid)) {
@@ -718,7 +724,7 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
         {/* ── Plugins ── */}
         <div className="group-title">插件</div>
         <div className="plugin-list">
-          {KNOWN_PLUGINS.map(({ id, description, requires }) => {
+          {KNOWN_PLUGINS.map(({ id, description, requires, conflicts }) => {
             const isOn = enabledPlugins.includes(id);
             const fields = PLUGIN_CONFIG_FIELDS[id];
             const isOpen = openPlugins.has(id);
@@ -726,14 +732,16 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
             const hasConfig = fields || PLUGIN_CUSTOM_EDITORS.has(id);
             const unmetDeps = (requires ?? []).filter(r => !enabledPlugins.includes(r));
             const dependents = findDependents(id, enabledPlugins);
+            const activeConflicts = findActiveConflicts(id, enabledPlugins);
             const isPendingDisable = confirmDisable?.id === id;
+            const hasBadges = (requires && requires.length > 0) || dependents.length > 0 || (conflicts && conflicts.length > 0);
             return (
               <div key={id} className={`plugin-item${isOn ? ' plugin-item--on' : ''}${isOpen ? ' plugin-item--open' : ''}${unmetDeps.length > 0 && isOn ? ' plugin-item--warn' : ''}`}>
                 <div className="plugin-item-header">
                   <div className="plugin-item-info">
                     <span className="plugin-item-name">{id}</span>
                     <span className="plugin-item-desc">{description}</span>
-                    {(requires && requires.length > 0) || dependents.length > 0 ? (
+                    {hasBadges ? (
                       <div className="plugin-dep-badges">
                         {(requires ?? []).map(r => (
                           <span
@@ -747,6 +755,15 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
                         {dependents.map(d => (
                           <span key={d} className="plugin-dep-badge plugin-dep-badge--dependent" title={`${d} 依赖此插件`}>
                             ↑ {d}
+                          </span>
+                        ))}
+                        {(conflicts ?? []).map(c => (
+                          <span
+                            key={c}
+                            className={`plugin-dep-badge plugin-dep-badge--conflict${activeConflicts.includes(c) ? ' plugin-dep-badge--conflict-active' : ''}`}
+                            title={`与 ${c} 互斥，同时只能启用一个`}
+                          >
+                            ✕ {c}
                           </span>
                         ))}
                       </div>

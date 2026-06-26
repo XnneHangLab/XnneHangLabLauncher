@@ -92,6 +92,12 @@
   --dep-danger-hover-text: #fca5a5;
   --dep-confirm-bg: rgba(251, 146, 60, 0.08);
   --dep-confirm-border: rgba(251, 146, 60, 0.20);
+  --dep-conflict-bg: rgba(100, 116, 139, 0.10);
+  --dep-conflict-border: rgba(100, 116, 139, 0.25);
+  --dep-conflict-text: #94a3b8;
+  --dep-conflict-active-bg: rgba(239, 68, 68, 0.12);
+  --dep-conflict-active-border: rgba(239, 68, 68, 0.35);
+  --dep-conflict-active-text: #f87171;
 }
 
 .launcher-root[data-theme='day'] {
@@ -187,4 +193,10 @@
   --dep-danger-hover-text: #b91c1c;
   --dep-confirm-bg: rgba(234, 88, 12, 0.06);
   --dep-confirm-border: rgba(234, 88, 12, 0.18);
+  --dep-conflict-bg: rgba(71, 85, 105, 0.08);
+  --dep-conflict-border: rgba(71, 85, 105, 0.22);
+  --dep-conflict-text: #64748b;
+  --dep-conflict-active-bg: rgba(220, 38, 38, 0.08);
+  --dep-conflict-active-border: rgba(220, 38, 38, 0.30);
+  --dep-conflict-active-text: #dc2626;
 }

@@ -394,6 +394,18 @@
   color: var(--dep-ref-text);
 }
 
+.plugin-dep-badge--conflict {
+  background: var(--dep-conflict-bg);
+  border-color: var(--dep-conflict-border);
+  color: var(--dep-conflict-text);
+}
+
+.plugin-dep-badge--conflict.plugin-dep-badge--conflict-active {
+  background: var(--dep-conflict-active-bg);
+  border-color: var(--dep-conflict-active-border);
+  color: var(--dep-conflict-active-text);
+}
+
 /* ── Inline disable confirmation ── */
 .plugin-dep-confirm {
   display: flex;
