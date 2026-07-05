@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -243,12 +243,12 @@ pub fn resolve_repo_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "failed to resolve workspace root from launcher/src-tauri".to_string())
 }
 
-pub fn resolve_workspace_root(repo_root: &PathBuf) -> Result<PathBuf, String> {
+pub fn resolve_workspace_root(repo_root: &Path) -> Result<PathBuf, String> {
     if let Ok(value) = std::env::var("XH_VOICE_WORKSPACE_ROOT") {
         return Ok(PathBuf::from(value));
     }
 
-    Ok(repo_root.clone())
+    Ok(repo_root.to_path_buf())
 }
 
 #[cfg(test)]

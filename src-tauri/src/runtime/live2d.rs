@@ -346,7 +346,7 @@ pub async fn pick_save_file(title: String, default_name: String) -> Result<Optio
                 return Ok(Some(stdout));
             }
         }
-        return Err("未找到可用的保存对话框（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的保存对话框（需要 zenity 或 kdialog）".to_string())
     }
 }
 

@@ -255,7 +255,7 @@ fn pick_dir_dialog(title: &str) -> Result<Option<PathBuf>, String> {
                 return Ok(Some(PathBuf::from(stdout)));
             }
         }
-        return Err("未找到可用的目录选择器（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的目录选择器（需要 zenity 或 kdialog）".to_string())
     }
 }
 
@@ -306,6 +306,6 @@ fn pick_file_dialog(title: &str, start_dir: &str) -> Result<Option<PathBuf>, Str
                 return Ok(Some(PathBuf::from(stdout)));
             }
         }
-        return Err("未找到可用的文件选择器（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的文件选择器（需要 zenity 或 kdialog）".to_string())
     }
 }

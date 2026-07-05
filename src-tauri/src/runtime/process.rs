@@ -554,7 +554,7 @@ pub fn resolve_managed_path(workspace_root: &Path, path_key: &str) -> Result<Pat
 }
 
 pub fn write_console_log(log_dir: &Path, contents: &str) -> Result<PathBuf, String> {
-    fs::create_dir_all(&log_dir).map_err(|error| error.to_string())?;
+    fs::create_dir_all(log_dir).map_err(|error| error.to_string())?;
     let log_path = log_dir.join(format!(
         "launcher-{}.log",
         super::state::current_timestamp()
@@ -1077,7 +1077,7 @@ pub fn spawn_backend_process(
 
     let app_stdout = app.clone();
     thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app_stdout, &line);
             }
@@ -1085,7 +1085,7 @@ pub fn spawn_backend_process(
     });
 
     thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app, &line);
             }
@@ -1139,7 +1139,7 @@ pub fn spawn_frontend_process(
 
     let app_stdout = app.clone();
     thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app_stdout, &line);
             }
@@ -1147,7 +1147,7 @@ pub fn spawn_frontend_process(
     });
 
     thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app, &line);
             }
@@ -1245,6 +1245,7 @@ pub fn pick_python_path() -> Result<Option<PathBuf>, String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_probe_payload(
     repo_root: &Path,
     workspace_root: &Path,
