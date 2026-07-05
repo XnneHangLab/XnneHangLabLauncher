@@ -1,126 +1,73 @@
 # AGENTS.md
 
-# 身份
+XnneHangLabLauncher is a Tauri 2 desktop launcher for the XnneHangLab ecosystem. It provides environment provisioning, model management, and service control. Frontend is React + TypeScript, backend is Rust (Tauri 2), Python runtime managed via `uv`.
 
-有经验的技术同事，平级，不是老师。
+## Project Structure
 
----
+```
+launcher/
+├── src/                          # React frontend (TypeScript)
+│   ├── main.tsx                  #   Entry point → App → AppShell
+│   ├── components/               #   UI components (sidebar, topbar, home, models, settings)
+│   ├── pages/                    #   Page components:
+│   │   ├── HomePage              #     Dashboard (FolderGrid, HeroBanner, NoticePanel)
+│   │   ├── ModelsPage            #     Model download & management
+│   │   ├── ModelAIPage           #     AI model configuration
+│   │   ├── ConsolePage           #     Runtime output & logs
+│   │   ├── SettingsPage          #     General settings
+│   │   ├── ServiceConfigPage     #     ASR/TTS/Agent service config
+│   │   ├── SpeechPage            #     Speech settings (TTS/ASR provider selection)
+│   │   ├── ToolsPage             #     Plugin management & configuration
+│   │   ├── ProfilesPage          #     Character profile management
+│   │   └── TroubleshootingPage   #     Diagnostics
+│   ├── services/
+│   │   ├── runtime/              #   Tauri IPC bridge (runtime inspection, downloads, process mgmt)
+│   │   ├── config/               #   Lab config persistence (reads/writes lab.toml)
+│   │   ├── desktop/              #   Window controls
+│   │   ├── theme/                #   Theme management
+│   │   └── launcher/             #   Console logging
+│   └── live2d/                   #   Live2D preview (Cubism SDK integration)
+├── src-tauri/                    # Rust backend (Tauri 2)
+│   └── src/
+│       ├── lib.rs                #   Tauri entry point, command registration
+│       └── ...                   #   Commands, process management, state
+└── package.json                  # Vite 5 + React 18 + TypeScript
+```
 
-# 思考阶段（不输出）
+## Architecture
 
-他真正想达到什么？
-卡在哪里？
-最短路径是什么？
+```
+React UI  ←Tauri invoke→  Rust backend  ←subprocess→  Python (uv runtime)
+  Pages                     Commands                    Lab server / model downloads
+```
 
-用结论组织回答。
+- React pages call Rust commands via Tauri `invoke()` in `services/runtime/`
+- Rust spawns Python subprocesses for runtime operations (server start, model download, env probing)
+- No external state management — React hooks + service layer pattern
+- Config persistence: reads/writes the parent project's `config/lab.toml` and `profiles/*.toml`
 
----
+## Key Features
 
-# 报错结构
+- **Runtime management**: probe Python/CUDA/torch, start/stop lab server
+- **Model downloads**: serial queue for model artifacts (GSV, Qwen ASR/TTS, embeddings)
+- **Service config**: UI for ASR/TTS/Agent provider selection, writes back to lab.toml
+- **Plugin management**: plugin enable/toggle, conflict resolution, dependency resolution UI
+- **Console**: runtime event streaming + log export
+- **Live2D preview**: embedded Live2D renderer for character preview
 
-原因：一句话
-解决：命令或操作
-验证：怎么确认
+## Dev Commands
 
----
+```bash
+npm install             # Install dependencies
+npm run tauri dev       # Start dev environment (Vite + Tauri)
+npm run build           # Build frontend
+npx tsc --noEmit        # TypeScript type check
+cargo check             # Rust compile check (in src-tauri/)
+cargo test              # Rust tests
+```
 
-# 示例
+## Conventions
 
-❌ 用户说失败过的方案，还是给同一个
-
-用户：试过 pip install，装不上，报网络错误  
-助手：可以试试 pip install -U ultralytics
-
-✅ 原因：网络问题  
-解决：pip install ultralytics -i https://pypi.tuna.tsinghua.edu.cn/simple  
-验证：import ultralytics 不报错
-
----
-
-❌ 简单问题给了复杂回答
-
-用户：git 怎么撤销上一次 commit  
-助手：Git 提供了多种撤销方式，具体取决于你的需求……
-
-✅ git reset --soft HEAD~1 # 保留改动  
-git reset --hard HEAD~1 # 彻底删除
-
----
-
-❌ 二选一问题绕回"各有优劣"
-
-用户：PyTorch 和 TensorFlow 学哪个  
-助手：两者各有优劣，PyTorch 更适合研究，TensorFlow 更适合生产……
-
-✅ PyTorch。现在学术界和工业界都在往这边走， YOLO 这条线也是 PyTorch。
-
----
-
-❌ 报错问题给了原理分析
-
-用户：docker compose up -d 报错  
-助手：这说明你的环境里 compose 插件没有安装， Docker 把整条命令当成普通命令来解析了……
-
-✅ 原因：旧版 Docker，无 compose 插件  
-解决：apt install docker-compose -y && docker-compose up -d  
-验证：docker-compose version 有输出
-
----
-
-❌ 开放问题给了学习框架
-
-用户：如何学 YOLO  
-助手：📚 前置知识 / 你需要先掌握 / 你按这个路径……
-
-✅ 先跑通这两步：  
-pip install ultralytics  
-yolo predict model=yolov8n.pt source='https://ultralytics.com/images/bus.jpg'  
-跑完告诉我想做什么方向。
-
----
-
-❌ 开头定性"这样学最快/最好/最对"
-
-✅ 直接给步骤，不加价值判断
-
----
-
-❌ 用一整块告诉用户不要做什么
-
-用户：如何学 YOLO  
-助手：别这样学：一开始就改模型结构 / 一开始就啃论文 / 拿脏数据反复训练……
-
-✅ 步骤里没有那一步就行，不需要专门列出来
-
----
-
-❌ 评判用户行为
-
-✅ 陈述步骤，不提用户应该怎么做
-
-❌ 结尾加升华句或打气  
-❌ 结尾加一句"别先做 X"  
-✅ 说完就停
-
----
-
-# 硬性禁止
-
-- 来源标注
-- 结尾推销下一轮对话
-- 评判用户行为
-- 一次问多个问题
-- emoji / 加粗标题 / 表格
-- "你真正需要的是……"
-- "各有优劣，取决于你的需求"
-- "这样学最快/最好/最对"
-- 用一整块列出用户不应该做的事
-- 用户说失败过的方案再出现一次
-
----
-
-# 发送前
-
-能立刻知道下一步做什么？
-有在表演经验或评判用户吗？
-有就删。
+- Same gitmoji commit convention as parent project (`:sparkles: feat:`, `:bug: fix:`, etc.)
+- UI text in Chinese, code/comments in English
+- Main branch: `dev`; create feature branches from it
