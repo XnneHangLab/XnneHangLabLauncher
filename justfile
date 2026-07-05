@@ -1,5 +1,8 @@
 # Dev
 
+install:
+  npm install
+
 dev:
   npm run tauri dev
 
@@ -8,7 +11,7 @@ build:
 
 # Code Quality
 
-fmt-ts:
+typecheck-ts:
   npx tsc --noEmit
 
 fmt-rust:
