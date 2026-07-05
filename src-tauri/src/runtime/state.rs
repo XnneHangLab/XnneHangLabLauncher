@@ -91,16 +91,15 @@ impl QueueState {
 
     pub fn has_active_tasks(&self) -> bool {
         self.worker_running
-            || self
-                .tasks
-                .iter()
-                .any(|task| matches!(
+            || self.tasks.iter().any(|task| {
+                matches!(
                     task.status,
                     TaskStatus::Queued
                         | TaskStatus::Preparing
                         | TaskStatus::Downloading
                         | TaskStatus::Verifying
-                ))
+                )
+            })
     }
 
     pub fn reset_for_workspace_switch(&mut self) {
@@ -328,7 +327,13 @@ mod tests {
         let task = queue.enqueue("genie-base".to_string(), "GenieData 基础资源".to_string());
         assert!(queue.has_active_tasks());
 
-        queue.apply_update(&task.task_id, TaskStatus::Completed, "完成".to_string(), 3, 3);
+        queue.apply_update(
+            &task.task_id,
+            TaskStatus::Completed,
+            "完成".to_string(),
+            3,
+            3,
+        );
         queue.worker_running = false;
         assert!(!queue.has_active_tasks());
     }

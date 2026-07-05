@@ -1,12 +1,12 @@
-use tauri::{AppHandle, State};
-use std::path::{Path, PathBuf};
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
+use tauri::{AppHandle, State};
 
 use super::process::{
     cleanup_frontend_processes, cleanup_webui_port_conflicts, cleanup_webui_processes,
     drain_download_queue, ensure_environment_ready, open_path, open_url, pick_python_path,
-    pick_workspace_root, resolve_managed_path, run_probe_command,
-    spawn_backend_process, spawn_frontend_process, write_console_log,
+    pick_workspace_root, resolve_managed_path, run_probe_command, spawn_backend_process,
+    spawn_frontend_process, write_console_log,
 };
 use super::state::{resolve_repo_root, resolve_workspace_root, RuntimeDriverConfig, RuntimeState};
 
@@ -14,29 +14,53 @@ use super::state::{resolve_repo_root, resolve_workspace_root, RuntimeDriverConfi
 
 #[derive(Deserialize, Default)]
 struct LabToml {
-    #[serde(default)] root:            LabTomlRoot,
-    #[serde(default)] local_embedding: LabTomlEmbedding,
-    #[serde(default)] agent:           LabTomlAgent,
-    #[serde(default)] asr:             LabTomlAsr,
+    #[serde(default)]
+    root: LabTomlRoot,
+    #[serde(default)]
+    local_embedding: LabTomlEmbedding,
+    #[serde(default)]
+    agent: LabTomlAgent,
+    #[serde(default)]
+    asr: LabTomlAsr,
 }
 
 #[derive(Deserialize, Default)]
-struct LabTomlRoot      { #[serde(default)] root_dir:    String }
-#[derive(Deserialize, Default)]
-struct LabTomlEmbedding { #[serde(default)] model_path:  String }
-#[derive(Deserialize, Default)]
-struct LabTomlAgent     { #[serde(default)] translate:   LabTomlTranslate }
-#[derive(Deserialize, Default)]
-struct LabTomlTranslate { #[serde(default)] llm:         LabTomlLlm }
-#[derive(Deserialize, Default)]
-struct LabTomlLlm       { #[serde(default)] model_path:  String }
-#[derive(Deserialize, Default)]
-struct LabTomlAsr {
-    #[serde(default)] vad_model_path: String,
-    #[serde(default)] sherpa:         LabTomlSherpa,
+struct LabTomlRoot {
+    #[serde(default)]
+    root_dir: String,
 }
 #[derive(Deserialize, Default)]
-struct LabTomlSherpa    { #[serde(default)] asr_model_dir: String }
+struct LabTomlEmbedding {
+    #[serde(default)]
+    model_path: String,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlAgent {
+    #[serde(default)]
+    translate: LabTomlTranslate,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlTranslate {
+    #[serde(default)]
+    llm: LabTomlLlm,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlLlm {
+    #[serde(default)]
+    model_path: String,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlAsr {
+    #[serde(default)]
+    vad_model_path: String,
+    #[serde(default)]
+    sherpa: LabTomlSherpa,
+}
+#[derive(Deserialize, Default)]
+struct LabTomlSherpa {
+    #[serde(default)]
+    asr_model_dir: String,
+}
 
 fn is_valid_gguf(path: &Path) -> bool {
     use std::io::Read;
@@ -66,8 +90,17 @@ fn load_lab_toml(workspace_root: &Path) -> LabToml {
 
 /// Mirrors Python's `_resolve_path`: absolute paths pass through,
 /// relative paths are resolved against `root_dir` (or `workspace_root`).
-fn resolve_model_path(root_dir: &str, workspace_root: &Path, configured: &str, default: &str) -> PathBuf {
-    let s = if configured.is_empty() { default } else { configured };
+fn resolve_model_path(
+    root_dir: &str,
+    workspace_root: &Path,
+    configured: &str,
+    default: &str,
+) -> PathBuf {
+    let s = if configured.is_empty() {
+        default
+    } else {
+        configured
+    };
     let p = Path::new(s);
     if p.is_absolute() {
         return p.to_path_buf();
@@ -78,7 +111,10 @@ fn resolve_model_path(root_dir: &str, workspace_root: &Path, configured: &str, d
         workspace_root
     };
     // Strip leading "./" or ".\"
-    let rel = s.strip_prefix("./").or_else(|| s.strip_prefix(".\\")).unwrap_or(s);
+    let rel = s
+        .strip_prefix("./")
+        .or_else(|| s.strip_prefix(".\\"))
+        .unwrap_or(s);
     base.join(rel)
 }
 
@@ -130,8 +166,7 @@ pub async fn enqueue_download(
     let driver = state.current_driver_config();
     let app_for_ensure = app.clone();
     run_blocking_runtime_action(move || {
-        ensure_environment_ready(&repo_root, &workspace_root, &driver, &app_for_ensure)
-            .map(|_| ())
+        ensure_environment_ready(&repo_root, &workspace_root, &driver, &app_for_ensure).map(|_| ())
     })
     .await?;
 
@@ -183,10 +218,16 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
         resolve_model_path(root_dir, &workspace_root, configured, default)
     };
 
-    let embedding_path = rp(&lab.local_embedding.model_path,     "models/bge-m3-q8_0.gguf");
-    let translate_path = rp(&lab.agent.translate.llm.model_path, "models/qwen2.5-0.5b-instruct-q8_0.gguf");
-    let vad_path       = rp(&lab.asr.vad_model_path,             "models/silero_vad.onnx");
-    let sherpa_dir     = rp(&lab.asr.sherpa.asr_model_dir,       "models/sherpa-onnx-paraformer-zh-2023-09-14");
+    let embedding_path = rp(&lab.local_embedding.model_path, "models/bge-m3-q8_0.gguf");
+    let translate_path = rp(
+        &lab.agent.translate.llm.model_path,
+        "models/qwen2.5-0.5b-instruct-q8_0.gguf",
+    );
+    let vad_path = rp(&lab.asr.vad_model_path, "models/silero_vad.onnx");
+    let sherpa_dir = rp(
+        &lab.asr.sherpa.asr_model_dir,
+        "models/sherpa-onnx-paraformer-zh-2023-09-14",
+    );
 
     // sherpa: tokens.txt + at least one onnx layout (offline or streaming)
     let sherpa_ok = sherpa_dir.join("tokens.txt").is_file()
@@ -197,9 +238,13 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
 
     // genie-base: key onnx + bin files that the Genie-TTS package requires
     let gd = m.join("GenieData");
-    let genie_ok = file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base.onnx"))
-        && file_nonempty(&gd.join("chinese-hubert-base").join("chinese-hubert-base_weights_fp16.bin"))
-        && file_nonempty(&gd.join("speaker_encoder.onnx"));
+    let genie_ok = file_nonempty(
+        &gd.join("chinese-hubert-base")
+            .join("chinese-hubert-base.onnx"),
+    ) && file_nonempty(
+        &gd.join("chinese-hubert-base")
+            .join("chinese-hubert-base_weights_fp16.bin"),
+    ) && file_nonempty(&gd.join("speaker_encoder.onnx"));
 
     // gsv-lite: 4 sub-dirs non-empty + roberta pytorch_model.bin present
     let gsv_parts = [
@@ -230,23 +275,82 @@ pub fn list_model_statuses(state: State<'_, RuntimeState>) -> serde_json::Value 
 
     // gsv-baoqiao: character.tts.character_name = "luming" in baoqiao.toml → runtime looks up gsv-tts-lite/luming
     let baoqiao_dir = m.join("gsv-tts-lite/luming-v2-pro-plus");
-    let baoqiao_ok = baoqiao_dir.join("infer_config.json").is_file()
-        || baoqiao_dir.join("infer.json").is_file();
+    let baoqiao_ok =
+        baoqiao_dir.join("infer_config.json").is_file() || baoqiao_dir.join("infer.json").is_file();
 
     let mut out = serde_json::Map::new();
     let mut s = |key: &str, status: &str, path: &Path| {
-        out.insert(key.into(), serde_json::json!({ "status": status, "path": path.display().to_string() }))
+        out.insert(
+            key.into(),
+            serde_json::json!({ "status": status, "path": path.display().to_string() }),
+        )
     };
-    s("sherpa-paraformer",            if sherpa_ok    { "ready" } else { "missing" }, &sherpa_dir);
-    s("silero-vad",                   if file_nonempty(&vad_path) { "ready" } else { "missing" }, &vad_path);
-    s("genie-base",                   if genie_ok     { "ready" } else { "missing" }, &gd);
-    s("gsv-lite",                     gsv_status,                                     &m.join("GSVLiteData"));
-    s("luming-genie-tts-v2-pro-plus", if luming_ok    { "ready" } else { "missing" }, &ld);
-    s("gsv-baoqiao",                  if baoqiao_ok   { "ready" } else { "missing" }, &baoqiao_dir);
-    s("qwen-tts-0.6b",                if dir_nonempty("Qwen3-TTS-12Hz-0.6B-Base")  { "ready" } else { "missing" }, &m.join("Qwen3-TTS-12Hz-0.6B-Base"));
-    s("qwen-tts-1.7b",                if dir_nonempty("Qwen3-TTS-12Hz-1.7B-Base")  { "ready" } else { "missing" }, &m.join("Qwen3-TTS-12Hz-1.7B-Base"));
-    s("local-embedding",              if is_valid_gguf(&embedding_path) { "ready" } else { "missing" }, &embedding_path);
-    s("llm-translate",                if is_valid_gguf(&translate_path) { "ready" } else { "missing" }, &translate_path);
+    s(
+        "sherpa-paraformer",
+        if sherpa_ok { "ready" } else { "missing" },
+        &sherpa_dir,
+    );
+    s(
+        "silero-vad",
+        if file_nonempty(&vad_path) {
+            "ready"
+        } else {
+            "missing"
+        },
+        &vad_path,
+    );
+    s(
+        "genie-base",
+        if genie_ok { "ready" } else { "missing" },
+        &gd,
+    );
+    s("gsv-lite", gsv_status, &m.join("GSVLiteData"));
+    s(
+        "luming-genie-tts-v2-pro-plus",
+        if luming_ok { "ready" } else { "missing" },
+        &ld,
+    );
+    s(
+        "gsv-baoqiao",
+        if baoqiao_ok { "ready" } else { "missing" },
+        &baoqiao_dir,
+    );
+    s(
+        "qwen-tts-0.6b",
+        if dir_nonempty("Qwen3-TTS-12Hz-0.6B-Base") {
+            "ready"
+        } else {
+            "missing"
+        },
+        &m.join("Qwen3-TTS-12Hz-0.6B-Base"),
+    );
+    s(
+        "qwen-tts-1.7b",
+        if dir_nonempty("Qwen3-TTS-12Hz-1.7B-Base") {
+            "ready"
+        } else {
+            "missing"
+        },
+        &m.join("Qwen3-TTS-12Hz-1.7B-Base"),
+    );
+    s(
+        "local-embedding",
+        if is_valid_gguf(&embedding_path) {
+            "ready"
+        } else {
+            "missing"
+        },
+        &embedding_path,
+    );
+    s(
+        "llm-translate",
+        if is_valid_gguf(&translate_path) {
+            "ready"
+        } else {
+            "missing"
+        },
+        &translate_path,
+    );
     serde_json::Value::Object(out)
 }
 
@@ -333,10 +437,7 @@ pub async fn pick_python_path_command() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub async fn launch_webui(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
-) -> Result<(), String> {
+pub async fn launch_webui(app: AppHandle, state: State<'_, RuntimeState>) -> Result<(), String> {
     let repo_root = state.repo_root.clone();
     let workspace_root = state.current_workspace_root();
     let driver = state.current_driver_config();
@@ -358,10 +459,7 @@ pub async fn launch_webui(
 }
 
 #[tauri::command]
-pub async fn launch_frontend(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
-) -> Result<(), String> {
+pub async fn launch_frontend(app: AppHandle, state: State<'_, RuntimeState>) -> Result<(), String> {
     let repo_root = state.repo_root.clone();
     let runtime_state = RuntimeState {
         repo_root: state.repo_root.clone(),
@@ -379,10 +477,7 @@ pub async fn launch_frontend(
 }
 
 #[tauri::command]
-pub async fn stop_webui(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
-) -> Result<(), String> {
+pub async fn stop_webui(app: AppHandle, state: State<'_, RuntimeState>) -> Result<(), String> {
     let runtime_state = RuntimeState {
         repo_root: state.repo_root.clone(),
         workspace_root: state.workspace_root.clone(),
@@ -391,17 +486,12 @@ pub async fn stop_webui(
         webui: state.webui.clone(),
         frontend: state.frontend.clone(),
     };
-    run_blocking_runtime_action(move || {
-        cleanup_webui_processes(&app, &runtime_state).map(|_| ())
-    })
-    .await
+    run_blocking_runtime_action(move || cleanup_webui_processes(&app, &runtime_state).map(|_| ()))
+        .await
 }
 
 #[tauri::command]
-pub async fn stop_frontend(
-    app: AppHandle,
-    state: State<'_, RuntimeState>,
-) -> Result<(), String> {
+pub async fn stop_frontend(app: AppHandle, state: State<'_, RuntimeState>) -> Result<(), String> {
     let runtime_state = RuntimeState {
         repo_root: state.repo_root.clone(),
         workspace_root: state.workspace_root.clone(),
@@ -422,7 +512,9 @@ fn validate_download_target(target: &str) -> Result<(&'static str, &'static str)
         "gsv-lite" => Ok(("gsv-lite", "GSV-Lite 数据包")),
         "qwen-tts-0.6b" => Ok(("qwen-tts-0.6b", "Qwen3-TTS 0.6B")),
         "qwen-tts-1.7b" => Ok(("qwen-tts-1.7b", "Qwen3-TTS 1.7B")),
-        "luming-genie-tts-v2-pro-plus" => Ok(("luming-genie-tts-v2-pro-plus", "路鸣 Genie-TTS v2 Pro+")),
+        "luming-genie-tts-v2-pro-plus" => {
+            Ok(("luming-genie-tts-v2-pro-plus", "路鸣 Genie-TTS v2 Pro+"))
+        }
         "gsv-baoqiao" => Ok(("gsv-baoqiao", "薄巧 GSV 角色模型")),
         "local-embedding" => Ok(("local-embedding", "BGE-M3 本地嵌入模型")),
         "llm-translate" => Ok(("llm-translate", "Qwen2.5 0.5B 翻译辅助")),
