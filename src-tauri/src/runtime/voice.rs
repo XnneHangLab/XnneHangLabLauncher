@@ -42,7 +42,11 @@ pub struct VoiceConfigResponse {
 // ── PLACEHOLDER_NEXT ──
 
 fn voice_config_path(state: &RuntimeState, voice_id: &str) -> std::path::PathBuf {
-    state.repo_root.join("config").join("voices").join(format!("{voice_id}.toml"))
+    state
+        .repo_root
+        .join("config")
+        .join("voices")
+        .join(format!("{voice_id}.toml"))
 }
 
 fn voices_asset_dir(state: &RuntimeState, asset_bundle: &str) -> std::path::PathBuf {
@@ -101,10 +105,16 @@ pub fn read_voice_config(
                         let path = entry.path();
                         if path.is_file() {
                             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                                if matches!(ext.to_lowercase().as_str(), "wav" | "mp3" | "ogg" | "m4a" | "opus") {
+                                if matches!(
+                                    ext.to_lowercase().as_str(),
+                                    "wav" | "mp3" | "ogg" | "m4a" | "opus"
+                                ) {
                                     let file_name = entry.file_name().to_string_lossy().to_string();
                                     let abs_path = path.to_string_lossy().to_string();
-                                    found.push(VoiceClip { file_name, abs_path });
+                                    found.push(VoiceClip {
+                                        file_name,
+                                        abs_path,
+                                    });
                                 }
                             }
                         }
@@ -178,7 +188,8 @@ pub fn write_voice_emotions(
         }
     }
 
-    let output = toml::to_string_pretty(&doc).map_err(|e| format!("序列化 voice config 失败: {e}"))?;
+    let output =
+        toml::to_string_pretty(&doc).map_err(|e| format!("序列化 voice config 失败: {e}"))?;
     std::fs::write(&path, output).map_err(|e| format!("写入 voice config 失败: {e}"))
 }
 

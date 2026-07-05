@@ -69,11 +69,19 @@ enum WebuiPortProbePlan {
     },
 }
 
-pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &RuntimeDriverConfig, app: &AppHandle) -> Result<EnvironmentProbePayload, String> {
+pub fn run_probe_command(
+    repo_root: &Path,
+    workspace_root: &Path,
+    driver: &RuntimeDriverConfig,
+    app: &AppHandle,
+) -> Result<EnvironmentProbePayload, String> {
     emit_raw_log(app, "[probe] 开始检测运行环境 …");
 
     if !workspace_root.is_dir() {
-        emit_raw_log(app, &format!("[probe] 工作目录无效: {}", workspace_root.display()));
+        emit_raw_log(
+            app,
+            &format!("[probe] 工作目录无效: {}", workspace_root.display()),
+        );
         return Ok(build_probe_payload(
             repo_root,
             workspace_root,
@@ -120,7 +128,9 @@ pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &Runti
             };
 
             if !uv_version.status.success() {
-                let stderr = String::from_utf8_lossy(&uv_version.stderr).trim().to_string();
+                let stderr = String::from_utf8_lossy(&uv_version.stderr)
+                    .trim()
+                    .to_string();
                 emit_raw_log(app, &format!("[probe] uv 不可用: {stderr}"));
                 return Ok(build_probe_payload(
                     repo_root,
@@ -135,7 +145,9 @@ pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &Runti
                 ));
             }
 
-            let uv_ver_str = String::from_utf8_lossy(&uv_version.stdout).trim().to_string();
+            let uv_ver_str = String::from_utf8_lossy(&uv_version.stdout)
+                .trim()
+                .to_string();
             if !uv_ver_str.is_empty() {
                 emit_raw_log(app, &format!("[probe] {uv_ver_str}"));
             }
@@ -171,7 +183,9 @@ pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &Runti
     emit_stderr_lines(app, &python_probe.stderr);
 
     if !python_probe.status.success() {
-        let stderr = String::from_utf8_lossy(&python_probe.stderr).trim().to_string();
+        let stderr = String::from_utf8_lossy(&python_probe.stderr)
+            .trim()
+            .to_string();
         return Ok(build_probe_payload(
             repo_root,
             workspace_root,
@@ -185,14 +199,21 @@ pub fn run_probe_command(repo_root: &Path, workspace_root: &Path, driver: &Runti
         ));
     }
 
-    let python_exe = String::from_utf8_lossy(&python_probe.stdout).trim().to_string();
+    let python_exe = String::from_utf8_lossy(&python_probe.stdout)
+        .trim()
+        .to_string();
     if !python_exe.is_empty() {
         emit_raw_log(app, &format!("[probe] Python: {python_exe}"));
     }
 
-    let output = build_python_command_for_driver(repo_root, workspace_root, driver, ["-c", ENVIRONMENT_PROBE_SCRIPT])
-        .output()
-        .map_err(|error| format!("failed to run environment probe: {error}"))?;
+    let output = build_python_command_for_driver(
+        repo_root,
+        workspace_root,
+        driver,
+        ["-c", ENVIRONMENT_PROBE_SCRIPT],
+    )
+    .output()
+    .map_err(|error| format!("failed to run environment probe: {error}"))?;
 
     emit_stderr_lines(app, &output.stderr);
 
@@ -258,7 +279,10 @@ pub fn run_download_command(
         &driver,
         ["scripts/lab_download.py"],
     );
-    command.arg(&target).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .arg(&target)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     let mut child = command
         .spawn()
@@ -326,12 +350,8 @@ pub fn run_download_command(
             if envelope.kind == "event" {
                 let payload = envelope.payload;
                 let timestamp = super::state::current_timestamp();
-                let event = runtime_event_from_python_payload(
-                    &task_id,
-                    &target,
-                    &payload,
-                    &timestamp,
-                );
+                let event =
+                    runtime_event_from_python_payload(&task_id, &target, &payload, &timestamp);
                 if event.event != "download.file_progress" {
                     let mut queue = state.queue.lock().unwrap();
                     queue.apply_update(
@@ -391,12 +411,8 @@ pub fn drain_download_queue(app: AppHandle, state: RuntimeState) {
             queue.apply_update(&task.task_id, TaskStatus::Failed, error.clone(), 3, 3);
             drop(queue);
 
-            let event = build_terminal_failure_event(
-                &task.task_id,
-                &task.target,
-                &error,
-                &timestamp,
-            );
+            let event =
+                build_terminal_failure_event(&task.task_id, &task.target, &error, &timestamp);
             let _ = app.emit("runtime:event", &event);
         }
     }
@@ -475,11 +491,11 @@ pub fn pick_workspace_root() -> Result<Option<PathBuf>, String> {
             });
         }
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return if stdout.is_empty() {
+        if stdout.is_empty() {
             Ok(None)
         } else {
             Ok(Some(PathBuf::from(stdout)))
-        };
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -500,11 +516,11 @@ pub fn pick_workspace_root() -> Result<Option<PathBuf>, String> {
             });
         }
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return if stdout.is_empty() {
+        if stdout.is_empty() {
             Ok(None)
         } else {
             Ok(Some(PathBuf::from(stdout)))
-        };
+        }
     }
 
     #[cfg(target_os = "linux")]
@@ -512,11 +528,7 @@ pub fn pick_workspace_root() -> Result<Option<PathBuf>, String> {
         for (program, args) in [
             (
                 "zenity",
-                vec![
-                    "--file-selection",
-                    "--directory",
-                    "--title=选择工作目录",
-                ],
+                vec!["--file-selection", "--directory", "--title=选择工作目录"],
             ),
             ("kdialog", vec!["--getexistingdirectory", "."]),
         ] {
@@ -547,14 +559,19 @@ pub fn resolve_managed_path(workspace_root: &Path, path_key: &str) -> Result<Pat
         "workspace" => Ok(workspace_root.to_path_buf()),
         "models" => Ok(models_root),
         "genieBase" => Ok(workspace_root.join("models").join("GenieData")),
-        "modelscopeCache" => Ok(workspace_root.join("models").join("cache").join("modelscope")),
+        "modelscopeCache" => Ok(workspace_root
+            .join("models")
+            .join("cache")
+            .join("modelscope")),
         "downloadLogs" => Ok(logs_root.join("downloads")),
-        other => Err(format!("managed path key not found in local runtime layout: {other}")),
+        other => Err(format!(
+            "managed path key not found in local runtime layout: {other}"
+        )),
     }
 }
 
 pub fn write_console_log(log_dir: &Path, contents: &str) -> Result<PathBuf, String> {
-    fs::create_dir_all(&log_dir).map_err(|error| error.to_string())?;
+    fs::create_dir_all(log_dir).map_err(|error| error.to_string())?;
     let log_path = log_dir.join(format!(
         "launcher-{}.log",
         super::state::current_timestamp()
@@ -629,8 +646,14 @@ fn runtime_event_from_python_payload(
             .unwrap_or("download.progress")
             .to_string(),
         task_id: task_id.to_string(),
-        target: payload["target"].as_str().unwrap_or(default_target).to_string(),
-        status: payload["status"].as_str().unwrap_or("downloading").to_string(),
+        target: payload["target"]
+            .as_str()
+            .unwrap_or(default_target)
+            .to_string(),
+        status: payload["status"]
+            .as_str()
+            .unwrap_or("downloading")
+            .to_string(),
         message: payload["message"].as_str().unwrap_or("").to_string(),
         progress_current: payload["progressCurrent"].as_u64().unwrap_or(0),
         progress_total: payload["progressTotal"].as_u64().unwrap_or(3),
@@ -676,11 +699,17 @@ where
         .arg("python")
         .current_dir(repo_root)
         .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
-        .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+        .env(
+            "XH_RUNTIME_CONFIG",
+            repo_root.join("config").join("runtime.toml"),
+        )
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONUNBUFFERED", "1")
-        .env("FTLANG_CACHE", workspace_root.join("models").join("GenieData"));
+        .env(
+            "FTLANG_CACHE",
+            workspace_root.join("models").join("GenieData"),
+        );
     for arg in python_args {
         command.arg(arg.as_ref());
     }
@@ -701,11 +730,17 @@ where
     command
         .current_dir(repo_root)
         .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
-        .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+        .env(
+            "XH_RUNTIME_CONFIG",
+            repo_root.join("config").join("runtime.toml"),
+        )
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONUNBUFFERED", "1")
-        .env("FTLANG_CACHE", workspace_root.join("models").join("GenieData"));
+        .env(
+            "FTLANG_CACHE",
+            workspace_root.join("models").join("GenieData"),
+        );
     for arg in python_args {
         command.arg(arg.as_ref());
     }
@@ -820,7 +855,9 @@ fn find_listener_pids_for_port(port: u16) -> Result<Vec<u32>, String> {
                     Ok(output) => output,
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                     Err(error) => {
-                        return Err(format!("failed to probe port {port} with {program}: {error}"));
+                        return Err(format!(
+                            "failed to probe port {port} with {program}: {error}"
+                        ));
                     }
                 };
 
@@ -1010,7 +1047,10 @@ fn run_get_root(
                 .arg("get_root")
                 .current_dir(repo_root)
                 .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
-                .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+                .env(
+                    "XH_RUNTIME_CONFIG",
+                    repo_root.join("config").join("runtime.toml"),
+                )
                 .env("PYTHONUTF8", "1")
                 .env("PYTHONIOENCODING", "utf-8");
             cmd
@@ -1021,7 +1061,10 @@ fn run_get_root(
                 .arg("lab.config_manager.abs_root")
                 .current_dir(repo_root)
                 .env("XH_VOICE_WORKSPACE_ROOT", workspace_root)
-                .env("XH_RUNTIME_CONFIG", repo_root.join("config").join("runtime.toml"))
+                .env(
+                    "XH_RUNTIME_CONFIG",
+                    repo_root.join("config").join("runtime.toml"),
+                )
                 .env("PYTHONUTF8", "1")
                 .env("PYTHONIOENCODING", "utf-8");
             cmd
@@ -1052,12 +1095,8 @@ pub fn spawn_backend_process(
     driver: &RuntimeDriverConfig,
 ) -> Result<(), String> {
     run_get_root(&app, repo_root, workspace_root, driver)?;
-    let mut command = build_python_command_for_driver(
-        repo_root,
-        workspace_root,
-        driver,
-        ["run_server.py"],
-    );
+    let mut command =
+        build_python_command_for_driver(repo_root, workspace_root, driver, ["run_server.py"]);
     configure_webui_command_for_process_tree(&mut command);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
@@ -1077,7 +1116,7 @@ pub fn spawn_backend_process(
 
     let app_stdout = app.clone();
     thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app_stdout, &line);
             }
@@ -1085,7 +1124,7 @@ pub fn spawn_backend_process(
     });
 
     thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app, &line);
             }
@@ -1139,7 +1178,7 @@ pub fn spawn_frontend_process(
 
     let app_stdout = app.clone();
     thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app_stdout, &line);
             }
@@ -1147,7 +1186,7 @@ pub fn spawn_frontend_process(
     });
 
     thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
                 emit_raw_log(&app, &line);
             }
@@ -1181,11 +1220,11 @@ pub fn pick_python_path() -> Result<Option<PathBuf>, String> {
             });
         }
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return if stdout.is_empty() {
+        if stdout.is_empty() {
             Ok(None)
         } else {
             Ok(Some(PathBuf::from(stdout)))
-        };
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1219,10 +1258,7 @@ pub fn pick_python_path() -> Result<Option<PathBuf>, String> {
         for (program, args) in [
             (
                 "zenity",
-                vec![
-                    "--file-selection",
-                    "--title=选择 Python 可执行文件",
-                ],
+                vec!["--file-selection", "--title=选择 Python 可执行文件"],
             ),
             ("kdialog", vec!["--getopenfilename", "."]),
         ] {
@@ -1245,6 +1281,7 @@ pub fn pick_python_path() -> Result<Option<PathBuf>, String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_probe_payload(
     repo_root: &Path,
     workspace_root: &Path,
@@ -1329,12 +1366,11 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(envs.iter().any(|(key, value)| {
-            key == "XH_VOICE_WORKSPACE_ROOT"
-                && value.as_deref() == Some("/tmp/workspace")
+            key == "XH_VOICE_WORKSPACE_ROOT" && value.as_deref() == Some("/tmp/workspace")
         }));
-        assert!(envs.iter().any(|(key, value)| {
-            key == "PYTHONUNBUFFERED" && value.as_deref() == Some("1")
-        }));
+        assert!(envs
+            .iter()
+            .any(|(key, value)| { key == "PYTHONUNBUFFERED" && value.as_deref() == Some("1") }));
     }
 
     #[test]
@@ -1384,12 +1420,8 @@ mod tests {
 
     #[test]
     fn build_terminal_failure_event_marks_task_as_failed() {
-        let event = build_terminal_failure_event(
-            "task-7",
-            "genie-base",
-            "spawn failed",
-            "1712300000",
-        );
+        let event =
+            build_terminal_failure_event("task-7", "genie-base", "spawn failed", "1712300000");
 
         assert_eq!(event.event, "download.failed");
         assert_eq!(event.task_id, "task-7");
@@ -1418,12 +1450,8 @@ mod tests {
             "total": "180M"
         });
 
-        let event = runtime_event_from_python_payload(
-            "task-1",
-            "genie-base",
-            &payload,
-            "1712300001",
-        );
+        let event =
+            runtime_event_from_python_payload("task-1", "genie-base", &payload, "1712300001");
 
         assert_eq!(event.event, "download.file_progress");
         assert_eq!(

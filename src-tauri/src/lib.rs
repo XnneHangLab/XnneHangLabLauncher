@@ -21,7 +21,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                cleanup_all_processes(&window.app_handle());
+                cleanup_all_processes(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![

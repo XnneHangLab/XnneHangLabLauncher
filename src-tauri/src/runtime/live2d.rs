@@ -108,7 +108,10 @@ pub fn write_live2d_presets(
 
 fn read_file_as_base64(path: &std::path::Path) -> Result<String, String> {
     let data = std::fs::read(path).map_err(|e| format!("读取文件失败 {}: {e}", path.display()))?;
-    Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data))
+    Ok(base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        &data,
+    ))
 }
 
 fn to_model_relative_path(model_dir: &Path, path: &Path) -> Option<String> {
@@ -148,7 +151,11 @@ fn collect_loose_exp3_files(dir: &Path, model_dir: &Path, files: &mut HashMap<St
 }
 
 /// Collects sub-resource paths from a model3.json FileReferences.
-fn collect_file_refs(root: &serde_json::Value, model_dir: &std::path::Path, files: &mut HashMap<String, String>) {
+fn collect_file_refs(
+    root: &serde_json::Value,
+    model_dir: &std::path::Path,
+    files: &mut HashMap<String, String>,
+) {
     let fr = &root["FileReferences"];
 
     // Moc
@@ -236,13 +243,14 @@ fn collect_file_refs(root: &serde_json::Value, model_dir: &std::path::Path, file
 pub async fn read_live2d_model_data(model3_path: String) -> Result<Live2DModelData, String> {
     // ... same as before ...
     let path = std::path::PathBuf::from(&model3_path);
-    let model_dir = path.parent().ok_or_else(|| "无法获取模型目录".to_string())?;
+    let model_dir = path
+        .parent()
+        .ok_or_else(|| "无法获取模型目录".to_string())?;
 
     // Read and parse model3.json
-    let json_text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取模型文件失败: {e}"))?;
-    let model_json: serde_json::Value = serde_json::from_str(&json_text)
-        .map_err(|e| format!("解析模型文件失败: {e}"))?;
+    let json_text = std::fs::read_to_string(&path).map_err(|e| format!("读取模型文件失败: {e}"))?;
+    let model_json: serde_json::Value =
+        serde_json::from_str(&json_text).map_err(|e| format!("解析模型文件失败: {e}"))?;
 
     let mut files = HashMap::new();
     collect_file_refs(&model_json, model_dir, &mut files);
@@ -269,29 +277,33 @@ pub async fn write_live2d_motion(
 ) -> Result<(), String> {
     // Read model3.json to find the motion file path
     let path = std::path::PathBuf::from(&model3_path);
-    let model_dir = path.parent().ok_or_else(|| "无法获取模型目录".to_string())?;
+    let model_dir = path
+        .parent()
+        .ok_or_else(|| "无法获取模型目录".to_string())?;
 
-    let json_text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取模型文件失败: {e}"))?;
-    let model_json: serde_json::Value = serde_json::from_str(&json_text)
-        .map_err(|e| format!("解析模型文件失败: {e}"))?;
+    let json_text = std::fs::read_to_string(&path).map_err(|e| format!("读取模型文件失败: {e}"))?;
+    let model_json: serde_json::Value =
+        serde_json::from_str(&json_text).map_err(|e| format!("解析模型文件失败: {e}"))?;
 
     // Find the motion file path
-    let motions = model_json["FileReferences"]["Motions"].as_object()
+    let motions = model_json["FileReferences"]["Motions"]
+        .as_object()
         .ok_or_else(|| "模型中未找到动作定义".to_string())?;
-    let group_arr = motions.get(&group)
+    let group_arr = motions
+        .get(&group)
         .and_then(|v| v.as_array())
         .ok_or_else(|| format!("未找到动作组: {group}"))?;
-    let entry = group_arr.get(index as usize)
+    let entry = group_arr
+        .get(index as usize)
         .ok_or_else(|| format!("未找到动作 #{index} 在组 {group} 中"))?;
-    let motion_file = entry["File"].as_str()
+    let motion_file = entry["File"]
+        .as_str()
         .ok_or_else(|| "动作文件路径为空".to_string())?;
 
     let write_path = model_dir.join(motion_file);
     let content = serde_json::to_string_pretty(&motion_json)
         .map_err(|e| format!("序列化动作数据失败: {e}"))?;
-    std::fs::write(&write_path, &content)
-        .map_err(|e| format!("写入动作文件失败: {e}"))?;
+    std::fs::write(&write_path, &content).map_err(|e| format!("写入动作文件失败: {e}"))?;
 
     Ok(())
 }
@@ -315,7 +327,11 @@ pub async fn pick_save_file(title: String, default_name: String) -> Result<Optio
             .output()
             .map_err(|e| format!("无法启动保存对话框: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(stdout) });
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(stdout)
+        })
     }
 
     #[cfg(target_os = "macos")]
@@ -328,25 +344,46 @@ pub async fn pick_save_file(title: String, default_name: String) -> Result<Optio
             .args(["-e", &script])
             .output()
             .map_err(|e| format!("无法启动保存对话框: {e}"))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(stdout) });
+        let stdout = String::from_utf8_lossy(&output.stdout)
+            .trim_end_matches('\n')
+            .to_string();
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(stdout)
+        })
     }
 
     #[cfg(target_os = "linux")]
     {
         for (program, args) in [
-            ("zenity", vec!["--file-selection", "--save", "--confirm-overwrite",
-                &format!("--title={title}"), &format!("--filename={default_name}")]),
-            ("kdialog", vec!["--getsavefilename", ".", &format!("--title={title}")]),
+            (
+                "zenity",
+                vec![
+                    "--file-selection",
+                    "--save",
+                    "--confirm-overwrite",
+                    &format!("--title={title}"),
+                    &format!("--filename={default_name}"),
+                ],
+            ),
+            (
+                "kdialog",
+                vec!["--getsavefilename", ".", &format!("--title={title}")],
+            ),
         ] {
-            let Ok(output) = std::process::Command::new(program).args(&args).output() else { continue };
-            if !output.status.success() { continue; }
+            let Ok(output) = std::process::Command::new(program).args(&args).output() else {
+                continue;
+            };
+            if !output.status.success() {
+                continue;
+            }
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !stdout.is_empty() {
                 return Ok(Some(stdout));
             }
         }
-        return Err("未找到可用的保存对话框（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的保存对话框（需要 zenity 或 kdialog）".to_string())
     }
 }
 
@@ -364,7 +401,10 @@ pub fn get_repo_root(state: State<'_, RuntimeState>) -> String {
 
 /// Convert an absolute path to a repo-relative path (forward slashes).
 #[tauri::command]
-pub fn to_relative_path(state: State<'_, RuntimeState>, absolute: String) -> Result<String, String> {
+pub fn to_relative_path(
+    state: State<'_, RuntimeState>,
+    absolute: String,
+) -> Result<String, String> {
     relative_from_absolute(&state.repo_root, &absolute)
 }
 

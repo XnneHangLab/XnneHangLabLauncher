@@ -1,0 +1,44 @@
+name: Lint TypeScript
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tsconfig*.json"
+      - "package.json"
+      - "justfile"
+      - ".github/workflows/lint-ts.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tsconfig*.json"
+      - "package.json"
+      - "justfile"
+      - ".github/workflows/lint-ts.yml"
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    name: TypeScript Type Check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: just ci-typecheck-ts

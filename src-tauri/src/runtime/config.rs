@@ -36,11 +36,9 @@ fn json_to_toml(val: serde_json::Value) -> Result<toml::Value, String> {
 #[tauri::command]
 pub fn read_lab_config(state: State<'_, RuntimeState>) -> Result<serde_json::Value, String> {
     let config_path = state.repo_root.join("config").join("lab.toml");
-    let contents = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取配置失败: {e}"))?;
-    let toml_val: toml::Value = contents
-        .parse()
-        .map_err(|e| format!("解析配置失败: {e}"))?;
+    let contents =
+        std::fs::read_to_string(&config_path).map_err(|e| format!("读取配置失败: {e}"))?;
+    let toml_val: toml::Value = contents.parse().map_err(|e| format!("解析配置失败: {e}"))?;
     serde_json::to_value(&toml_val).map_err(|e| format!("转换配置失败: {e}"))
 }
 
@@ -51,8 +49,7 @@ pub fn write_lab_config(
 ) -> Result<(), String> {
     let config_path = state.repo_root.join("config").join("lab.toml");
     let toml_val = json_to_toml(config)?;
-    let toml_str = toml::to_string_pretty(&toml_val)
-        .map_err(|e| format!("序列化配置失败: {e}"))?;
+    let toml_str = toml::to_string_pretty(&toml_val).map_err(|e| format!("序列化配置失败: {e}"))?;
     std::fs::write(&config_path, toml_str).map_err(|e| format!("写入配置失败: {e}"))
 }
 
@@ -61,8 +58,8 @@ pub fn list_profiles(state: State<'_, RuntimeState>) -> Result<serde_json::Value
     let profiles_dir = state.repo_root.join("profiles");
     let mut list: Vec<serde_json::Value> = Vec::new();
 
-    let entries = std::fs::read_dir(&profiles_dir)
-        .map_err(|e| format!("无法读取 profiles 目录: {e}"))?;
+    let entries =
+        std::fs::read_dir(&profiles_dir).map_err(|e| format!("无法读取 profiles 目录: {e}"))?;
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -75,13 +72,26 @@ pub fn list_profiles(state: State<'_, RuntimeState>) -> Result<serde_json::Value
             .unwrap_or("")
             .to_string();
         let contents = std::fs::read_to_string(&path).unwrap_or_default();
-        let toml_val: toml::Value = contents.parse().unwrap_or(toml::Value::Table(Default::default()));
+        let toml_val: toml::Value = contents
+            .parse()
+            .unwrap_or(toml::Value::Table(Default::default()));
         let profile_section = toml_val.get("profile");
         let character_section = toml_val.get("character");
-        let avatar_str = character_section.and_then(|c| c.get("avatar")).and_then(|v| v.as_str()).unwrap_or("");
+        let avatar_str = character_section
+            .and_then(|c| c.get("avatar"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let avatar_abs_path: Option<String> = if !avatar_str.is_empty() {
-            let p = state.repo_root.join("static").join("avatars").join(avatar_str);
-            if p.exists() { Some(p.to_string_lossy().to_string()) } else { None }
+            let p = state
+                .repo_root
+                .join("static")
+                .join("avatars")
+                .join(avatar_str);
+            if p.exists() {
+                Some(p.to_string_lossy().to_string())
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -97,17 +107,25 @@ pub fn list_profiles(state: State<'_, RuntimeState>) -> Result<serde_json::Value
     }
 
     list.sort_by(|a, b| {
-        a["file"].as_str().unwrap_or("").cmp(b["file"].as_str().unwrap_or(""))
+        a["file"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["file"].as_str().unwrap_or(""))
     });
 
     serde_json::to_value(list).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn read_profile(state: State<'_, RuntimeState>, file: String) -> Result<serde_json::Value, String> {
-    let path = state.repo_root.join("profiles").join(format!("{file}.toml"));
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取 profile 失败: {e}"))?;
+pub fn read_profile(
+    state: State<'_, RuntimeState>,
+    file: String,
+) -> Result<serde_json::Value, String> {
+    let path = state
+        .repo_root
+        .join("profiles")
+        .join(format!("{file}.toml"));
+    let contents = std::fs::read_to_string(&path).map_err(|e| format!("读取 profile 失败: {e}"))?;
     let toml_val: toml::Value = contents
         .parse()
         .map_err(|e| format!("解析 profile 失败: {e}"))?;
@@ -120,16 +138,22 @@ pub fn write_profile(
     file: String,
     config: serde_json::Value,
 ) -> Result<(), String> {
-    let path = state.repo_root.join("profiles").join(format!("{file}.toml"));
+    let path = state
+        .repo_root
+        .join("profiles")
+        .join(format!("{file}.toml"));
     let toml_val = json_to_toml(config)?;
-    let toml_str = toml::to_string_pretty(&toml_val)
-        .map_err(|e| format!("序列化 profile 失败: {e}"))?;
+    let toml_str =
+        toml::to_string_pretty(&toml_val).map_err(|e| format!("序列化 profile 失败: {e}"))?;
     std::fs::write(&path, toml_str).map_err(|e| format!("写入 profile 失败: {e}"))
 }
 
 #[tauri::command]
 pub fn create_profile(state: State<'_, RuntimeState>, file: String) -> Result<(), String> {
-    let path = state.repo_root.join("profiles").join(format!("{file}.toml"));
+    let path = state
+        .repo_root
+        .join("profiles")
+        .join(format!("{file}.toml"));
     if path.exists() {
         return Err(format!("profile '{file}' 已存在"));
     }
@@ -141,7 +165,10 @@ pub fn create_profile(state: State<'_, RuntimeState>, file: String) -> Result<()
 
 #[tauri::command]
 pub fn delete_profile(state: State<'_, RuntimeState>, file: String) -> Result<(), String> {
-    let path = state.repo_root.join("profiles").join(format!("{file}.toml"));
+    let path = state
+        .repo_root
+        .join("profiles")
+        .join(format!("{file}.toml"));
     std::fs::remove_file(&path).map_err(|e| format!("删除 profile 失败: {e}"))
 }
 
@@ -203,8 +230,7 @@ pub async fn pick_file_for_profile(
 
 #[tauri::command]
 pub async fn pick_any_file(title: String) -> Result<Option<String>, String> {
-    pick_file_dialog(&title, "")
-        .map(|p| p.map(|b| b.to_string_lossy().to_string()))
+    pick_file_dialog(&title, "").map(|p| p.map(|b| b.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
@@ -228,7 +254,11 @@ fn pick_dir_dialog(title: &str) -> Result<Option<PathBuf>, String> {
             .output()
             .map_err(|e| format!("无法启动目录选择器: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(stdout))
+        })
     }
 
     #[cfg(target_os = "macos")]
@@ -238,24 +268,41 @@ fn pick_dir_dialog(title: &str) -> Result<Option<PathBuf>, String> {
             .args(["-e", &script])
             .output()
             .map_err(|e| format!("无法启动目录选择器: {e}"))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+        let stdout = String::from_utf8_lossy(&output.stdout)
+            .trim_end_matches('\n')
+            .to_string();
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(stdout))
+        })
     }
 
     #[cfg(target_os = "linux")]
     {
         for (program, args) in [
-            ("zenity", vec!["--file-selection", "--directory", &format!("--title={title}")]),
+            (
+                "zenity",
+                vec![
+                    "--file-selection",
+                    "--directory",
+                    &format!("--title={title}"),
+                ],
+            ),
             ("kdialog", vec!["--getexistingdirectory", "."]),
         ] {
-            let Ok(output) = Command::new(program).args(&args).output() else { continue };
-            if !output.status.success() { continue }
+            let Ok(output) = Command::new(program).args(&args).output() else {
+                continue;
+            };
+            if !output.status.success() {
+                continue;
+            }
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !stdout.is_empty() {
                 return Ok(Some(PathBuf::from(stdout)));
             }
         }
-        return Err("未找到可用的目录选择器（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的目录选择器（需要 zenity 或 kdialog）".to_string())
     }
 }
 
@@ -276,7 +323,11 @@ fn pick_file_dialog(title: &str, start_dir: &str) -> Result<Option<PathBuf>, Str
             .output()
             .map_err(|e| format!("无法启动文件选择器: {e}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(stdout))
+        })
     }
 
     #[cfg(target_os = "macos")]
@@ -288,24 +339,41 @@ fn pick_file_dialog(title: &str, start_dir: &str) -> Result<Option<PathBuf>, Str
             .args(["-e", &script])
             .output()
             .map_err(|e| format!("无法启动文件选择器: {e}"))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string();
-        return Ok(if stdout.is_empty() { None } else { Some(PathBuf::from(stdout)) });
+        let stdout = String::from_utf8_lossy(&output.stdout)
+            .trim_end_matches('\n')
+            .to_string();
+        Ok(if stdout.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(stdout))
+        })
     }
 
     #[cfg(target_os = "linux")]
     {
         let start_with_slash = format!("{}/", start_dir.trim_end_matches('/'));
         for (program, args) in [
-            ("zenity", vec!["--file-selection", &format!("--title={title}"), &format!("--filename={start_with_slash}")]),
+            (
+                "zenity",
+                vec![
+                    "--file-selection",
+                    &format!("--title={title}"),
+                    &format!("--filename={start_with_slash}"),
+                ],
+            ),
             ("kdialog", vec!["--getopenfilename", start_dir]),
         ] {
-            let Ok(output) = Command::new(program).args(&args).output() else { continue };
-            if !output.status.success() { continue }
+            let Ok(output) = Command::new(program).args(&args).output() else {
+                continue;
+            };
+            if !output.status.success() {
+                continue;
+            }
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !stdout.is_empty() {
                 return Ok(Some(PathBuf::from(stdout)));
             }
         }
-        return Err("未找到可用的文件选择器（需要 zenity 或 kdialog）".to_string());
+        Err("未找到可用的文件选择器（需要 zenity 或 kdialog）".to_string())
     }
 }
