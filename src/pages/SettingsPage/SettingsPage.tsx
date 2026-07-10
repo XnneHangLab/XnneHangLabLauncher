@@ -258,8 +258,7 @@ export function SettingsPage({
                   </SettingRow>
                   {(
                     [
-                      ['local_embedding', '本地向量嵌入', 'BGE-M3 GGUF 向量化，用于记忆搜索'],
-                      ['memory_bench', 'Memory Bench', '记忆压测工具'],
+                      ['local_embedding', '本地向量嵌入', 'BGE-M3 GGUF 向量化，可用于 wikimem 语义融合'],
                     ] as Array<[keyof LabConfig['package'], string, string]>
                   ).map(([key, name, description]) => (
                     <SettingRow key={key} name={name} description={description}>
