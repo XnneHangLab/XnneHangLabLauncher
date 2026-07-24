@@ -29,15 +29,60 @@ class _CubismFrameworkInit {
 
   private _contextLostCallbacks: Array<() => void> = [];
   private _contextRestoredCallbacks: Array<() => void> = [];
+  private _listenerCanvas: HTMLCanvasElement | null = null;
+
+  // Stable, bound handlers so the identical reference can be removed later.
+  // The old code added a fresh anonymous listener on every initialize() call,
+  // and since initialize() is re-invoked from webglcontextrestored, those
+  // duplicate, unremovable handlers multiplied on each context restore.
+  private readonly _handleContextLost = (e: Event): void => {
+    e.preventDefault();
+    this._initialized = false;
+    this._gl = null;
+    for (const cb of this._contextLostCallbacks) cb();
+  };
+
+  private readonly _handleContextRestored = (): void => {
+    const canvas = this._canvas;
+    if (!canvas) return;
+    this.initialize(canvas);
+    for (const cb of this._contextRestoredCallbacks) cb();
+  };
+
+  private attachContextListeners(canvas: HTMLCanvasElement): void {
+    if (this._listenerCanvas === canvas) return;
+    this.detachContextListeners();
+    canvas.addEventListener('webglcontextlost', this._handleContextLost);
+    canvas.addEventListener('webglcontextrestored', this._handleContextRestored);
+    this._listenerCanvas = canvas;
+  }
+
+  private detachContextListeners(): void {
+    const canvas = this._listenerCanvas;
+    if (!canvas) return;
+    canvas.removeEventListener('webglcontextlost', this._handleContextLost);
+    canvas.removeEventListener('webglcontextrestored', this._handleContextRestored);
+    this._listenerCanvas = null;
+  }
 
   /** Register a callback for when WebGL context is lost. */
   onContextLost(cb: () => void): void {
     this._contextLostCallbacks.push(cb);
   }
 
+  /** Unregister a previously registered context-lost callback. */
+  offContextLost(cb: () => void): void {
+    this._contextLostCallbacks = this._contextLostCallbacks.filter((c) => c !== cb);
+  }
+
   /** Register a callback for when WebGL context is restored. */
   onContextRestored(cb: () => void): void {
     this._contextRestoredCallbacks.push(cb);
+  }
+
+  /** Unregister a previously registered context-restored callback. */
+  offContextRestored(cb: () => void): void {
+    this._contextRestoredCallbacks = this._contextRestoredCallbacks.filter((c) => c !== cb);
   }
 
   /** Remove all context loss/restore callbacks. */
@@ -60,17 +105,10 @@ class _CubismFrameworkInit {
 
     this._canvas = canvas;
 
-    // Handle WebGL context loss (e.g. HMR, GPU reset, sleep/wake)
-    canvas.addEventListener('webglcontextlost', (e) => {
-      e.preventDefault();
-      this._initialized = false;
-      this._gl = null;
-      for (const cb of this._contextLostCallbacks) cb();
-    });
-    canvas.addEventListener('webglcontextrestored', () => {
-      this.initialize(canvas);
-      for (const cb of this._contextRestoredCallbacks) cb();
-    });
+    // Handle WebGL context loss (e.g. HMR, GPU reset, sleep/wake). Attached via
+    // stable named handlers and only once per canvas, so the re-init that
+    // webglcontextrestored triggers does not stack duplicate listeners.
+    this.attachContextListeners(canvas);
 
     this._gl =
       (canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true }) as WebGL2RenderingContext) ??
@@ -108,6 +146,7 @@ class _CubismFrameworkInit {
 
   /** Dispose Cubism Framework. */
   dispose(): void {
+    this.detachContextListeners();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
     if (this._initialized) {

@@ -89,3 +89,26 @@ export async function createTextures(
 
   return results;
 }
+
+/**
+ * Delete the WebGL textures created by createTextures().
+ *
+ * The Cubism renderer binds these textures but does NOT own them, so they must
+ * be deleted explicitly when a model is released or reloaded. Skipping this
+ * orphaned one texture set per (re)load on the GPU — a VRAM leak that
+ * eventually exhausts the WebGL context and forces a context loss.
+ */
+export function deleteTextures(infos: TextureInfo[]): void {
+  if (infos.length === 0) return;
+  let gl: WebGL2RenderingContext | WebGLRenderingContext;
+  try {
+    gl = CubismInit.gl;
+  } catch {
+    // GL context is already gone (e.g. after a context-lost event) — the
+    // textures were freed along with it, so there is nothing to delete.
+    return;
+  }
+  for (const info of infos) {
+    if (info.id) gl.deleteTexture(info.id);
+  }
+}

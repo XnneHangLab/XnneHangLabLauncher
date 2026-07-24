@@ -27,7 +27,7 @@ import { CubismMotionManager } from '@framework/motion/cubismmotionmanager';
 import { CubismExpressionMotionManager } from '@framework/motion/cubismexpressionmotionmanager';
 
 import { CubismInit } from './CubismFrameworkInit';
-import { createTextures, TextureInfo } from './TextureManager';
+import { createTextures, deleteTextures, TextureInfo } from './TextureManager';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -566,6 +566,10 @@ export class ModelInstance {
 
   release(): void {
     this._userModel.release();
+    // Free the GPU textures too — the renderer we just released does not own
+    // them, so without this they leak on every model (re)load.
+    deleteTextures(this._textureInfos);
+    this._textureInfos = [];
   }
 }
 
