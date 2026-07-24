@@ -45,7 +45,16 @@ class _CubismFrameworkInit {
   private readonly _handleContextRestored = (): void => {
     const canvas = this._canvas;
     if (!canvas) return;
-    this.initialize(canvas);
+    try {
+      this.initialize(canvas);
+    } catch (e) {
+      // Re-init failed (e.g. getContext returned null). Leave the framework
+      // uninitialized so the render loop keeps idling, and do NOT run the
+      // restored callbacks — there is no usable GL context to reload into.
+      // The host's restore-timeout path surfaces the failure to the user.
+      console.error('[Live2D] WebGL 上下文恢复后重新初始化失败:', e);
+      return;
+    }
     for (const cb of this._contextRestoredCallbacks) cb();
   };
 

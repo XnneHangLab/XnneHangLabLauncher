@@ -37,7 +37,9 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
   };
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
-  const isLoading = !!modelPath && !modelLoaded && !modelError;
+  // While the context is lost, the dedicated "restoring…" overlay owns the
+  // canvas; don't also show the generic loading overlay (they'd stack).
+  const isLoading = !!modelPath && !modelLoaded && !modelError && !contextLost;
 
   return (
     <div className="live2d-tool">

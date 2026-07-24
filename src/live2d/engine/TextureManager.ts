@@ -95,7 +95,7 @@ export async function createTextures(
  *
  * The Cubism renderer binds these textures but does NOT own them, so they must
  * be deleted explicitly when a model is released or reloaded. Skipping this
- * orphaned one texture set per (re)load on the GPU — a VRAM leak that
+ * leaves one orphaned texture set on the GPU per (re)load — a VRAM leak that
  * eventually exhausts the WebGL context and forces a context loss.
  */
 export function deleteTextures(infos: TextureInfo[]): void {
