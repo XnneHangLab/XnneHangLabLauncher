@@ -179,6 +179,11 @@ interface Live2DSessionState {
 
 const live2dSessionKey = 'live2d.previewSession';
 
+// If the WebGL context is lost and neither restored nor failed within this
+// window (e.g. a hard GPU-process crash where webglcontextrestored never
+// fires), stop showing the "restoring…" overlay and surface an error instead.
+const CONTEXT_RESTORE_TIMEOUT_MS = 10_000;
+
 export interface EditorContextValue {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   modelInstance: ModelInstance | null;
@@ -188,6 +193,8 @@ export interface EditorContextValue {
   toggleMotionAsset: (entry: MotionEntry) => void;
   modelLoaded: boolean;
   modelError: string | null;
+  /** True while the WebGL context is lost and the model is being restored. */
+  contextLost: boolean;
   modelPath: string | null;
   isPlaying: boolean;
   currentTime: number;
@@ -762,6 +769,7 @@ export function EditorProvider({
   const loadModelByPathRef = useRef<(path: string, options?: { keepManualOverrides?: boolean; keepTimeline?: boolean; keepMotionAssets?: boolean }) => Promise<void>>(async () => {});
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [contextLost, setContextLost] = useState(false);
   const [motionEntries, setMotionEntries] = useState<MotionEntry[]>([]);
   const [motionAssets, setMotionAssets] = useState<MotionEntry[]>([]);
   const motionAssetsRef = useRef<MotionEntry[]>([]);
@@ -947,21 +955,88 @@ export function EditorProvider({
       } catch (e) {
         debugLogRef.current?.(`[Live2D] CubismFramework 初始化失败: ${String(e)}`, 'stderr');
       }
-
-      CubismInit.onContextRestored(() => {
-        const currentPath = modelPathRef.current;
-        if (currentPath) {
-          loadModelByPathRef.current(currentPath, { keepManualOverrides: true, keepMotionAssets: true })
-            .catch(console.error);
-        }
-      });
     };
     tryInit();
     return () => {
       cancelled = true;
-      CubismInit.clearContextCallbacks();
     };
   }, [isActive]);
+
+  // ── WebGL context loss / restore recovery ────────────────────────────────
+  // Registered once on mount and independent of `isActive`, so navigating away
+  // from the tools page (which tears down the init effect above) does NOT
+  // unregister recovery. On loss: release the now-invalid model — this frees
+  // its GPU textures and stops the render loop from touching dead GL objects.
+  // On restore: reload the model from disk against the fresh context.
+  useEffect(() => {
+    let restoreTimer: number | null = null;
+    const clearRestoreTimer = () => {
+      if (restoreTimer !== null) {
+        window.clearTimeout(restoreTimer);
+        restoreTimer = null;
+      }
+    };
+
+    const onLost = () => {
+      debugLogRef.current?.('[Live2D] WebGL 上下文丢失，等待恢复…', 'stderr');
+      setContextLost(true);
+      // Keep the state machine consistent with the GPU: the model object is
+      // about to be released, so it is no longer "loaded" or "playing".
+      setModelLoaded(false);
+      setIsPlaying(false);
+      motionPlayerRef.current.unload();
+      if (modelRef.current) {
+        try {
+          modelRef.current.release();
+        } catch {
+          // Context already gone — GPU resources are freed with it.
+        }
+        modelRef.current = null;
+      }
+      // Safety net: if the context is never restored (a hard GPU-process crash
+      // on Windows WebView2 may never fire webglcontextrestored) or re-init
+      // throws, surface an error instead of a perpetual "restoring…" overlay.
+      clearRestoreTimer();
+      restoreTimer = window.setTimeout(() => {
+        restoreTimer = null;
+        debugLogRef.current?.('[Live2D] WebGL 上下文恢复超时', 'stderr');
+        setModelError('图形上下文恢复超时，请重新打开 Live2D 预览。');
+        setContextLost(false);
+      }, CONTEXT_RESTORE_TIMEOUT_MS);
+    };
+
+    const onRestored = () => {
+      debugLogRef.current?.('[Live2D] WebGL 上下文已恢复，重新加载模型', 'system');
+      clearRestoreTimer();
+      const currentPath = modelPathRef.current;
+      if (!currentPath) {
+        setContextLost(false);
+        return;
+      }
+      // Reload against the fresh context. loadModelByPath owns its error path
+      // (sets modelError on failure and never rejects), so keep the overlay up
+      // until the async reload settles, then hand back to the normal
+      // loaded / error state. keepTimeline preserves the editor's timeline
+      // across an involuntary GPU reset.
+      //
+      // Note: this reloads regardless of `isActive`. A context loss while the
+      // tools page is hidden (0-size canvas) is rare, and the reload is
+      // idempotent, so we accept the background work rather than deferring.
+      loadModelByPathRef.current(currentPath, {
+        keepManualOverrides: true,
+        keepMotionAssets: true,
+        keepTimeline: true,
+      }).finally(() => setContextLost(false));
+    };
+
+    CubismInit.onContextLost(onLost);
+    CubismInit.onContextRestored(onRestored);
+    return () => {
+      clearRestoreTimer();
+      CubismInit.offContextLost(onLost);
+      CubismInit.offContextRestored(onRestored);
+    };
+  }, []);
 
   // ── Animation loop ───────────────────────────────────────────────────────
 
@@ -2747,6 +2822,7 @@ export function EditorProvider({
     toggleMotionAsset,
     modelLoaded,
     modelError,
+    contextLost,
     clearModelError,
     modelPath,
     isPlaying,

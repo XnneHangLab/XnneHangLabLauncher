@@ -23,7 +23,7 @@ export function Live2DPreviewTool({ onBack, onDebugLog, isActive }: Live2DPrevie
 }
 
 function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
-  const { canvasRef, modelPath, modelLoaded, modelError, clearModelError } = useEditor();
+  const { canvasRef, modelPath, modelLoaded, modelError, contextLost, clearModelError } = useEditor();
   const [rightTab, setRightTab] = useState<'params' | 'expressions'>('params');
   const [renderScale, setRenderScale] = useState<number>(() => {
     const saved = localStorage.getItem('live2d_preview_render_scale');
@@ -37,7 +37,9 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
   };
 
   const filename = modelPath ? modelPath.split(/[/\\]/).pop() ?? modelPath : '未选择模型';
-  const isLoading = !!modelPath && !modelLoaded && !modelError;
+  // While the context is lost, the dedicated "restoring…" overlay owns the
+  // canvas; don't also show the generic loading overlay (they'd stack).
+  const isLoading = !!modelPath && !modelLoaded && !modelError && !contextLost;
 
   return (
     <div className="live2d-tool">
@@ -69,6 +71,7 @@ function Live2DToolInner({ onBack }: Live2DPreviewToolProps) {
           <div className="live2d-canvas-wrap">
             {!modelPath && <div className="live2d-empty">点击「导入模型」选择 .model3.json 文件</div>}
             {isLoading && <div className="live2d-loading"><span className="live2d-loading-spinner" />加载模型中…</div>}
+            {contextLost && <div className="live2d-loading"><span className="live2d-loading-spinner" />图形上下文恢复中…</div>}
             <canvas ref={canvasRef} className="live2d-canvas" />
           </div>
         </div>
