@@ -95,7 +95,6 @@ export interface LabConfig {
   package: {
     llm_translate: boolean;
     local_embedding: boolean;
-    memory_bench: boolean;
     sherpa_asr: boolean;
     qwen_asr: boolean;
     gsv_lite: boolean;
@@ -109,9 +108,5 @@ export interface LabConfig {
     config_alts_dir: string;
     uvicorn_log_level: string;
     live2d_render_scale: number;
-  };
-  memory_bench: {
-    search_limit: number;
-    server_api_key: string;
   };
 }

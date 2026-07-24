@@ -28,8 +28,7 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string; requires?: string[
   { id: 'web_search_searxng', description: 'SearXNG 网络搜索', conflicts: ['web_search_ddg'] },
   { id: 'screen_shot', description: '允许 Agent 调用截图能力' },
   { id: 'diary', description: '读写日记文件' },
-  { id: 'memory', description: '长期记忆检索与写入（memory_bench/mem0 后端，迁移期回退）', conflicts: ['wikimem'] },
-  { id: 'wikimem', description: '记忆管线：markdown 文件记忆，BM25 + wiki-link 关联召回', conflicts: ['memory'] },
+  { id: 'wikimem', description: '记忆管线：markdown 文件记忆，BM25 + wiki-link 关联召回' },
   { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
   { id: 'mood_chat', description: '主动发起情绪化对话', requires: ['visual_observer'] },
   { id: 'visual_observer', description: '游戏陪伴模式下的后台视觉轮询与摘要' },
@@ -65,12 +64,6 @@ type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'se
 interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; options?: string[]; }
 
 const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
-  memory: [
-    { key: 'base_url', type: 'text', description: 'Memory Bench 服务基础地址', defaultValue: 'http://localhost:12393' },
-    { key: 'user_id', type: 'text', description: '记忆读写使用的用户 ID', defaultValue: 'xnne' },
-    { key: 'agent_id', type: 'text', description: '记忆读写使用的角色 ID', defaultValue: 'congyin' },
-    { key: 'search_limit', type: 'number', description: '每轮注入的最大记忆条数', defaultValue: 10 },
-  ],
   wikimem: [
     { key: 'memory_dir', type: 'text', description: '记忆目录（相对 workspace_root，或绝对路径）', defaultValue: 'memory' },
     { key: 'user_id', type: 'text', description: '记忆条目 owner 标识', defaultValue: 'xnne' },
