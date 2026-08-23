@@ -57,6 +57,7 @@ export interface LabConfig {
       llm_provider: string;
       llm_model_name: string;
       support_vision: boolean;
+      thinking_mode?: 'default' | 'enabled' | 'disabled';
     };
     vision_model: {
       llm_provider: string;

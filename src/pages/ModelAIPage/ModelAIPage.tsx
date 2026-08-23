@@ -135,13 +135,12 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
   const [providers, setProviders] = useState<LlmProvider[]>(
     labConfig?.agent.llm.providers ?? [],
   );
-  const [chatModel, setChatModel] = useState(
-    labConfig?.agent.chat_model ?? {
-      llm_provider: '',
-      llm_model_name: '',
-      support_vision: false,
-    },
-  );
+  const [chatModel, setChatModel] = useState<LabConfig['agent']['chat_model']>(() => ({
+    llm_provider: labConfig?.agent.chat_model.llm_provider ?? '',
+    llm_model_name: labConfig?.agent.chat_model.llm_model_name ?? '',
+    support_vision: labConfig?.agent.chat_model.support_vision ?? false,
+    thinking_mode: labConfig?.agent.chat_model.thinking_mode ?? 'default',
+  }));
   const [visionModel, setVisionModel] = useState(
     labConfig?.agent.vision_model ?? {
       llm_provider: '',
@@ -261,6 +260,22 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
             onChange={(next) => setChatModel({ ...chatModel, support_vision: next })}
           />
         </SettingRow>
+        <SettingRow name="思考模式" description="显式设置仅适用于支持 thinking 参数的提供商" icon="🧠">
+          <select
+            className="proxy-input"
+            value={chatModel.thinking_mode ?? 'default'}
+            onChange={(e) =>
+              setChatModel({
+                ...chatModel,
+                thinking_mode: e.target.value as 'default' | 'enabled' | 'disabled',
+              })
+            }
+          >
+            <option value="default">默认（由提供商决定）</option>
+            <option value="disabled">关闭（实时交互）</option>
+            <option value="enabled">开启</option>
+          </select>
+        </SettingRow>
       </SettingCard>
 
       <div className="group-title">视觉模型</div>
@@ -299,8 +314,8 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
         )}
       </SettingCard>
       <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px', lineHeight: 1.5 }}>
-        ⓘ 游戏陪伴模式的截图轮询始终使用此视觉模型分析画面，不会调用对话模型。
-        如需启用轮询，建议配置速度快、价格便宜的视觉模型。
+        ⓘ 对话模型支持视觉时，图片会直接进入同一次对话请求；不支持视觉时，系统会使用此视觉模型生成摘要后再交给对话模型。
+        游戏陪伴模式的后台截图轮询也会使用此视觉模型。
       </p>
 
       <div className="settings-save-row">
