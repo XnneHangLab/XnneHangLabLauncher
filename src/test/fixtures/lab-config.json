@@ -1,0 +1,70 @@
+{
+  "conf_version": "v1.6.6",
+  "asr": {},
+  "agent": {
+    "enable_tool": true,
+    "translate_provider": "none",
+    "user_lang": "ZH",
+    "speaker_lang": "ZH",
+    "faster_first_response": false,
+    "max_vision_concurrency": 4,
+    "require_detailed": false,
+    "structured_history_full_turns": 5,
+    "segment_method": "pysbd",
+    "interrupt_method": "user",
+    "memory_agent_profile": "profiles/baoqiao.toml",
+    "memory_chat_profile": "profiles/congyin.toml",
+    "chat_model": {
+      "llm_provider": "deepseek",
+      "llm_model_name": "deepseek-v4-flash-vision-exp",
+      "support_vision": true,
+      "thinking_mode": "disabled"
+    },
+    "vision_model": {
+      "llm_provider": "",
+      "llm_model_name": "",
+      "reasoning_effort": null
+    },
+    "prompts": {
+      "vision_prompt": "./prompts/vision_prompt.txt"
+    },
+    "llm": {
+      "providers": []
+    },
+    "translate": {
+      "deeplx": {
+        "api_key": ""
+      },
+      "llm": {
+        "model_path": "",
+        "n_gpu_layers": 0
+      }
+    },
+    "tts": {
+      "provider": "none",
+      "voice_assets_root": "./voices",
+      "gsv_lite": {
+        "use_bert": false
+      },
+      "genie_tts": {
+        "language": "auto",
+        "use_roberta": false,
+        "onnx_intra_threads": 4
+      }
+    },
+    "qwen_tts": {
+      "model_name": "0.6b",
+      "model_0_6b_path": "",
+      "model_1_7b_path": "",
+      "device": "cpu",
+      "warmup_cuda_graphs": false
+    }
+  },
+  "local_embedding": {},
+  "package": {},
+  "root": {
+    "root_dir": ""
+  },
+  "server": {},
+  "memory_bench": {}
+}
