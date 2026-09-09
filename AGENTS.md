@@ -16,7 +16,6 @@ launcher/
 │   │   ├── ConsolePage           #     Runtime output & logs
 │   │   ├── SettingsPage          #     General settings
 │   │   ├── ServiceConfigPage     #     ASR/TTS/Agent service config
-│   │   ├── SpeechPage            #     Speech settings (TTS/ASR provider selection)
 │   │   ├── ToolsPage             #     Plugin management & configuration
 │   │   ├── ProfilesPage          #     Character profile management
 │   │   └── TroubleshootingPage   #     Diagnostics

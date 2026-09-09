@@ -17,7 +17,6 @@ import { listProfiles } from '../../services/config/profileBridge';
 import type { ProfileMeta } from '../../services/config/profileConfig';
 import { ServiceConfigPanel } from '../ServiceConfigPage/ServiceConfigPage';
 import { ModelAIPanel } from '../ModelAIPage/ModelAIPage';
-import { SpeechPanel } from '../SpeechPage/SpeechPage';
 import '../../styles/settings.css';
 
 interface SettingsPageProps {
@@ -293,13 +292,6 @@ export function SettingsPage({
         return (
           <div id="settings-panel-model-ai" role="tabpanel" aria-labelledby="settings-tab-model-ai">
             <ModelAIPanel labConfig={labConfig} onSaveLabConfig={onSaveLabConfig} />
-          </div>
-        );
-
-      case 'speech':
-        return (
-          <div id="settings-panel-speech" role="tabpanel" aria-labelledby="settings-tab-speech">
-            <SpeechPanel labConfig={labConfig} onSaveLabConfig={onSaveLabConfig} />
           </div>
         );
 
