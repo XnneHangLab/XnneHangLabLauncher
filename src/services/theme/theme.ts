@@ -17,6 +17,7 @@ export function readStoredTheme(): ThemeMode | null {
 }
 
 export function writeStoredTheme(theme: ThemeMode) {
+  document.documentElement.dataset.theme = theme;
   localStorage.setItem(THEME_STORAGE_KEY, theme);
 }
 

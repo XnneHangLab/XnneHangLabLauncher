@@ -11,6 +11,10 @@ describe('theme service', () => {
     localStorage.clear();
   });
 
+  afterEach(() => {
+    delete document.documentElement.dataset.theme;
+  });
+
   it('recognizes valid theme values', () => {
     expect(isThemeMode('night')).toBe(true);
     expect(isThemeMode('day')).toBe(true);
@@ -23,6 +27,10 @@ describe('theme service', () => {
     writeStoredTheme('day');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('day');
     expect(readStoredTheme()).toBe('day');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'day');
+
+    writeStoredTheme('night');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'night');
   });
 
   it('falls back to null for invalid stored values', () => {
