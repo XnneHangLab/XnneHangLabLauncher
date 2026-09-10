@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { ConsoleLogEntry } from '../../services/launcher/launcher';
 import '../../styles/tools.css';
 import '../../styles/live2d.css';
-import { Live2DPreviewTool } from './Live2DPreviewTool';
+const Live2DPreviewTool = lazy(() => import('./Live2DPreviewTool').then((module) => ({
+  default: module.Live2DPreviewTool,
+})));
 
 type ToolId = 'live2d';
 
@@ -23,6 +25,11 @@ interface ToolsPageProps {
 }
 
 export function ToolsPage({ onDebugLog, isActive = false }: ToolsPageProps) {
+  const [hasOpened, setHasOpened] = useState(false);
+  useEffect(() => {
+    if (isActive) setHasOpened(true);
+  }, [isActive]);
+
   const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
     return window.localStorage.getItem('live2d.activeTool') === 'live2d' ? 'live2d' : null;
   });
@@ -32,8 +39,12 @@ export function ToolsPage({ onDebugLog, isActive = false }: ToolsPageProps) {
     else window.localStorage.removeItem('live2d.activeTool');
   }, [activeTool]);
 
-  if (activeTool === 'live2d') {
-    return <Live2DPreviewTool onBack={() => setActiveTool(null)} onDebugLog={onDebugLog} isActive={isActive} />;
+  if (activeTool === 'live2d' && (isActive || hasOpened)) {
+    return (
+      <Suspense fallback={<p role="status">正在加载 Live2D 预览…</p>}>
+        <Live2DPreviewTool onBack={() => setActiveTool(null)} onDebugLog={onDebugLog} isActive={isActive} />
+      </Suspense>
+    );
   }
 
   return (
