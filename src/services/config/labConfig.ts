@@ -46,8 +46,6 @@ export interface LabConfig {
     user_lang: string;
     speaker_lang: string;
     faster_first_response: boolean;
-    max_vision_concurrency: number;
-    require_detailed: boolean;
     structured_history_full_turns: number;
     segment_method: string;
     interrupt_method: string;
@@ -58,14 +56,6 @@ export interface LabConfig {
       llm_model_name: string;
       support_vision: boolean;
       thinking_mode?: 'default' | 'enabled' | 'disabled';
-    };
-    vision_model: {
-      llm_provider: string;
-      llm_model_name: string;
-      reasoning_effort: string | null;
-    };
-    prompts: {
-      vision_prompt: string;
     };
     llm: {
       providers: LlmProvider[];

@@ -88,8 +88,8 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分', defaultValue: 10 },
     { key: 'game_companion_mode', type: 'boolean', description: '启用游戏陪伴模式', defaultValue: false },
     { key: 'game_mood_decrease', type: 'number', description: '游戏模式下超时扣除的心情分', defaultValue: 2 },
-    { key: 'game_interval_s', type: 'number', description: '游戏模式下检查视觉摘要的间隔（秒）', defaultValue: 1 },
-    { key: 'game_prompt_suffix', type: 'textarea', description: '游戏模式下追加到 prompt 的后缀', defaultValue: '根据视觉摘要简短评论，不超过两句话。不要提问。' },
+    { key: 'game_interval_s', type: 'number', description: '游戏模式下检查视觉变化的间隔（秒）', defaultValue: 1 },
+    { key: 'game_prompt_suffix', type: 'textarea', description: '游戏模式下追加到 prompt 的后缀', defaultValue: '根据截图和 OCR 文字简短评论，不超过两句话。不要提问。' },
     { key: 'game_require_visual_change', type: 'boolean', description: '游戏模式下是否要求有视觉变化才发言', defaultValue: true },
   ],
   pre_tool_preview: [
@@ -121,11 +121,10 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   ],
   visual_observer: [
     { key: 'poll_interval_s', type: 'number', description: '截图轮询间隔（秒）', defaultValue: 1.0 },
-    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发摘要', defaultValue: 20 },
+    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发对话', defaultValue: 20 },
     { key: 'ocr_max_items', type: 'number', description: '每帧保留面积最大的前 N 条 OCR', defaultValue: 10 },
     { key: 'ocr_min_confidence', type: 'number', description: 'OCR 置信度过滤阈值', defaultValue: 0.6 },
     { key: 'ocr_min_length', type: 'number', description: 'OCR 最短文字长度', defaultValue: 2 },
-    { key: 'vision_boost', type: 'boolean', description: '触发摘要时同时发送截图给 VLM（需可用视觉模型）', defaultValue: false },
   ],
 };
 
@@ -986,11 +985,11 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
     active?: boolean;
     total_captures?: number;
     pending_ocr_count?: number;
+    ocr_threshold?: number;
+    speaking?: boolean;
     accumulated_ocr?: string[];
     current_frame_ocr?: string[];
-    latest_summary?: string | null;
-    visual_digest?: { text: string; frame_count: number; timestamp: number } | null;
-    session_history?: Array<Record<string, any>>;
+    session_history?: Array<{ accumulated_ocr: string[]; ocr_count: number; timestamp: number }>;
   } | null>(null);
   const [voExpanded, setVoExpanded] = useState(false);
 
@@ -1294,16 +1293,10 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                     </div>
                   </details>
                 )}
-                {voStatus.latest_summary && (
-                  <div className="status-kv-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-                    <span className="status-kv-label">最近摘要</span>
-                    <span className="status-kv-value" style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{voStatus.latest_summary}</span>
-                  </div>
-                )}
                 {voStatus.session_history && voStatus.session_history.length > 0 && (
                   <details className="mbti-answers-detail">
                     <summary className="mbti-answers-summary">
-                      历史总结 ({voStatus.session_history.length} 轮)
+                      观察记录 ({voStatus.session_history.length} 轮)
                       <button
                         type="button"
                         className="l2d-add-btn"
@@ -1316,7 +1309,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                       >复制 JSON</button>
                     </summary>
                     <div className="mbti-answers-list">
-                      {voStatus.session_history.map((s: any, si: number) => (
+                      {voStatus.session_history.map((s, si) => (
                         <div key={si} className="mbti-answer-item">
                           <div className="mbti-answer-header">
                             <span className="mbti-answer-id">轮 {si + 1}</span>
@@ -1325,7 +1318,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                             </span>
                           </div>
                           <div className="mbti-answer-body">
-                            <span className="mbti-answer-choice" style={{ whiteSpace: 'pre-wrap' }}>{s.summary}</span>
+                            <span className="mbti-answer-choice" style={{ whiteSpace: 'pre-wrap' }}>{s.accumulated_ocr.join('\n')}</span>
                           </div>
                         </div>
                       ))}

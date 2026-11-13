@@ -13,6 +13,7 @@ describe('ModelAIPanel', () => {
     const onSave = vi.fn();
 
     render(<ModelAIPanel labConfig={structuredClone(labConfig)} onSaveLabConfig={onSave} />);
+    expect(screen.queryByText('视觉模型')).not.toBeInTheDocument();
 
     const selects = screen.getAllByRole('combobox');
     const selectedThinking = selects.find((select) => (select as HTMLSelectElement).value === 'disabled');
@@ -28,5 +29,6 @@ describe('ModelAIPanel', () => {
         }),
       }),
     );
+    expect(onSave.mock.calls[0][0].agent).not.toHaveProperty('vision_model');
   });
 });
