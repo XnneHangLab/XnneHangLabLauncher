@@ -30,8 +30,7 @@ const KNOWN_PLUGINS: Array<{ id: string; description: string; requires?: string[
   { id: 'diary', description: '读写日记文件' },
   { id: 'wikimem', description: '记忆管线：markdown 文件记忆，BM25 + wiki-link 关联召回' },
   { id: 'live2d_control', description: '控制 Live2D 模型外观与动作' },
-  { id: 'mood_chat', description: '主动发起情绪化对话', requires: ['visual_observer'] },
-  { id: 'visual_observer', description: '游戏陪伴模式下的后台视觉轮询与摘要' },
+  { id: 'mood_chat', description: '主动发起情绪化对话' },
 ];
 
 const PLUGIN_MAP = new Map(KNOWN_PLUGINS.map(p => [p.id, p]));
@@ -86,11 +85,6 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'interval_low_s', type: 'number', description: '心情 >= 60 时的主动发言间隔（秒）', defaultValue: 120 },
     { key: 'mood_increase', type: 'number', description: '用户发言后增加的心情分', defaultValue: 5 },
     { key: 'mood_decrease', type: 'number', description: '主动发言后超时未回应时扣除的心情分', defaultValue: 10 },
-    { key: 'game_companion_mode', type: 'boolean', description: '启用游戏陪伴模式', defaultValue: false },
-    { key: 'game_mood_decrease', type: 'number', description: '游戏模式下超时扣除的心情分', defaultValue: 2 },
-    { key: 'game_interval_s', type: 'number', description: '游戏模式下检查视觉变化的间隔（秒）', defaultValue: 1 },
-    { key: 'game_prompt_suffix', type: 'textarea', description: '游戏模式下追加到 prompt 的后缀', defaultValue: '根据截图和 OCR 文字简短评论，不超过两句话。不要提问。' },
-    { key: 'game_require_visual_change', type: 'boolean', description: '游戏模式下是否要求有视觉变化才发言', defaultValue: true },
   ],
   pre_tool_preview: [
     { key: 'preview_max_chars', type: 'number', description: '工具调用前预告的最大字数', defaultValue: 30 },
@@ -119,12 +113,9 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
     { key: 'user_agent', type: 'text', description: '请求 SearXNG 时使用的 User-Agent 头', defaultValue: 'XnneHangLab-ToolPlugin/1.0' },
     { key: 'timeout_s', type: 'number', description: 'SearXNG 搜索请求超时时间（秒）', defaultValue: 10.0 },
   ],
-  visual_observer: [
-    { key: 'poll_interval_s', type: 'number', description: '截图轮询间隔（秒）', defaultValue: 1.0 },
-    { key: 'diff_ocr_threshold', type: 'number', description: '累积多少条新 OCR 后触发对话', defaultValue: 20 },
-    { key: 'ocr_max_items', type: 'number', description: '每帧保留面积最大的前 N 条 OCR', defaultValue: 10 },
-    { key: 'ocr_min_confidence', type: 'number', description: 'OCR 置信度过滤阈值', defaultValue: 0.6 },
-    { key: 'ocr_min_length', type: 'number', description: 'OCR 最短文字长度', defaultValue: 2 },
+  screen_shot: [
+    { key: 'enable_ocr', type: 'boolean', description: '启用独立按需屏幕 OCR（截图不等待 OCR）', defaultValue: false },
+    { key: 'ocr_threads', type: 'number', description: '按需 OCR 的 ONNX 线程数', defaultValue: 2 },
   ],
 };
 
@@ -978,20 +969,6 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
   const [mbtiTesting, setMbtiTesting] = useState(false);
   const [mbtiError, setMbtiError] = useState('');
 
-  const [voStatus, setVoStatus] = useState<{
-    online: boolean;
-    loaded?: boolean;
-    game_companion_active?: boolean;
-    active?: boolean;
-    total_captures?: number;
-    pending_ocr_count?: number;
-    ocr_threshold?: number;
-    speaking?: boolean;
-    accumulated_ocr?: string[];
-    current_frame_ocr?: string[];
-    session_history?: Array<{ accumulated_ocr: string[]; ocr_count: number; timestamp: number }>;
-  } | null>(null);
-  const [voExpanded, setVoExpanded] = useState(false);
 
   // Load MBTI result: try backend first, fallback to localStorage
   useEffect(() => {
@@ -1062,20 +1039,7 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
     void poll();
     const timer = setInterval(poll, 5000);
 
-    const pollVo = async () => {
-      try {
-        const res = await fetch('http://127.0.0.1:12393/status/visual-observer');
-        if (res.ok && !cancelled) {
-          setVoStatus(await res.json());
-        }
-      } catch {
-        if (!cancelled) setVoStatus(null);
-      }
-    };
-    void pollVo();
-    const voTimer = setInterval(pollVo, 3000);
-
-    return () => { cancelled = true; clearInterval(timer); clearInterval(voTimer); };
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   const online = status?.online ?? false;
@@ -1248,94 +1212,6 @@ function CharacterStatusPanel({ profileId, characterName, avatarAbsPath }: {
                   {mbtiTesting ? '测试中…' : '开始测试'}
                 </button>
               </>
-            )}
-          </div>
-        </div>
-
-        <div className="status-card">
-          <div className="status-card-header">视觉观察</div>
-          <div className="status-card-body">
-            {voStatus?.loaded && voStatus?.active ? (
-              <>
-                <div className="status-kv-row">
-                  <span className="status-kv-label">模式</span>
-                  <span className="status-kv-value">{voStatus.game_companion_active ? '🎮 陪玩' : '正常'}</span>
-                </div>
-                <div className="status-kv-row">
-                  <span className="status-kv-label">截图数</span>
-                  <span className="status-kv-value">{voStatus.total_captures ?? 0}</span>
-                </div>
-                <div className="status-kv-row">
-                  <span className="status-kv-label">待触发 OCR</span>
-                  <span className="status-kv-value">{voStatus.pending_ocr_count ?? 0} 条新增（阈值 {voStatus.ocr_threshold ?? 20}）{voStatus.speaking ? ' ⏸ 暂停中' : ''}</span>
-                </div>
-                {voStatus.current_frame_ocr && voStatus.current_frame_ocr.length > 0 && (
-                  <details className="mbti-answers-detail">
-                    <summary className="mbti-answers-summary">当前帧 OCR ({voStatus.current_frame_ocr.length} 条)</summary>
-                    <div className="mbti-answers-list">
-                      {voStatus.current_frame_ocr.map((text, i) => (
-                        <div key={i} className="mbti-answer-item" style={{ padding: '2px 0' }}>
-                          <span style={{ fontSize: 12 }}>{text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-                {voStatus.accumulated_ocr && voStatus.accumulated_ocr.length > 0 && (
-                  <details className="mbti-answers-detail">
-                    <summary className="mbti-answers-summary">累积新增 OCR ({voStatus.accumulated_ocr.length} 条)</summary>
-                    <div className="mbti-answers-list">
-                      {voStatus.accumulated_ocr.map((text, i) => (
-                        <div key={i} className="mbti-answer-item" style={{ padding: '2px 0' }}>
-                          <span style={{ fontSize: 12 }}>{text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-                {voStatus.session_history && voStatus.session_history.length > 0 && (
-                  <details className="mbti-answers-detail">
-                    <summary className="mbti-answers-summary">
-                      观察记录 ({voStatus.session_history.length} 轮)
-                      <button
-                        type="button"
-                        className="l2d-add-btn"
-                        style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const text = JSON.stringify(voStatus.session_history, null, 2);
-                          navigator.clipboard.writeText(text);
-                        }}
-                      >复制 JSON</button>
-                    </summary>
-                    <div className="mbti-answers-list">
-                      {voStatus.session_history.map((s, si) => (
-                        <div key={si} className="mbti-answer-item">
-                          <div className="mbti-answer-header">
-                            <span className="mbti-answer-id">轮 {si + 1}</span>
-                            <span className="mbti-answer-question" style={{ fontSize: 11, color: 'var(--muted)' }}>
-                              {s.ocr_count} OCR
-                            </span>
-                          </div>
-                          <div className="mbti-answer-body">
-                            <span className="mbti-answer-choice" style={{ whiteSpace: 'pre-wrap' }}>{s.accumulated_ocr.join('\n')}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </>
-            ) : (
-              <div className="status-weather-placeholder">
-                {!online
-                  ? '离线'
-                  : voStatus?.loaded
-                    ? (voStatus.total_captures ?? 0) > 0
-                      ? `已暂停（共 ${voStatus.total_captures} 帧）`
-                      : '已加载，等待首次对话'
-                    : '未启用'}
-              </div>
             )}
           </div>
         </div>
