@@ -24,7 +24,14 @@ export async function readProfile(file: string) {
   return normalizePlugins(await invoke<ProfileConfig>('read_profile', { file }));
 }
 
-export function writeProfile(file: string, config: ProfileConfig) {
+export async function writeProfile(file: string, config: ProfileConfig) {
+  const screenshot = config.plugins?.screen_shot;
+  if (screenshot && typeof screenshot === 'object') {
+    const threads = (screenshot as Record<string, unknown>).ocr_threads;
+    if (threads !== undefined && (typeof threads !== 'number' || !Number.isInteger(threads) || threads < 1 || threads > 32)) {
+      throw new Error('OCR 线程数必须是 1–32 的整数，请填写后再保存。');
+    }
+  }
   return invoke<void>('write_profile', { file, config: normalizePlugins(config) });
 }
 

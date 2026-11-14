@@ -60,7 +60,7 @@ function findActiveConflicts(id: string, enabled: string[]): string[] {
 }
 
 type PluginFieldType = 'text' | 'number' | 'textarea' | 'boolean' | 'json' | 'select';
-interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; options?: string[]; }
+interface PluginField { key: string; type: PluginFieldType; description?: string; defaultValue?: string | number | boolean; options?: string[]; min?: number; max?: number; step?: number; }
 
 const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   wikimem: [
@@ -115,7 +115,7 @@ const PLUGIN_CONFIG_FIELDS: Record<string, PluginField[]> = {
   ],
   screen_shot: [
     { key: 'enable_ocr', type: 'boolean', description: '启用独立按需屏幕 OCR（截图不等待 OCR）', defaultValue: false },
-    { key: 'ocr_threads', type: 'number', description: '按需 OCR 的 ONNX 线程数', defaultValue: 2 },
+    { key: 'ocr_threads', type: 'number', description: '按需 OCR 的 ONNX 线程数（1–32 的整数）', defaultValue: 2, min: 1, max: 32, step: 1 },
   ],
 };
 
@@ -822,9 +822,14 @@ function ProfileEditor({ file, config, onChange, onSave, onDelete, onSetActive, 
                               {(f.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                           ) : (
-                            <input className="proxy-input" type={f.type}
+                            <input className="proxy-input" type={f.type} aria-label={f.key}
+                              min={f.min} max={f.max} step={f.step}
                               value={(effective as string | number) ?? ''}
-                              onChange={(e) => setPluginCfg(id, { [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })} />
+                              onChange={(e) => setPluginCfg(id, {
+                                [f.key]: f.type === 'number'
+                                  ? (f.key === 'ocr_threads' && e.target.value === '' ? '' : Number(e.target.value))
+                                  : e.target.value,
+                              })} />
                           )}
                         </div>
                       );
@@ -1283,6 +1288,7 @@ export function ProfilesPage() {
   async function handleSave() {
     if (!selectedFile || !activeConfig) return;
     setSaving(true);
+    setError('');
     try {
       await writeProfile(selectedFile, activeConfig);
       await reload();
