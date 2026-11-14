@@ -7,8 +7,6 @@
     "user_lang": "ZH",
     "speaker_lang": "ZH",
     "faster_first_response": false,
-    "max_vision_concurrency": 4,
-    "require_detailed": false,
     "structured_history_full_turns": 5,
     "segment_method": "pysbd",
     "interrupt_method": "user",
@@ -19,14 +17,6 @@
       "llm_model_name": "deepseek-v4-flash-vision-exp",
       "support_vision": true,
       "thinking_mode": "disabled"
-    },
-    "vision_model": {
-      "llm_provider": "",
-      "llm_model_name": "",
-      "reasoning_effort": null
-    },
-    "prompts": {
-      "vision_prompt": "./prompts/vision_prompt.txt"
     },
     "llm": {
       "providers": []

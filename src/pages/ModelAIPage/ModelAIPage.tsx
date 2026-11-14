@@ -141,13 +141,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
     support_vision: labConfig?.agent.chat_model.support_vision ?? false,
     thinking_mode: labConfig?.agent.chat_model.thinking_mode ?? 'default',
   }));
-  const [visionModel, setVisionModel] = useState(
-    labConfig?.agent.vision_model ?? {
-      llm_provider: '',
-      llm_model_name: '',
-      reasoning_effort: null,
-    },
-  );
   const [modelCache, setModelCache] = useState<Record<string, string[]>>({});
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<Record<string, string>>({});
@@ -178,7 +171,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
         ...labConfig.agent,
         llm: { providers },
         chat_model: chatModel,
-        vision_model: visionModel,
       },
     });
   }
@@ -188,8 +180,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
   const allModels = Object.values(modelCache).flat();
   const chatProviderModels =
     modelCache[chatModel.llm_provider] ?? allModels;
-  const visionProviderModels =
-    modelCache[visionModel.llm_provider] ?? allModels;
 
   return (
     <>
@@ -253,7 +243,7 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
             models={chatProviderModels}
           />
         </SettingRow>
-        <SettingRow name="支持视觉" description="模型是否支持图像输入" icon="👁">
+        <SettingRow name="支持视觉" description="看图和游戏陪伴需要支持图像输入的对话模型" icon="👁">
           <ToggleSwitch
             label="支持视觉"
             checked={chatModel.support_vision}
@@ -277,46 +267,6 @@ export function ModelAIPanel({ labConfig, onSaveLabConfig }: ModelAIPanelProps) 
           </select>
         </SettingRow>
       </SettingCard>
-
-      <div className="group-title">视觉模型</div>
-      <SettingCard>
-        <SettingRow name="提供商" description="留空=不使用视觉模型" icon="🏭">
-          <ModelInput
-            value={visionModel.llm_provider}
-            onChange={(v) => setVisionModel({ ...visionModel, llm_provider: v, llm_model_name: v ? visionModel.llm_model_name : '' })}
-            models={['', ...providers.map((p) => p.name).filter(Boolean)]}
-            placeholder="不使用视觉模型"
-          />
-        </SettingRow>
-        {visionModel.llm_provider && (
-          <>
-            <SettingRow name="模型名称" icon="🤖">
-              <ModelInput
-                value={visionModel.llm_model_name}
-                onChange={(v) => setVisionModel({ ...visionModel, llm_model_name: v })}
-                models={visionProviderModels}
-              />
-            </SettingRow>
-            <SettingRow name="推理深度" description="设为 none 可关闭慢模型的内置 thinking，加快响应" icon="🧠">
-              <select
-                className="proxy-input"
-                value={visionModel.reasoning_effort ?? ''}
-                onChange={(e) => setVisionModel({ ...visionModel, reasoning_effort: e.target.value || null })}
-              >
-                <option value="">默认（由模型决定）</option>
-                <option value="none">关闭</option>
-                <option value="low">低</option>
-                <option value="medium">中</option>
-                <option value="high">高</option>
-              </select>
-            </SettingRow>
-          </>
-        )}
-      </SettingCard>
-      <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 16px', lineHeight: 1.5 }}>
-        ⓘ 对话模型支持视觉时，图片会直接进入同一次对话请求；不支持视觉时，系统会使用此视觉模型生成摘要后再交给对话模型。
-        游戏陪伴模式的后台截图轮询也会使用此视觉模型。
-      </p>
 
       <div className="settings-save-row">
         <button type="button" className="settings-save-button" onClick={handleSave}>
